@@ -54,17 +54,21 @@ def checkout(tier:str=Form(...), form:str=Form("aa")):
         return RedirectResponse(f"/start/{token}",303)
     s=stripe("POST","/checkout/sessions",{"mode":"payment","line_items[0][quantity]":1,"line_items[0][price_data][currency]":"gbp",
       "line_items[0][price_data][unit_amount]":price,"line_items[0][price_data][product_data][name]":f"{FORMS[form]['name']}: {name}",
-      "client_reference_id":token,"customer_creation":"always","consent_collection[terms_of_service]":"required",
+      "client_reference_id":token,"adaptive_pricing[enabled]":"false","customer_creation":"always","consent_collection[terms_of_service]":"required",
       "success_url":f"{PUBLIC}/success?session_id={{CHECKOUT_SESSION_ID}}","cancel_url":f"{PUBLIC}/?form={form}"})
     c.execute("insert into orders(token,tier,status,stripe_session,created,form) values(?,?,?,?,?,?)",(token,tier,"pending",s["id"],time.time(),form)); c.commit()
     return RedirectResponse(s["url"],303)
 @app.get("/success")
-def success(session_id:str):
-    s=stripe("GET","/checkout/sessions/"+urllib.parse.quote(session_id))
-    if s.get("payment_status")!="paid": return page("<h1>Payment not completed</h1><p>You have not been charged. <a href=/>Go back and try again</a>.</p>","Payment not completed")
-    c=db(); c.execute("update orders set status='paid', email=? where stripe_session=?",((s.get("customer_details") or {}).get("email"),session_id)); c.commit()
-    # TODO: email the private /start link to the customer (Postmark/Resend) — production should also use a Stripe webhook.
-    return RedirectResponse(f"/start/{s['client_reference_id']}",303)
+def success(session_id:str=""):
+    c=db(); row=c.execute("select * from orders where stripe_session=?",(session_id,)).fetchone() if session_id else None
+    try: s=stripe("GET","/checkout/sessions/"+urllib.parse.quote(session_id)) if session_id else {}
+    except Exception: s={}
+    if s.get("payment_status")=="paid":
+        c.execute("update orders set status='paid', email=coalesce(?,email) where stripe_session=?",((s.get("customer_details") or {}).get("email"),session_id)); c.commit()
+        return RedirectResponse(f"/start/{s.get('client_reference_id') or row['token']}",303)
+    if row and row["status"]!="pending": return RedirectResponse(f"/start/{row['token']}",303)   # webhook already confirmed it
+    if not s and session_id: return page("<h1>We're confirming your payment</h1><p>This can take a minute. <a href='/success?session_id="+urllib.parse.quote(session_id)+"'>Refresh this page</a>. If you were charged, email <a href=mailto:hello@formsorted.com>hello@formsorted.com</a>.</p>","Confirming payment")
+    return page("<h1>Payment not completed</h1><p>You have not been charged. <a href=/>Go back and try again</a>.</p>","Payment not completed")
 WHSEC=os.getenv("STRIPE_WEBHOOK_SECRET","")
 @app.post("/webhooks/payment")
 async def payment_webhook(req:Request):

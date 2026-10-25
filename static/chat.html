@@ -27,10 +27,11 @@
 <script>
 const tok=location.hash.slice(1),$=id=>document.getElementById(id);let n=0;
 const clean=t=>t.replace('[[DONE]]','').trim();
-function said(t,c){const d=document.createElement('p');d.className='said';d.textContent=(c=='me'?'You: ':'We asked: ')+t;$('log').appendChild(d)}
+const md=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\*\*([^*\n]+?)\*\*/g,'<strong>$1</strong>').replace(/\*\*/g,'');
+function said(t,c){const d=document.createElement('p');d.className='said';if(c=='me')d.textContent='You: '+t;else d.innerHTML='We asked: '+md(t);$('log').appendChild(d)}
 async function send(text){$('send').disabled=true;const r=await fetch(`/api/${tok}/message`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});const j=await r.json();
  n++;if(j.topic){$('qn').textContent=j.topic;$('qt').textContent=j.total;$('pbar').style.width=(60+Math.round(20*(j.topic-1)/j.total))+'%'}
- if(j.done){$('f').hidden=true;$('ready').hidden=false;$('fin').focus()}else{$('q').textContent=clean(j.reply);said(clean(j.reply),'ai');$('t').focus()}$('send').disabled=false}
+ if(j.done){$('f').hidden=true;$('ready').hidden=false;$('fin').focus()}else{$('q').innerHTML=md(clean(j.reply));said(clean(j.reply),'ai');$('t').focus()}$('send').disabled=false}
 $('f').onsubmit=e=>{e.preventDefault();const t=$('t');if(!t.value.trim()){t.focus();return}said(t.value,'me');send(t.value);t.value=''};
 $('fin').onclick=async()=>{$('fin').disabled=true;$('fin').textContent='Preparing…';const j=await(await fetch(`/api/${tok}/finish`,{method:'POST'})).json();location.href=j.next};
 $('del').onclick=async()=>{if(confirm('Delete everything you have told us? This cannot be undone.')){await fetch(`/api/${tok}/delete`,{method:'POST'});$('main').innerHTML='<div class="wrap"><h1>Your information has been deleted</h1></div>'}};
