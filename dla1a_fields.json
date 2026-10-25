@@ -1,0 +1,4586 @@
+[
+{
+"page": 1,
+"name": "0_2",
+"type": "/Tx",
+"tip": "If you would like to be sent a text message confirming we have received this form, please provide a mobile num",
+"w": 217,
+"h": 23
+},
+{
+"page": 2,
+"name": "1",
+"type": "/Btn",
+"tip": "Are you claiming for a child under the special rules?",
+"w": 14,
+"h": 14
+},
+{
+"page": 2,
+"name": "1",
+"type": "/Btn",
+"tip": "Are you claiming for a child under the special rules?",
+"w": 14,
+"h": 14
+},
+{
+"page": 2,
+"name": "7",
+"type": "/Btn",
+"tip": "The child's sex",
+"w": 14,
+"h": 14
+},
+{
+"page": 2,
+"name": "7",
+"type": "/Btn",
+"tip": "Their sex",
+"w": 14,
+"h": 14
+},
+{
+"page": 2,
+"name": "8",
+"type": "/Tx",
+"tip": "The child's home address where they normally live.",
+"w": 217,
+"h": 23
+},
+{
+"page": 2,
+"name": "8_1",
+"type": "/Tx",
+"tip": "second line of their home address",
+"w": 217,
+"h": 23
+},
+{
+"page": 2,
+"name": "8_2",
+"type": "/Tx",
+"tip": "Third line of their home address",
+"w": 217,
+"h": 23
+},
+{
+"page": 2,
+"name": "8_3",
+"type": "/Tx",
+"tip": "Postcode",
+"w": 165,
+"h": 23
+},
+{
+"page": 2,
+"name": "2",
+"type": "/Tx",
+"tip": "The child's surname or family name",
+"w": 217,
+"h": 23
+},
+{
+"page": 2,
+"name": "3",
+"type": "/Tx",
+"tip": "All the child's other names in full",
+"w": 217,
+"h": 23
+},
+{
+"page": 2,
+"name": "4",
+"type": "/Tx",
+"tip": "Any other names the child has had",
+"w": 217,
+"h": 22
+},
+{
+"page": 2,
+"name": "5",
+"type": "/Tx",
+"tip": "The child's National Insurance (NI) number",
+"w": 216,
+"h": 23
+},
+{
+"page": 2,
+"name": "6",
+"type": "/Tx",
+"tip": "The child's date of birth. D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 2,
+"name": "9",
+"type": "/Tx",
+"tip": "The child's nationality.",
+"w": 217,
+"h": 23
+},
+{
+"page": 3,
+"name": "10",
+"type": "/Btn",
+"tip": "If the child is Swiss or European Economic Area (EEA) national, were they living in the United Kingdom (UK) be",
+"w": 14,
+"h": 14
+},
+{
+"page": 3,
+"name": "10",
+"type": "/Btn",
+"tip": "If the child is Swiss or European Economic Area (EEA) national, were they living in the United Kingdom (UK) be",
+"w": 14,
+"h": 14
+},
+{
+"page": 3,
+"name": "10",
+"type": "/Btn",
+"tip": "If the child is Swiss or European Economic Area (EEA) national, were they living in the United Kingdom (UK) be",
+"w": 14,
+"h": 14
+},
+{
+"page": 3,
+"name": "11",
+"type": "/Btn",
+"tip": "Does the child normally live in England or Wales?",
+"w": 14,
+"h": 14
+},
+{
+"page": 3,
+"name": "11",
+"type": "/Btn",
+"tip": "Does the child normally live in England or Wales?",
+"w": 14,
+"h": 14
+},
+{
+"page": 3,
+"name": "12",
+"type": "/Btn",
+"tip": "Has the child moved from Scotland to live in England or Wales since 1 July 2021?",
+"w": 14,
+"h": 15
+},
+{
+"page": 3,
+"name": "12",
+"type": "/Btn",
+"tip": "Has the child moved from Scotland to live in England or Wales since 1 July 2021?",
+"w": 14,
+"h": 14
+},
+{
+"page": 3,
+"name": "13",
+"type": "/Tx",
+"tip": "What date did the child move to live in England or Wales? D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 3,
+"name": "14",
+"type": "/Btn",
+"tip": "Is the child getting or have they made a claim for Child Disability Payment?",
+"w": 14,
+"h": 14
+},
+{
+"page": 3,
+"name": "14",
+"type": "/Btn",
+"tip": "Is the child getting or have they made a claim for Child Disability Payment?",
+"w": 14,
+"h": 14
+},
+{
+"page": 3,
+"name": "15",
+"type": "/Btn",
+"tip": "Has the child moved from another country in the last 3 years to live in Great Britain (GB)?",
+"w": 14,
+"h": 15
+},
+{
+"page": 3,
+"name": "15",
+"type": "/Btn",
+"tip": "Has the child moved from another country in the last 3 years to live in Great Britain (GB)?",
+"w": 14,
+"h": 14
+},
+{
+"page": 3,
+"name": "16",
+"type": "/Tx",
+"tip": "What date did they arrive in GB? D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 3,
+"name": "17",
+"type": "/Tx",
+"tip": "Please tell us the child\u2019s Passport Number, if known",
+"w": 217,
+"h": 23
+},
+{
+"page": 4,
+"name": "18",
+"type": "/Btn",
+"tip": "Has the child been abroad in the last 3 years?",
+"w": 14,
+"h": 14
+},
+{
+"page": 4,
+"name": "18",
+"type": "/Btn",
+"tip": "Has the child been abroad in the last 3 years?",
+"w": 14,
+"h": 14
+},
+{
+"page": 4,
+"name": "19",
+"type": "/Btn",
+"tip": "Is the child\u2019s parent or guardian getting any pensions or benefits from a European Economic Area (EEA) state o",
+"w": 14,
+"h": 15
+},
+{
+"page": 4,
+"name": "19",
+"type": "/Btn",
+"tip": "Is the child\u2019s parent or guardian getting any pensions or benefits from a European Economic Area (EEA) state o",
+"w": 14,
+"h": 14
+},
+{
+"page": 4,
+"name": "19",
+"type": "/Btn",
+"tip": "Is the child\u2019s parent or guardian getting any pensions or benefits from a European Economic Area (EEA) state o",
+"w": 14,
+"h": 15
+},
+{
+"page": 4,
+"name": "20",
+"type": "/Btn",
+"tip": "Is the child\u2019s parent or guardian working in or paying insurance to an EEA state or Switzerland?",
+"w": 14,
+"h": 14
+},
+{
+"page": 4,
+"name": "20",
+"type": "/Btn",
+"tip": "Is the child\u2019s parent or guardian working in or paying insurance to an EEA state or Switzerland?",
+"w": 14,
+"h": 14
+},
+{
+"page": 4,
+"name": "20",
+"type": "/Btn",
+"tip": "Is the child\u2019s parent or guardian working in or paying insurance to an EEA state or Switzerland?",
+"w": 14,
+"h": 14
+},
+{
+"page": 4,
+"name": "18_1",
+"type": "/Tx",
+"tip": "Row 1 - Date the child left GB. D D / M M / Y Y Y Y",
+"w": 88,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_2",
+"type": "/Tx",
+"tip": "Row 1 - Date the child arrived back in GB. D D / M M / Y Y Y Y",
+"w": 86,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_3",
+"type": "/Tx",
+"tip": "Row 1 - Where they went?",
+"w": 125,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_4",
+"type": "/Tx",
+"tip": "Row 1 - Why they went?",
+"w": 178,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_5",
+"type": "/Tx",
+"tip": "Row 2 - Date the child left GB. D D / M M / Y Y Y Y",
+"w": 88,
+"h": 33
+},
+{
+"page": 4,
+"name": "18_6",
+"type": "/Tx",
+"tip": "Row 2 - Date the child arrived back in GB. D D / M M / Y Y Y Y",
+"w": 86,
+"h": 33
+},
+{
+"page": 4,
+"name": "18_7",
+"type": "/Tx",
+"tip": "Row 2 - Where they went?",
+"w": 125,
+"h": 33
+},
+{
+"page": 4,
+"name": "18_8",
+"type": "/Tx",
+"tip": "Row 2 - Why they went?",
+"w": 178,
+"h": 33
+},
+{
+"page": 4,
+"name": "18_9",
+"type": "/Tx",
+"tip": "Row 3 - Date the child left GB. D D / M M / Y Y Y Y",
+"w": 88,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_10",
+"type": "/Tx",
+"tip": "Row 3 - Date the child arrived back in GB. D D / M M / Y Y Y Y",
+"w": 86,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_11",
+"type": "/Tx",
+"tip": "Row 3 - Where they went?",
+"w": 125,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_12",
+"type": "/Tx",
+"tip": "Row 3 - Why they went?",
+"w": 178,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_13",
+"type": "/Tx",
+"tip": "Row 4 - Date the child left GB. D D / M M / Y Y Y Y",
+"w": 88,
+"h": 33
+},
+{
+"page": 4,
+"name": "18_14",
+"type": "/Tx",
+"tip": "Row 4 - Date the child arrived back in GB. D D / M M / Y Y Y Y",
+"w": 86,
+"h": 33
+},
+{
+"page": 4,
+"name": "18_15",
+"type": "/Tx",
+"tip": "Row 4 - Where they went?",
+"w": 125,
+"h": 33
+},
+{
+"page": 4,
+"name": "18_16",
+"type": "/Tx",
+"tip": "Row 4 - Why they went?",
+"w": 178,
+"h": 33
+},
+{
+"page": 4,
+"name": "18_17",
+"type": "/Tx",
+"tip": "Row 5 - Date the child left GB. D D / M M / Y Y Y Y",
+"w": 88,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_18",
+"type": "/Tx",
+"tip": "Row 5 - Date the child arrived back in GB. D D / M M / Y Y Y Y",
+"w": 86,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_19",
+"type": "/Tx",
+"tip": "Row 5 - Where they went?",
+"w": 125,
+"h": 32
+},
+{
+"page": 4,
+"name": "18_20",
+"type": "/Tx",
+"tip": "Row 5 - Why they went?",
+"w": 178,
+"h": 32
+},
+{
+"page": 5,
+"name": "21",
+"type": "/Btn",
+"tip": "Is the child currently in a hospital?",
+"w": 14,
+"h": 15
+},
+{
+"page": 5,
+"name": "21",
+"type": "/Btn",
+"tip": "Is the child currently in a hospital?",
+"w": 14,
+"h": 14
+},
+{
+"page": 5,
+"name": "21_1",
+"type": "/Tx",
+"tip": "Please tell us the date they went in. D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 5,
+"name": "21_2",
+"type": "/Tx",
+"tip": "Please tell us the full name and address of the hospital.",
+"w": 217,
+"h": 23
+},
+{
+"page": 5,
+"name": "21_3",
+"type": "/Tx",
+"tip": "Second line of the address",
+"w": 217,
+"h": 23
+},
+{
+"page": 5,
+"name": "21_4",
+"type": "/Tx",
+"tip": "Third line of the address",
+"w": 217,
+"h": 23
+},
+{
+"page": 5,
+"name": "21_5",
+"type": "/Tx",
+"tip": "Postcode",
+"w": 165,
+"h": 23
+},
+{
+"page": 5,
+"name": "21_6",
+"type": "/Tx",
+"tip": "Phone number of the hospital.",
+"w": 217,
+"h": 23
+},
+{
+"page": 5,
+"name": "21_7",
+"type": "/Tx",
+"tip": "Why did they go in?",
+"w": 217,
+"h": 112
+},
+{
+"page": 5,
+"name": "21_8",
+"type": "/Btn",
+"tip": "Is the NHS paying the costs for their stay?",
+"w": 14,
+"h": 14
+},
+{
+"page": 5,
+"name": "21_8",
+"type": "/Btn",
+"tip": "Is the NHS paying the costs for their stay?",
+"w": 14,
+"h": 14
+},
+{
+"page": 5,
+"name": "22",
+"type": "/Btn",
+"tip": "Has the child had any overnight stays at a hospice, residential college or similar accommodation in the last 1",
+"w": 14,
+"h": 14
+},
+{
+"page": 5,
+"name": "22",
+"type": "/Btn",
+"tip": "Has the child had any overnight stays at a hospice, residential college or similar accommodation in the last 1",
+"w": 14,
+"h": 14
+},
+{
+"page": 5,
+"name": "22_1",
+"type": "/Tx",
+"tip": "Please tell us the date they went into the overnight accommodation. D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 5,
+"name": "22_2",
+"type": "/Tx",
+"tip": "Please tell us the date they came out of the overnight accommodation. D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 5,
+"name": "22_3",
+"type": "/Tx",
+"tip": "Please tell us the full name and address of the accommodation.",
+"w": 217,
+"h": 23
+},
+{
+"page": 5,
+"name": "22_4",
+"type": "/Tx",
+"tip": "Second line of the address",
+"w": 217,
+"h": 23
+},
+{
+"page": 5,
+"name": "22_5",
+"type": "/Tx",
+"tip": "Third line of the address",
+"w": 217,
+"h": 23
+},
+{
+"page": 5,
+"name": "22_6",
+"type": "/Tx",
+"tip": "Postcode",
+"w": 165,
+"h": 23
+},
+{
+"page": 5,
+"name": "22_7",
+"type": "/Tx",
+"tip": "Phone number of accommodation, if you know it.",
+"w": 217,
+"h": 23
+},
+{
+"page": 5,
+"name": "22_8",
+"type": "/Btn",
+"tip": "Did any of the following pay any of the costs towards them living there?",
+"w": 14,
+"h": 15
+},
+{
+"page": 5,
+"name": "22_8",
+"type": "/Btn",
+"tip": "Did any of the following pay any of the costs towards them living there?",
+"w": 14,
+"h": 14
+},
+{
+"page": 5,
+"name": "22_8",
+"type": "/Btn",
+"tip": "Did any of the following pay any of the costs towards them living there?",
+"w": 14,
+"h": 15
+},
+{
+"page": 5,
+"name": "22_9",
+"type": "/Tx",
+"tip": "Name of authority or department",
+"w": 196,
+"h": 23
+},
+{
+"page": 5,
+"name": "22_8",
+"type": "/Btn",
+"tip": "Did any of the following pay any of the costs towards them living there?",
+"w": 14,
+"h": 14
+},
+{
+"page": 5,
+"name": "22_8",
+"type": "/Btn",
+"tip": "Did any of the following pay any of the costs towards them living there?",
+"w": 14,
+"h": 14
+},
+{
+"page": 6,
+"name": "23",
+"type": "/Btn",
+"tip": "Has the child had or are they due to have any assessments by a health professional or specialist to help diagn",
+"w": 14,
+"h": 14
+},
+{
+"page": 6,
+"name": "23",
+"type": "/Btn",
+"tip": "Has the child had or are they due to have any assessments by a health professional or specialist to help diagn",
+"w": 14,
+"h": 15
+},
+{
+"page": 6,
+"name": "23_1_1",
+"type": "/Tx",
+"tip": "Test 1 - Date and type of test.",
+"w": 147,
+"h": 63
+},
+{
+"page": 6,
+"name": "23_1_2",
+"type": "/Tx",
+"tip": "Test  1 - What did the test show?",
+"w": 252,
+"h": 63
+},
+{
+"page": 6,
+"name": "23_1_3",
+"type": "/Btn",
+"tip": "Test 1 - Are they waiting for results?",
+"w": 15,
+"h": 14
+},
+{
+"page": 6,
+"name": "23_1_3",
+"type": "/Btn",
+"tip": "Test 1 - Are they waiting for results?",
+"w": 15,
+"h": 14
+},
+{
+"page": 6,
+"name": "23_2",
+"type": "/Tx",
+"tip": "Test 2 - Date and type of test.",
+"w": 147,
+"h": 62
+},
+{
+"page": 6,
+"name": "23_3",
+"type": "/Tx",
+"tip": "Test  2 - What did the test show?",
+"w": 252,
+"h": 62
+},
+{
+"page": 6,
+"name": "23_4",
+"type": "/Btn",
+"tip": "Test 2 - Are they waiting for results?",
+"w": 15,
+"h": 14
+},
+{
+"page": 6,
+"name": "23_4",
+"type": "/Btn",
+"tip": "Test 2 - Are they waiting for results?",
+"w": 15,
+"h": 14
+},
+{
+"page": 6,
+"name": "23_5",
+"type": "/Tx",
+"tip": "Test  3 - Date and type of test.",
+"w": 147,
+"h": 62
+},
+{
+"page": 6,
+"name": "23_6",
+"type": "/Tx",
+"tip": "Test  3 - What did the test show?",
+"w": 252,
+"h": 62
+},
+{
+"page": 6,
+"name": "23_7",
+"type": "/Btn",
+"tip": "Test 3 - Are they waiting for results?",
+"w": 15,
+"h": 15
+},
+{
+"page": 6,
+"name": "23_7",
+"type": "/Btn",
+"tip": "Test 3 - Are they waiting for results?",
+"w": 15,
+"h": 14
+},
+{
+"page": 6,
+"name": "23_8",
+"type": "/Tx",
+"tip": "Test  4 - Date and type of test.",
+"w": 147,
+"h": 63
+},
+{
+"page": 6,
+"name": "23_9",
+"type": "/Tx",
+"tip": "Test  4 - What did the test show?",
+"w": 252,
+"h": 63
+},
+{
+"page": 6,
+"name": "23_10",
+"type": "/Btn",
+"tip": "Test 4 - Are they waiting for results?",
+"w": 15,
+"h": 14
+},
+{
+"page": 6,
+"name": "23_10",
+"type": "/Btn",
+"tip": "Test 4 - Are they waiting for results?",
+"w": 15,
+"h": 14
+},
+{
+"page": 6,
+"name": "23_11",
+"type": "/Tx",
+"tip": "Test  5 - Date and type of test.",
+"w": 147,
+"h": 62
+},
+{
+"page": 6,
+"name": "23_12",
+"type": "/Tx",
+"tip": "Test  5 - What did the test show?",
+"w": 252,
+"h": 62
+},
+{
+"page": 6,
+"name": "23_13",
+"type": "/Btn",
+"tip": "Test 5 - Are they waiting for results?",
+"w": 15,
+"h": 14
+},
+{
+"page": 6,
+"name": "23_13",
+"type": "/Btn",
+"tip": "Test 5 - Are they waiting for results?",
+"w": 15,
+"h": 14
+},
+{
+"page": 7,
+"name": "24",
+"type": "/Btn",
+"tip": "Do you have any letters or assessment reports about the child\u2019s health conditions or disabilities that you can",
+"w": 14,
+"h": 14
+},
+{
+"page": 7,
+"name": "24",
+"type": "/Btn",
+"tip": "Do you have any letters or assessment reports about the child\u2019s health conditions or disabilities that you can",
+"w": 14,
+"h": 14
+},
+{
+"page": 7,
+"name": "24_1",
+"type": "/Tx",
+"tip": "Tell us what reports you have.",
+"w": 462,
+"h": 496
+},
+{
+"page": 8,
+"name": "25",
+"type": "/Btn",
+"tip": "Does the child have any health professionals, who are not their GP, who supports them with their health condit",
+"w": 14,
+"h": 15
+},
+{
+"page": 8,
+"name": "25",
+"type": "/Btn",
+"tip": "Does the child have any health professionals, who are not their GP, who supports them with their health condit",
+"w": 14,
+"h": 14
+},
+{
+"page": 8,
+"name": "25_1",
+"type": "/Tx",
+"tip": "Health professional\u2019s name in full",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "25_2",
+"type": "/Tx",
+"tip": "Their relationship to the child?",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "25_3",
+"type": "/Tx",
+"tip": "First line of the Health Professionals work address",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "25_4",
+"type": "/Tx",
+"tip": "Second line of their address",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "25_5",
+"type": "/Tx",
+"tip": "Third line of their address",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "25_6",
+"type": "/Tx",
+"tip": "Postcode",
+"w": 165,
+"h": 23
+},
+{
+"page": 8,
+"name": "25_7",
+"type": "/Tx",
+"tip": "A phone number we can contact them on, if you know it",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "25_8",
+"type": "/Tx",
+"tip": "The child\u2019s hospital record number.",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "25_9",
+"type": "/Tx",
+"tip": "Which condition or disability did they see the child about?",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "25_10",
+"type": "/Tx",
+"tip": "What date did the child last have contact with them about their health condition or disabilities? D D / M M / ",
+"w": 126,
+"h": 23
+},
+{
+"page": 8,
+"name": "26",
+"type": "/Tx",
+"tip": "Child\u2019s GP\u2019s name",
+"w": 218,
+"h": 23
+},
+{
+"page": 8,
+"name": "27",
+"type": "/Tx",
+"tip": "First line of GP's surgery address",
+"w": 218,
+"h": 23
+},
+{
+"page": 8,
+"name": "27_1",
+"type": "/Tx",
+"tip": "Second line of the address",
+"w": 218,
+"h": 23
+},
+{
+"page": 8,
+"name": "27_2",
+"type": "/Tx",
+"tip": "Third line of the address",
+"w": 218,
+"h": 23
+},
+{
+"page": 8,
+"name": "27_3",
+"type": "/Tx",
+"tip": "Postcode",
+"w": 166,
+"h": 23
+},
+{
+"page": 8,
+"name": "28",
+"type": "/Tx",
+"tip": "Surgery phone number, if you know it",
+"w": 218,
+"h": 23
+},
+{
+"page": 8,
+"name": "29",
+"type": "/Tx",
+"tip": "Tell us the date the child last had contact with their GP about their health condition or disabilities. D D / ",
+"w": 127,
+"h": 23
+},
+{
+"page": 8,
+"name": "30",
+"type": "/Tx",
+"tip": "Name of the school or nursery the child attends",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "31",
+"type": "/Tx",
+"tip": "First line of school or nursery's address",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "31_1",
+"type": "/Tx",
+"tip": "Second line of the address",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "31_2",
+"type": "/Tx",
+"tip": "Third line of the address",
+"w": 217,
+"h": 23
+},
+{
+"page": 8,
+"name": "31_3",
+"type": "/Tx",
+"tip": "Postcode",
+"w": 165,
+"h": 23
+},
+{
+"page": 9,
+"name": "32",
+"type": "/Tx",
+"tip": "Please tell us the name of someone we can contact at the school if we need more information",
+"w": 217,
+"h": 23
+},
+{
+"page": 9,
+"name": "33",
+"type": "/Tx",
+"tip": "A phone number we can contact them on, if you know it",
+"w": 217,
+"h": 23
+},
+{
+"page": 9,
+"name": "34",
+"type": "/Tx",
+"tip": "Their email address, if you know it",
+"w": 217,
+"h": 23
+},
+{
+"page": 9,
+"name": "35",
+"type": "/Btn",
+"tip": "Is this a mainstream school?",
+"w": 14,
+"h": 14
+},
+{
+"page": 9,
+"name": "35",
+"type": "/Btn",
+"tip": "Is this a mainstream school?",
+"w": 14,
+"h": 15
+},
+{
+"page": 9,
+"name": "36",
+"type": "/Btn",
+"tip": "Is this a specialist school?",
+"w": 14,
+"h": 14
+},
+{
+"page": 9,
+"name": "36",
+"type": "/Btn",
+"tip": "Is this a specialist school?",
+"w": 14,
+"h": 14
+},
+{
+"page": 9,
+"name": "36_1",
+"type": "/Tx",
+"tip": "What type of school is it?",
+"w": 198,
+"h": 112
+},
+{
+"page": 9,
+"name": "37_1",
+"type": "/Btn",
+"tip": "Educational Health Care Plan",
+"w": 14,
+"h": 14
+},
+{
+"page": 9,
+"name": "37_2",
+"type": "/Btn",
+"tip": "Individual Education Plan",
+"w": 14,
+"h": 14
+},
+{
+"page": 9,
+"name": "37_3",
+"type": "/Btn",
+"tip": "Individual Behaviour Plan",
+"w": 14,
+"h": 14
+},
+{
+"page": 9,
+"name": "37_4",
+"type": "/Btn",
+"tip": "A letter, note in lieu or a statement of Special Educational Needs from the local authority",
+"w": 14,
+"h": 14
+},
+{
+"page": 9,
+"name": "37_5",
+"type": "/Btn",
+"tip": "Co-ordinated Support Plan",
+"w": 14,
+"h": 14
+},
+{
+"page": 9,
+"name": "37_6",
+"type": "/Btn",
+"tip": "I am waiting to hear about one of the above",
+"w": 14,
+"h": 14
+},
+{
+"page": 9,
+"name": "37_7",
+"type": "/Btn",
+"tip": "The child does not have any of the above reports, plans or statements",
+"w": 14,
+"h": 14
+},
+{
+"page": 10,
+"name": "38",
+"type": "/Btn",
+"tip": "Is there anyone else who knows the child and can tell us about their difficulties?",
+"w": 14,
+"h": 15
+},
+{
+"page": 10,
+"name": "38",
+"type": "/Btn",
+"tip": "Is there anyone else who knows the child and can tell us about their difficulties?",
+"w": 14,
+"h": 14
+},
+{
+"page": 10,
+"name": "38_1",
+"type": "/Tx",
+"tip": "The person giving their statement completes this box with the name of the child",
+"w": 217,
+"h": 23
+},
+{
+"page": 10,
+"name": "38_2",
+"type": "/Tx",
+"tip": "The person giving their statement completes this box with the child's date of birth. ",
+"w": 126,
+"h": 23
+},
+{
+"page": 10,
+"name": "38_3",
+"type": "/Tx",
+"tip": "Statement of the person who knows the child",
+"w": 484,
+"h": 292
+},
+{
+"page": 11,
+"name": "38_5",
+"type": "/Tx",
+"tip": "Name",
+"w": 217,
+"h": 45
+},
+{
+"page": 11,
+"name": "38_6",
+"type": "/Tx",
+"tip": "Date of the signature. D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 11,
+"name": "38_7",
+"type": "/Tx",
+"tip": "The job or profession of the person giving the statement.",
+"w": 217,
+"h": 23
+},
+{
+"page": 11,
+"name": "38_8",
+"type": "/Tx",
+"tip": "The phone number of the person giving the statement.",
+"w": 217,
+"h": 23
+},
+{
+"page": 11,
+"name": "38_9",
+"type": "/Tx",
+"tip": "First line of the address of the person giving the statement.",
+"w": 217,
+"h": 23
+},
+{
+"page": 11,
+"name": "38_10",
+"type": "/Tx",
+"tip": "Second line of the address",
+"w": 217,
+"h": 23
+},
+{
+"page": 11,
+"name": "38_11",
+"type": "/Tx",
+"tip": "Third line of the address",
+"w": 217,
+"h": 23
+},
+{
+"page": 11,
+"name": "38_12",
+"type": "/Tx",
+"tip": "Postcode",
+"w": 165,
+"h": 23
+},
+{
+"page": 11,
+"name": "38_13",
+"type": "/Tx",
+"tip": "The person giving the statement's relationship to the child, if applicable.",
+"w": 217,
+"h": 23
+},
+{
+"page": 11,
+"name": "38_14",
+"type": "/Tx",
+"tip": "When did the person giving the statement last see the child? D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 12,
+"name": "39",
+"type": "/Btn",
+"tip": "Do you give consent for the child\u2019s doctor or other relevant professionals to give DWP more information about ",
+"w": 14,
+"h": 14
+},
+{
+"page": 12,
+"name": "39",
+"type": "/Btn",
+"tip": "Do you give consent for the child\u2019s doctor or other relevant professionals to give DWP more information about ",
+"w": 14,
+"h": 14
+},
+{
+"page": 12,
+"name": "39_1",
+"type": "/Tx",
+"tip": "Date of signature. D D / M M / Y Y Y Y",
+"w": 127,
+"h": 23
+},
+{
+"page": 13,
+"name": "40_1",
+"type": "/Tx",
+"tip": "Row 1 - Child's health condition or disability",
+"w": 104,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_2",
+"type": "/Tx",
+"tip": "Row 1 - How long has the child had the health condition or disability?",
+"w": 95,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_3",
+"type": "/Tx",
+"tip": "Row 1 - What treatment has the child had for their health condition or disability?",
+"w": 164,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_4",
+"type": "/Tx",
+"tip": "Row 1 - How often does the child have treatment?",
+"w": 119,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_5",
+"type": "/Tx",
+"tip": "Row 2 - Child's health condition or disability",
+"w": 104,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_6",
+"type": "/Tx",
+"tip": "Row 2 - How long has the child had the health condition or disability?",
+"w": 95,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_7",
+"type": "/Tx",
+"tip": "Row 2 - What treatment has the child had for their health condition or disability?",
+"w": 164,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_8",
+"type": "/Tx",
+"tip": "Row 2 - How often does the child have treatment?",
+"w": 119,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_9",
+"type": "/Tx",
+"tip": "Row 3 - Child's health condition or disability",
+"w": 104,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_10",
+"type": "/Tx",
+"tip": "Row 3 - How long has the child had the health condition or disability?",
+"w": 95,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_11",
+"type": "/Tx",
+"tip": "Row 3 - What treatment has the child had for their health condition or disability?",
+"w": 164,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_12",
+"type": "/Tx",
+"tip": "Row 3 - How often does the child have treatment?",
+"w": 119,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_13",
+"type": "/Tx",
+"tip": "Row 4 - Child's health condition or disability",
+"w": 104,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_14",
+"type": "/Tx",
+"tip": "Row 4 - How long has the child had the health condition or disability?",
+"w": 95,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_15",
+"type": "/Tx",
+"tip": "Row 4 - What treatment has the child had for their health condition or disability?",
+"w": 164,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_16",
+"type": "/Tx",
+"tip": "Row 4 - How often does the child have treatment?",
+"w": 119,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_17",
+"type": "/Tx",
+"tip": "Row 5 - Child's health condition or disability",
+"w": 104,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_18",
+"type": "/Tx",
+"tip": "Row 5 - How long has the child had the health condition or disability?",
+"w": 95,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_19",
+"type": "/Tx",
+"tip": "Row 5 - What treatment has the child had for their health condition or disability?",
+"w": 164,
+"h": 50
+},
+{
+"page": 13,
+"name": "40_20",
+"type": "/Tx",
+"tip": "Row 5 - How often does the child have treatment?",
+"w": 119,
+"h": 50
+},
+{
+"page": 14,
+"name": "41",
+"type": "/Btn",
+"tip": "Does the child use, or have they been prescribed or had an occupational health assessment for any aids or adap",
+"w": 14,
+"h": 14
+},
+{
+"page": 14,
+"name": "41",
+"type": "/Btn",
+"tip": "Does the child use, or have they been prescribed or had an occupational health assessment for any aids or adap",
+"w": 14,
+"h": 14
+},
+{
+"page": 14,
+"name": "41_1",
+"type": "/Tx",
+"tip": "Row 1 - Aids and adaptations",
+"w": 151,
+"h": 53
+},
+{
+"page": 14,
+"name": "41_2",
+"type": "/Tx",
+"tip": "Row 1 - What help does the child need to use the aid or adaptation?",
+"w": 163,
+"h": 53
+},
+{
+"page": 14,
+"name": "41_3",
+"type": "/Btn",
+"tip": "Row 1 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 14
+},
+{
+"page": 14,
+"name": "41_3",
+"type": "/Btn",
+"tip": "Row 1 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 14
+},
+{
+"page": 14,
+"name": "41_4",
+"type": "/Tx",
+"tip": "Row 2 - Aids and adaptations",
+"w": 151,
+"h": 54
+},
+{
+"page": 14,
+"name": "41_5",
+"type": "/Tx",
+"tip": "Row 2 - What help does the child need to use the aid or adaptation?",
+"w": 163,
+"h": 54
+},
+{
+"page": 14,
+"name": "41_6",
+"type": "/Btn",
+"tip": "Row 2 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 14
+},
+{
+"page": 14,
+"name": "41_6",
+"type": "/Btn",
+"tip": "Row 2 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 15
+},
+{
+"page": 14,
+"name": "41_7",
+"type": "/Tx",
+"tip": "Row 3 - Aids and adaptations",
+"w": 151,
+"h": 54
+},
+{
+"page": 14,
+"name": "41_8",
+"type": "/Tx",
+"tip": "Row 3 - What help does the child need to use the aid or adaptation?",
+"w": 163,
+"h": 54
+},
+{
+"page": 14,
+"name": "41_9",
+"type": "/Btn",
+"tip": "Row 3 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 14
+},
+{
+"page": 14,
+"name": "41_9",
+"type": "/Btn",
+"tip": "Row 3 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 14
+},
+{
+"page": 14,
+"name": "41_10",
+"type": "/Tx",
+"tip": "Row 4 - Aids and adaptations",
+"w": 151,
+"h": 54
+},
+{
+"page": 14,
+"name": "41_11",
+"type": "/Tx",
+"tip": "Row 4 - What help does the child need to use the aid or adaptation?",
+"w": 163,
+"h": 54
+},
+{
+"page": 14,
+"name": "41_12",
+"type": "/Btn",
+"tip": "Row 4 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 14
+},
+{
+"page": 14,
+"name": "41_12",
+"type": "/Btn",
+"tip": "Row 4 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 14
+},
+{
+"page": 14,
+"name": "41_13",
+"type": "/Tx",
+"tip": "Row 5 - Aids and adaptations",
+"w": 151,
+"h": 54
+},
+{
+"page": 14,
+"name": "41_14",
+"type": "/Tx",
+"tip": "Row 5 - What help does the child need to use the aid or adaptation?",
+"w": 163,
+"h": 54
+},
+{
+"page": 14,
+"name": "41_15",
+"type": "/Btn",
+"tip": "Row 5 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 15
+},
+{
+"page": 14,
+"name": "41_15",
+"type": "/Btn",
+"tip": "Row 5 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 14
+},
+{
+"page": 14,
+"name": "14_16",
+"type": "/Tx",
+"tip": "Row 6 - Aids and adaptations",
+"w": 151,
+"h": 54
+},
+{
+"page": 14,
+"name": "14_17",
+"type": "/Tx",
+"tip": "Row 6 - What help does the child need to use the aid or adaptation?",
+"w": 163,
+"h": 54
+},
+{
+"page": 14,
+"name": "41_18",
+"type": "/Btn",
+"tip": "Row 6 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 15
+},
+{
+"page": 14,
+"name": "41_18",
+"type": "/Btn",
+"tip": "Row 6 - Was this aid or adaptation prescribed by a healthcare professional?",
+"w": 15,
+"h": 14
+},
+{
+"page": 15,
+"name": "42",
+"type": "/Btn",
+"tip": "Does the child\u2019s needs stay the same on the majority of the days or does it change from day to day?",
+"w": 14,
+"h": 14
+},
+{
+"page": 15,
+"name": "42",
+"type": "/Btn",
+"tip": "Does the child\u2019s needs stay the same on the majority of the days or does it change from day to day?",
+"w": 14,
+"h": 15
+},
+{
+"page": 15,
+"name": "42_1",
+"type": "/Tx",
+"tip": "Tell us how their needs change from day to day.",
+"w": 461,
+"h": 428
+},
+{
+"page": 16,
+"name": "43",
+"type": "/Btn",
+"tip": "Can the child physically walk?",
+"w": 14,
+"h": 14
+},
+{
+"page": 16,
+"name": "43",
+"type": "/Btn",
+"tip": "Can the child physically walk?",
+"w": 14,
+"h": 14
+},
+{
+"page": 16,
+"name": "44",
+"type": "/Btn",
+"tip": "Does the child have any difficulties with standing and moving around due to a health condition or disability?",
+"w": 14,
+"h": 14
+},
+{
+"page": 16,
+"name": "44",
+"type": "/Btn",
+"tip": "Does the child have any difficulties with standing and moving around due to a health condition or disability?",
+"w": 14,
+"h": 15
+},
+{
+"page": 16,
+"name": "45",
+"type": "/Btn",
+"tip": "How far can they walk?",
+"w": 14,
+"h": 14
+},
+{
+"page": 16,
+"name": "45",
+"type": "/Btn",
+"tip": "How far can they walk?",
+"w": 14,
+"h": 15
+},
+{
+"page": 16,
+"name": "45",
+"type": "/Btn",
+"tip": "How far can they walk?",
+"w": 14,
+"h": 14
+},
+{
+"page": 16,
+"name": "45",
+"type": "/Btn",
+"tip": "How far can they walk?",
+"w": 14,
+"h": 14
+},
+{
+"page": 16,
+"name": "45_1",
+"type": "/Btn",
+"tip": "How long does it take them?",
+"w": 14,
+"h": 14
+},
+{
+"page": 16,
+"name": "45_1",
+"type": "/Btn",
+"tip": "How long does it take them?",
+"w": 14,
+"h": 15
+},
+{
+"page": 16,
+"name": "45_1",
+"type": "/Btn",
+"tip": "How long does it take them?",
+"w": 14,
+"h": 14
+},
+{
+"page": 16,
+"name": "45_1",
+"type": "/Btn",
+"tip": "How long does it take them?",
+"w": 14,
+"h": 15
+},
+{
+"page": 16,
+"name": "46",
+"type": "/Btn",
+"tip": "Please tell us about their walking speed",
+"w": 14,
+"h": 15
+},
+{
+"page": 16,
+"name": "46",
+"type": "/Btn",
+"tip": "Please tell us about their walking speed",
+"w": 14,
+"h": 14
+},
+{
+"page": 16,
+"name": "46",
+"type": "/Btn",
+"tip": "Please tell us about their walking speed",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 15
+},
+{
+"page": 17,
+"name": "47",
+"type": "/Btn",
+"tip": "Please tell us about the way they walk",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "47_1",
+"type": "/Tx",
+"tip": "Please tell us about this.",
+"w": 196,
+"h": 361
+},
+{
+"page": 17,
+"name": "48",
+"type": "/Btn",
+"tip": "Does the child have any other difficulties either during or after standing and moving around that affects thei",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "48",
+"type": "/Btn",
+"tip": "Does the child have any other difficulties either during or after standing and moving around that affects thei",
+"w": 14,
+"h": 15
+},
+{
+"page": 17,
+"name": "48_1",
+"type": "/Tx",
+"tip": "Please tell us about this.",
+"w": 196,
+"h": 385
+},
+{
+"page": 17,
+"name": "49",
+"type": "/Btn",
+"tip": "Do they need guidance or supervision most of the time when they walk outdoors?",
+"w": 14,
+"h": 14
+},
+{
+"page": 17,
+"name": "49",
+"type": "/Btn",
+"tip": "Do they need guidance or supervision most of the time when they walk outdoors?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_1",
+"type": "/Btn",
+"tip": "Can they find their way around places they know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_1",
+"type": "/Btn",
+"tip": "Can they find their way around places they know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_2",
+"type": "/Btn",
+"tip": "Can they ask for and follow directions?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_2",
+"type": "/Btn",
+"tip": "Can they ask for and follow directions?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_3",
+"type": "/Btn",
+"tip": "Can they walk safely next to a busy road?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_3",
+"type": "/Btn",
+"tip": "Can they walk safely next to a busy road?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_4",
+"type": "/Btn",
+"tip": "Can they cross a road safely?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_4",
+"type": "/Btn",
+"tip": "Can they cross a road safely?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_5",
+"type": "/Btn",
+"tip": "Can they understand common dangers outdoors?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_5",
+"type": "/Btn",
+"tip": "Can they understand common dangers outdoors?",
+"w": 14,
+"h": 15
+},
+{
+"page": 18,
+"name": "49_6",
+"type": "/Btn",
+"tip": "Do they regularly become anxious, display distressed behaviours, show confusion and become disorientated?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_6",
+"type": "/Btn",
+"tip": "Do they regularly become anxious, display distressed behaviours, show confusion and become disorientated?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_7",
+"type": "/Btn",
+"tip": "Do they regularly display unpredictable behaviour?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_7",
+"type": "/Btn",
+"tip": "Do they regularly display unpredictable behaviour?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_8",
+"type": "/Btn",
+"tip": "Do they regularly need physical restraint?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "49_8",
+"type": "/Btn",
+"tip": "Do they regularly need physical restraint?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "50",
+"type": "/Btn",
+"tip": "Do they fall due to their health condition or disability?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "50",
+"type": "/Btn",
+"tip": "Do they fall due to their health condition or disability?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "50_2",
+"type": "/Btn",
+"tip": "When they fall, can they get up without help or assistance?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "50_2",
+"type": "/Btn",
+"tip": "When they fall, can they get up without help or assistance?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "50_3",
+"type": "/Btn",
+"tip": "Have they had injuries from the falls needing hospital treatment?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "50_3",
+"type": "/Btn",
+"tip": "Have they had injuries from the falls needing hospital treatment?",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "52",
+"type": "/Btn",
+"tip": "If the child is eligible for help from Motability, would you like us to send you information about the help th",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "52",
+"type": "/Btn",
+"tip": "If the child is eligible for help from Motability, would you like us to send you information about the help th",
+"w": 14,
+"h": 14
+},
+{
+"page": 18,
+"name": "50_1",
+"type": "/Tx",
+"tip": "Tell us the number of falls each month",
+"w": 65,
+"h": 22
+},
+{
+"page": 18,
+"name": "51",
+"type": "/Tx",
+"tip": "Please tell us the date their mobility needs started. D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 19,
+"name": "53",
+"type": "/Tx",
+"tip": "Tell us anything else we need to know about their difficulties with standing and moving around or how their ne",
+"w": 480,
+"h": 631
+},
+{
+"page": 20,
+"name": "54",
+"type": "/Btn",
+"tip": "Does the child need encouragement, prompting, or assistance to settle in bed during the day?",
+"w": 14,
+"h": 15
+},
+{
+"page": 20,
+"name": "54",
+"type": "/Btn",
+"tip": "Does the child need encouragement, prompting, or assistance to settle in bed during the day?",
+"w": 14,
+"h": 14
+},
+{
+"page": 20,
+"name": "54_1",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to help them get out of bed?",
+"w": 217,
+"h": 23
+},
+{
+"page": 20,
+"name": "54_2",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 20,
+"name": "54_3",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to help to get into bed?",
+"w": 217,
+"h": 23
+},
+{
+"page": 20,
+"name": "54_4",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 20,
+"name": "54_5",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to help settle in bed?",
+"w": 217,
+"h": 23
+},
+{
+"page": 20,
+"name": "54_6",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 21,
+"name": "55",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to manage their toilet needs?",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "55",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to manage their toilet needs?",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "55_1",
+"type": "/Btn",
+"tip": "go to the toilet",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "55_2",
+"type": "/Btn",
+"tip": "manage clothes",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "55_3",
+"type": "/Btn",
+"tip": "get on and off the toilet",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "55_4",
+"type": "/Btn",
+"tip": "wipe or clean themselves",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "55_5",
+"type": "/Btn",
+"tip": "wash and dry their hands",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "55_6",
+"type": "/Btn",
+"tip": "manage a catheter, ostomy or stoma",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "55_7",
+"type": "/Btn",
+"tip": "manage nappies or pads",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "56",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting, or assistance to help move around indoors, use stairs or get into or ou",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "56",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting, or assistance to help move around indoors, use stairs or get into or ou",
+"w": 14,
+"h": 14
+},
+{
+"page": 21,
+"name": "56_1",
+"type": "/Btn",
+"tip": "go up and down one step",
+"w": 15,
+"h": 14
+},
+{
+"page": 21,
+"name": "56_2",
+"type": "/Btn",
+"tip": "go upstairs",
+"w": 15,
+"h": 14
+},
+{
+"page": 21,
+"name": "56_3",
+"type": "/Btn",
+"tip": "go downstairs",
+"w": 15,
+"h": 14
+},
+{
+"page": 21,
+"name": "56_4",
+"type": "/Btn",
+"tip": "move around safely",
+"w": 15,
+"h": 14
+},
+{
+"page": 21,
+"name": "56_5",
+"type": "/Btn",
+"tip": "get into or out of a chair",
+"w": 15,
+"h": 14
+},
+{
+"page": 21,
+"name": "56_6",
+"type": "/Btn",
+"tip": "sit in a chair",
+"w": 15,
+"h": 14
+},
+{
+"page": 22,
+"name": "57",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting, or assistance with washing, bathing, showering and cleaning themselves ",
+"w": 14,
+"h": 14
+},
+{
+"page": 22,
+"name": "57",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting, or assistance with washing, bathing, showering and cleaning themselves ",
+"w": 14,
+"h": 15
+},
+{
+"page": 22,
+"name": "57_1",
+"type": "/Tx",
+"tip": "How often each day do they need prompting or assistance to wash or bathe?",
+"w": 217,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_2",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_3",
+"type": "/Tx",
+"tip": "How often each day do they need prompting or assistance to clean their teeth?",
+"w": 217,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_4",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_5",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to wash their hair?",
+"w": 217,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_6",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_7",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to get in or out of the bath?",
+"w": 217,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_8",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_9",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to get in or out of the shower?",
+"w": 217,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_10",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_11",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to clean themselves in the bath or show",
+"w": 217,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_12",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_13",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to dry themselves after a bath or showe",
+"w": 217,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_14",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 22,
+"name": "57_15",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to check their appearance?",
+"w": 217,
+"h": 23
+},
+{
+"page": 23,
+"name": "57_16",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 23,
+"name": "58",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting, or assistance to dress and undress during the day?",
+"w": 14,
+"h": 14
+},
+{
+"page": 23,
+"name": "58",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting, or assistance to dress and undress during the day?",
+"w": 14,
+"h": 14
+},
+{
+"page": 23,
+"name": "58_1",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to dress?",
+"w": 217,
+"h": 23
+},
+{
+"page": 23,
+"name": "58_2",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 76,
+"h": 23
+},
+{
+"page": 23,
+"name": "58_3",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to undress?",
+"w": 217,
+"h": 23
+},
+{
+"page": 23,
+"name": "58_4",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 23,
+"name": "58_5",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to manage zips, buttons, or other faste",
+"w": 217,
+"h": 23
+},
+{
+"page": 23,
+"name": "58_6",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 23,
+"name": "58_7",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to choose appropriate clothes?",
+"w": 217,
+"h": 23
+},
+{
+"page": 23,
+"name": "58_8",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 23,
+"name": "59",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting, or assistance to eat and drink during the day?",
+"w": 14,
+"h": 14
+},
+{
+"page": 23,
+"name": "59",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting, or assistance to eat and drink during the day?",
+"w": 14,
+"h": 14
+},
+{
+"page": 23,
+"name": "59_1",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to eat?",
+"w": 217,
+"h": 23
+},
+{
+"page": 24,
+"name": "59_2",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 24,
+"name": "59_3",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to use a spoon?",
+"w": 217,
+"h": 23
+},
+{
+"page": 24,
+"name": "59_4",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 24,
+"name": "59_5",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to cut up food on their plate?",
+"w": 217,
+"h": 23
+},
+{
+"page": 24,
+"name": "59_6",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 24,
+"name": "59_7",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to drink using a cup?",
+"w": 217,
+"h": 23
+},
+{
+"page": 24,
+"name": "59_8",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 24,
+"name": "59_9",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to be tube or pump fed?",
+"w": 217,
+"h": 23
+},
+{
+"page": 24,
+"name": "59_10",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 24,
+"name": "60",
+"type": "/Btn",
+"tip": " Do they need encouragement, prompting, or assistance with managing their medication or monitoring or managing",
+"w": 14,
+"h": 14
+},
+{
+"page": 24,
+"name": "60",
+"type": "/Btn",
+"tip": " Do they need encouragement, prompting, or assistance with managing their medication or monitoring or managing",
+"w": 14,
+"h": 14
+},
+{
+"page": 24,
+"name": "60_1",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to take the correct medication?",
+"w": 217,
+"h": 22
+},
+{
+"page": 24,
+"name": "60_2",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 24,
+"name": "60_3",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to know when to take their medication?",
+"w": 217,
+"h": 23
+},
+{
+"page": 24,
+"name": "60_4",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 24,
+"name": "60_5",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to manage their therapy?",
+"w": 217,
+"h": 23
+},
+{
+"page": 25,
+"name": "60_6",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 25,
+"name": "60_7",
+"type": "/Tx",
+"tip": "How often each day do they need encouragement, prompting or assistance to remind them of when to do their ther",
+"w": 217,
+"h": 23
+},
+{
+"page": 25,
+"name": "60_8",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 25,
+"name": "61",
+"type": "/Btn",
+"tip": "Do they have difficulty seeing?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61",
+"type": "/Btn",
+"tip": "Do they have difficulty seeing?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_1",
+"type": "/Btn",
+"tip": "Are they",
+"w": 14,
+"h": 15
+},
+{
+"page": 25,
+"name": "61_1",
+"type": "/Btn",
+"tip": "Are they",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_2",
+"type": "/Btn",
+"tip": "Can they see computer keyboard keys or large print in a book?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_2",
+"type": "/Btn",
+"tip": "Can they see computer keyboard keys or large print in a book?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_3",
+"type": "/Btn",
+"tip": "Can they see a TV and follow the actions to a story?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_3",
+"type": "/Btn",
+"tip": "Can they see a TV and follow the actions to a story?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_4",
+"type": "/Btn",
+"tip": "Can they see the shape of furniture in a room?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_4",
+"type": "/Btn",
+"tip": "Can they see the shape of furniture in a room?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_5",
+"type": "/Btn",
+"tip": "Can they recognise someone\u2019s face across a room?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_5",
+"type": "/Btn",
+"tip": "Can they recognise someone\u2019s face across a room?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_6",
+"type": "/Btn",
+"tip": "Can they recognise someone across a street?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "61_6",
+"type": "/Btn",
+"tip": "Can they recognise someone across a street?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "62",
+"type": "/Btn",
+"tip": "Do they have difficulty hearing?",
+"w": 14,
+"h": 15
+},
+{
+"page": 25,
+"name": "62",
+"type": "/Btn",
+"tip": "Do they have difficulty hearing?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "62_1",
+"type": "/Btn",
+"tip": "Have they had an audiology test in the last 6 months?",
+"w": 14,
+"h": 15
+},
+{
+"page": 25,
+"name": "62_1",
+"type": "/Btn",
+"tip": "Have they had an audiology test in the last 6 months?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "62_2",
+"type": "/Btn",
+"tip": "Can they hear a whisper in a quiet room?",
+"w": 14,
+"h": 14
+},
+{
+"page": 25,
+"name": "62_2",
+"type": "/Btn",
+"tip": "Can they hear a whisper in a quiet room?",
+"w": 14,
+"h": 15
+},
+{
+"page": 26,
+"name": "62_3",
+"type": "/Btn",
+"tip": "Can they hear a normal voice in a quiet room?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "62_3",
+"type": "/Btn",
+"tip": "Can they hear a normal voice in a quiet room?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "62_4",
+"type": "/Btn",
+"tip": "Can they hear a loud voice in a quiet room?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "62_4",
+"type": "/Btn",
+"tip": "Can they hear a loud voice in a quiet room?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "62_5",
+"type": "/Btn",
+"tip": "Can they hear a TV, radio or CD but only at a very loud volume?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "62_5",
+"type": "/Btn",
+"tip": "Can they hear a TV, radio or CD but only at a very loud volume?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "62_6",
+"type": "/Btn",
+"tip": "Can they hear a school bell or car horn?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "62_6",
+"type": "/Btn",
+"tip": "Can they hear a school bell or car horn?",
+"w": 14,
+"h": 15
+},
+{
+"page": 26,
+"name": "63",
+"type": "/Btn",
+"tip": "Do they have difficulty speaking?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63",
+"type": "/Btn",
+"tip": "Do they have difficulty speaking?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_1",
+"type": "/Btn",
+"tip": "Can they speak clearly in sentences?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_1",
+"type": "/Btn",
+"tip": "Can they speak clearly in sentences?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_2",
+"type": "/Btn",
+"tip": "Can they put words together to make simple sentences?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_2",
+"type": "/Btn",
+"tip": "Can they put words together to make simple sentences?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_3",
+"type": "/Btn",
+"tip": "Can they speak single words?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_3",
+"type": "/Btn",
+"tip": "Can they speak single words?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_4",
+"type": "/Btn",
+"tip": "Can they communicate using speech with someone they know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_4",
+"type": "/Btn",
+"tip": "Can they communicate using speech with someone they know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_5",
+"type": "/Btn",
+"tip": "Can they communicate using speech with someone they do not know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "63_5",
+"type": "/Btn",
+"tip": "Can they communicate using speech with someone they do not know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "64",
+"type": "/Btn",
+"tip": "Do they have difficulty and need help communicating?",
+"w": 14,
+"h": 15
+},
+{
+"page": 26,
+"name": "64",
+"type": "/Btn",
+"tip": "Do they have difficulty and need help communicating?",
+"w": 14,
+"h": 14
+},
+{
+"page": 26,
+"name": "64_1",
+"type": "/Btn",
+"tip": "Writing",
+"w": 15,
+"h": 14
+},
+{
+"page": 26,
+"name": "64_1_2",
+"type": "/Btn",
+"tip": "British Sign Language (BSL)",
+"w": 15,
+"h": 15
+},
+{
+"page": 26,
+"name": "64_1_3",
+"type": "/Btn",
+"tip": "Lip reading",
+"w": 15,
+"h": 14
+},
+{
+"page": 26,
+"name": "64_1_4",
+"type": "/Btn",
+"tip": "Using hand movements, facial expressions and body language",
+"w": 15,
+"h": 14
+},
+{
+"page": 26,
+"name": "64_1_5",
+"type": "/Btn",
+"tip": "Makaton",
+"w": 15,
+"h": 14
+},
+{
+"page": 26,
+"name": "64_1_6",
+"type": "/Btn",
+"tip": "Signed Supported English (SSE)",
+"w": 15,
+"h": 14
+},
+{
+"page": 26,
+"name": "64_1_7",
+"type": "/Btn",
+"tip": "Signed English (SE)",
+"w": 15,
+"h": 14
+},
+{
+"page": 26,
+"name": "64_1_8",
+"type": "/Btn",
+"tip": "Finger spelling",
+"w": 15,
+"h": 14
+},
+{
+"page": 26,
+"name": "64_1_9",
+"type": "/Btn",
+"tip": "Picture Exchange Communication System (PECS)",
+"w": 15,
+"h": 14
+},
+{
+"page": 26,
+"name": "64_1_10",
+"type": "/Btn",
+"tip": "Tadoma\u0007",
+"w": 15,
+"h": 14
+},
+{
+"page": 27,
+"name": "64_2",
+"type": "/Tx",
+"tip": "If they use another form of communication that has not been listed, please tell us.",
+"w": 217,
+"h": 67
+},
+{
+"page": 27,
+"name": "64_3",
+"type": "/Btn",
+"tip": "Can they communicate with someone they know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "64_3",
+"type": "/Btn",
+"tip": "Can they communicate with someone they know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "64_4",
+"type": "/Btn",
+"tip": "Can they communicate with someone they do not know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "64_4",
+"type": "/Btn",
+"tip": "Can they communicate with someone they do not know?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65",
+"type": "/Btn",
+"tip": "Do they have fits, blackouts, seizures, or something similar?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65",
+"type": "/Btn",
+"tip": "Do they have fits, blackouts, seizures, or something similar?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_1",
+"type": "/Tx",
+"tip": "Tell us what type they have and what happens:",
+"w": 217,
+"h": 180
+},
+{
+"page": 27,
+"name": "65_2",
+"type": "/Btn",
+"tip": "Do they have any warning before a fit, blackout or seizure?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_2",
+"type": "/Btn",
+"tip": "Do they have any warning before a fit, blackout or seizure?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_2",
+"type": "/Btn",
+"tip": "Do they have any warning before a fit, blackout or seizure?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_3",
+"type": "/Btn",
+"tip": "Can they recognise a warning and tell an adult?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_3",
+"type": "/Btn",
+"tip": "Can they recognise a warning and tell an adult?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_3",
+"type": "/Btn",
+"tip": "Can they recognise a warning and tell an adult?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_4",
+"type": "/Btn",
+"tip": "Can they recognise a warning and take the appropriate action?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_4",
+"type": "/Btn",
+"tip": "Can they recognise a warning and take the appropriate action?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_4",
+"type": "/Btn",
+"tip": "Can they recognise a warning and take the appropriate action?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_5",
+"type": "/Btn",
+"tip": "Have they had a serious injury in the last 6 months because of a fit, blackout or seizure?",
+"w": 14,
+"h": 15
+},
+{
+"page": 27,
+"name": "65_5",
+"type": "/Btn",
+"tip": "Have they had a serious injury in the last 6 months because of a fit, blackout or seizure?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_6",
+"type": "/Btn",
+"tip": "Are they at risk of harm to themselves or others after a fit, blackout or seizure?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_6",
+"type": "/Btn",
+"tip": "Are they at risk of harm to themselves or others after a fit, blackout or seizure?",
+"w": 14,
+"h": 14
+},
+{
+"page": 27,
+"name": "65_7",
+"type": "/Tx",
+"tip": "How many days on average does this happen each month?",
+"w": 97,
+"h": 23
+},
+{
+"page": 27,
+"name": "65_8",
+"type": "/Tx",
+"tip": "How many fits do they have on average on these days?",
+"w": 97,
+"h": 23
+},
+{
+"page": 27,
+"name": "65_9",
+"type": "/Tx",
+"tip": "How many nights on average does this happen each month?",
+"w": 97,
+"h": 23
+},
+{
+"page": 27,
+"name": "65_10",
+"type": "/Tx",
+"tip": "How many fits do they have on average on these nights?",
+"w": 97,
+"h": 23
+},
+{
+"page": 28,
+"name": "65_11",
+"type": "/Btn",
+"tip": "Have they had an episode of status epilepticus in the past 12 months?",
+"w": 14,
+"h": 15
+},
+{
+"page": 28,
+"name": "65_11",
+"type": "/Btn",
+"tip": "Have they had an episode of status epilepticus in the past 12 months?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66",
+"type": "/Btn",
+"tip": "Do they need to be supervised during the day to keep them safe?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66",
+"type": "/Btn",
+"tip": "Do they need to be supervised during the day to keep them safe?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_1",
+"type": "/Btn",
+"tip": "Can they recognise and react to common dangers?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_1",
+"type": "/Btn",
+"tip": "Can they recognise and react to common dangers?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_2",
+"type": "/Btn",
+"tip": "Can they cope with planned changes to daily routine?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_2",
+"type": "/Btn",
+"tip": "Can they cope with planned changes to daily routine?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_3",
+"type": "/Btn",
+"tip": "Can they cope with unplanned changes to daily routine?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_3",
+"type": "/Btn",
+"tip": "Can they cope with unplanned changes to daily routine?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_4",
+"type": "/Btn",
+"tip": "Do they regularly feel anxious or panic?",
+"w": 14,
+"h": 15
+},
+{
+"page": 28,
+"name": "66_5",
+"type": "/Btn",
+"tip": "Do they regularly become upset or frustrated?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_5",
+"type": "/Btn",
+"tip": "Do they regularly become upset or frustrated?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_6",
+"type": "/Btn",
+"tip": "Do they regularly harm themselves or others?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_6",
+"type": "/Btn",
+"tip": "Do they regularly harm themselves or others?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_7",
+"type": "/Btn",
+"tip": "Do they regularly feel someone may harm them?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_7",
+"type": "/Btn",
+"tip": "Do they regularly feel someone may harm them?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_8",
+"type": "/Btn",
+"tip": "Do they regularly become verbally abusive or display distressed behaviours that can cause harm to themselves o",
+"w": 14,
+"h": 15
+},
+{
+"page": 28,
+"name": "66_8",
+"type": "/Btn",
+"tip": "Do they regularly become verbally abusive or display distressed behaviours that can cause harm to themselves o",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_9",
+"type": "/Btn",
+"tip": "Do they regularly act impulsively?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_9",
+"type": "/Btn",
+"tip": "Do they regularly act impulsively?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_10",
+"type": "/Btn",
+"tip": "Do they regularly become overwhelmed or distressed?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_10",
+"type": "/Btn",
+"tip": "Do they regularly become overwhelmed or distressed?",
+"w": 14,
+"h": 14
+},
+{
+"page": 28,
+"name": "66_4",
+"type": "/Btn",
+"tip": "Do they regularly feel anxious or panic?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67",
+"type": "/Btn",
+"tip": " Do they need extra help with their development?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67",
+"type": "/Btn",
+"tip": " Do they need extra help with their development?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_1",
+"type": "/Btn",
+"tip": "Do they need help to understand the world around them?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_1",
+"type": "/Btn",
+"tip": "Do they need help to understand the world around them?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_2",
+"type": "/Btn",
+"tip": "Do they need help to recognise their surroundings?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_2",
+"type": "/Btn",
+"tip": "Do they need help to recognise their surroundings?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_3",
+"type": "/Btn",
+"tip": "Do they need help to follow instructions?",
+"w": 14,
+"h": 15
+},
+{
+"page": 29,
+"name": "67_3",
+"type": "/Btn",
+"tip": "Do they need help to follow instructions?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_4",
+"type": "/Btn",
+"tip": "Do they need help to play with others?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_4",
+"type": "/Btn",
+"tip": "Do they need help to play with others?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_5",
+"type": "/Btn",
+"tip": "Do they need help to play on their own?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_5",
+"type": "/Btn",
+"tip": "Do they need help to play on their own?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_6",
+"type": "/Btn",
+"tip": "Do they need help to join in activities with others?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_6",
+"type": "/Btn",
+"tip": "Do they need help to join in activities with others?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_7",
+"type": "/Btn",
+"tip": "Do they need help to behave appropriately?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_7",
+"type": "/Btn",
+"tip": "Do they need help to behave appropriately?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_8",
+"type": "/Btn",
+"tip": "Do they need help to understand, react and respond to other people\u2019s behaviour?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "67_8",
+"type": "/Btn",
+"tip": "Do they need help to understand, react and respond to other people\u2019s behaviour?",
+"w": 14,
+"h": 15
+},
+{
+"page": 29,
+"name": "68",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance at school or nursery?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "68",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance at school or nursery?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "68_1",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to go to and use the toilet?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "68_1",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to go to and use the toilet?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "68_2",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to safely move between lessons?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "68_2",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to safely move between lessons?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "68_3",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to change into different clothes for physical education an",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "68_3",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to change into different clothes for physical education an",
+"w": 14,
+"h": 15
+},
+{
+"page": 29,
+"name": "68_4",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to eat meals?",
+"w": 14,
+"h": 14
+},
+{
+"page": 29,
+"name": "68_4",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to eat meals?",
+"w": 14,
+"h": 15
+},
+{
+"page": 30,
+"name": "68_5",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to take medicine or manage their therapy?",
+"w": 14,
+"h": 14
+},
+{
+"page": 30,
+"name": "68_5",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to take medicine or manage their therapy?",
+"w": 14,
+"h": 15
+},
+{
+"page": 30,
+"name": "68_6",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to communicate?",
+"w": 14,
+"h": 15
+},
+{
+"page": 30,
+"name": "68_6",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to communicate?",
+"w": 14,
+"h": 14
+},
+{
+"page": 30,
+"name": "68_7",
+"type": "/Tx",
+"tip": "What extra help do they need with their learning?",
+"w": 217,
+"h": 493
+},
+{
+"page": 30,
+"name": "68_8",
+"type": "/Tx",
+"tip": "What is their behaviour like at school or nursery?",
+"w": 217,
+"h": 428
+},
+{
+"page": 30,
+"name": "68_9",
+"type": "/Tx",
+"tip": "How do they usually get to and from school or nursery?",
+"w": 217,
+"h": 156
+},
+{
+"page": 31,
+"name": "69",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to take part in hobbies, interests, social or religious ac",
+"w": 14,
+"h": 15
+},
+{
+"page": 31,
+"name": "69",
+"type": "/Btn",
+"tip": "Do they need encouragement, prompting or assistance to take part in hobbies, interests, social or religious ac",
+"w": 14,
+"h": 14
+},
+{
+"page": 31,
+"name": "69_13",
+"type": "/Tx",
+"tip": "Activity 1",
+"w": 102,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_14",
+"type": "/Tx",
+"tip": "Help needed for activity 1",
+"w": 203,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_15",
+"type": "/Tx",
+"tip": "How often is the help needed for activity 1?",
+"w": 94,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_16",
+"type": "/Tx",
+"tip": "How long each time is the help needed for activity 1?",
+"w": 77,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_17",
+"type": "/Tx",
+"tip": "Activity 2",
+"w": 102,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_18",
+"type": "/Tx",
+"tip": "Help needed for activity 2",
+"w": 203,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_19",
+"type": "/Tx",
+"tip": "How often is the help needed for activity 2?",
+"w": 94,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_20",
+"type": "/Tx",
+"tip": "How long each time is the help needed for activity 2?",
+"w": 77,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_21",
+"type": "/Tx",
+"tip": "Activity 3",
+"w": 102,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_22",
+"type": "/Tx",
+"tip": "Help needed for activity 3",
+"w": 203,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_23",
+"type": "/Tx",
+"tip": "How often is the help needed for activity 3?",
+"w": 94,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_24",
+"type": "/Tx",
+"tip": "How long each time is the help needed for activity 3?",
+"w": 77,
+"h": 49
+},
+{
+"page": 31,
+"name": "69_1",
+"type": "/Tx",
+"tip": "Activity 1",
+"w": 102,
+"h": 45
+},
+{
+"page": 31,
+"name": "69_2",
+"type": "/Tx",
+"tip": "Help needed for activity 1",
+"w": 204,
+"h": 45
+},
+{
+"page": 31,
+"name": "69_3",
+"type": "/Tx",
+"tip": "How often is the help needed for activity 1?",
+"w": 93,
+"h": 45
+},
+{
+"page": 31,
+"name": "69_4",
+"type": "/Tx",
+"tip": "How long each time is the help needed for activity 1?",
+"w": 78,
+"h": 45
+},
+{
+"page": 31,
+"name": "69_5",
+"type": "/Tx",
+"tip": "Activity 2",
+"w": 102,
+"h": 46
+},
+{
+"page": 31,
+"name": "69_6",
+"type": "/Tx",
+"tip": "Help needed for activity 2",
+"w": 204,
+"h": 46
+},
+{
+"page": 31,
+"name": "69_7",
+"type": "/Tx",
+"tip": "How often is the help needed for activity 2?",
+"w": 93,
+"h": 46
+},
+{
+"page": 31,
+"name": "69_8",
+"type": "/Tx",
+"tip": "How long each time is the help needed for activity 2?",
+"w": 78,
+"h": 46
+},
+{
+"page": 31,
+"name": "69_9",
+"type": "/Tx",
+"tip": "Activity 3",
+"w": 102,
+"h": 46
+},
+{
+"page": 31,
+"name": "69_10",
+"type": "/Tx",
+"tip": "Help needed for activity 3",
+"w": 204,
+"h": 46
+},
+{
+"page": 31,
+"name": "69_11",
+"type": "/Tx",
+"tip": "How often is the help needed for activity 3?",
+"w": 93,
+"h": 46
+},
+{
+"page": 31,
+"name": "69_12",
+"type": "/Tx",
+"tip": "How long each time is the help needed for activity 3?",
+"w": 78,
+"h": 46
+},
+{
+"page": 32,
+"name": "70",
+"type": "/Btn",
+"tip": "Due to a health condition or disability do they wake and need assistance or supervision during the night?",
+"w": 14,
+"h": 15
+},
+{
+"page": 32,
+"name": "70",
+"type": "/Btn",
+"tip": "Due to a health condition or disability do they wake and need assistance or supervision during the night?",
+"w": 14,
+"h": 14
+},
+{
+"page": 32,
+"name": "70_1",
+"type": "/Tx",
+"tip": "On average how many nights each week do they need encouragement, prompting or assistance to get into, get out ",
+"w": 217,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_2",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_3",
+"type": "/Tx",
+"tip": "How many times a night do they need the help?",
+"w": 217,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_4",
+"type": "/Tx",
+"tip": "On average how many nights each week do they need encouragement, prompting or assistance to get to and use the",
+"w": 217,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_5",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_6",
+"type": "/Tx",
+"tip": "How many times a night do they need the help?",
+"w": 217,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_7",
+"type": "/Tx",
+"tip": "On average how many nights each week do they need encouragement, prompting or assistance to have treatment?",
+"w": 217,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_8",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_9",
+"type": "/Tx",
+"tip": "How many times a night do they need the help?",
+"w": 217,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_10",
+"type": "/Tx",
+"tip": "On average how many nights each week do they need encouragement, prompting or assistance to settle or re-settl",
+"w": 217,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_11",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_12",
+"type": "/Tx",
+"tip": "How many times a night do they need the help?",
+"w": 217,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_13",
+"type": "/Tx",
+"tip": "On average how many nights each week do they need supervision because they are unaware of danger or may harm t",
+"w": 217,
+"h": 23
+},
+{
+"page": 32,
+"name": "70_14",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 33,
+"name": "70_15",
+"type": "/Tx",
+"tip": "How many times a night do they need the help?",
+"w": 217,
+"h": 23
+},
+{
+"page": 33,
+"name": "70_16",
+"type": "/Tx",
+"tip": "On average how many nights each week do they need supervision because they may wander about?",
+"w": 217,
+"h": 23
+},
+{
+"page": 33,
+"name": "70_17",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 33,
+"name": "70_18",
+"type": "/Tx",
+"tip": "How many times a night do they need the help?",
+"w": 217,
+"h": 23
+},
+{
+"page": 33,
+"name": "70_19",
+"type": "/Tx",
+"tip": "On average how many nights each week do they need supervision because they have behavioural problems?",
+"w": 217,
+"h": 23
+},
+{
+"page": 33,
+"name": "70_20",
+"type": "/Tx",
+"tip": "How many minutes does this take each time?",
+"w": 73,
+"h": 23
+},
+{
+"page": 33,
+"name": "70_21",
+"type": "/Tx",
+"tip": "How many times a night do they need the help?",
+"w": 217,
+"h": 23
+},
+{
+"page": 33,
+"name": "71",
+"type": "/Tx",
+"tip": "What date did the child's difficulties with their care needs start? D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 34,
+"name": "72",
+"type": "/Tx",
+"tip": "Tell us anything else we need to know about their difficulties with their daily living and care needs or how t",
+"w": 480,
+"h": 586
+},
+{
+"page": 35,
+"name": "82",
+"type": "/Tx",
+"tip": "What is your relationship to the child?",
+"w": 217,
+"h": 23
+},
+{
+"page": 35,
+"name": "73",
+"type": "/Tx",
+"tip": "Your surname or family name",
+"w": 217,
+"h": 23
+},
+{
+"page": 35,
+"name": "74",
+"type": "/Tx",
+"tip": "All other names in full",
+"w": 217,
+"h": 24
+},
+{
+"page": 35,
+"name": "74_1",
+"type": "/Tx",
+"tip": "Title",
+"w": 217,
+"h": 23
+},
+{
+"page": 35,
+"name": "75",
+"type": "/Tx",
+"tip": "Your date of birth. D D / M M / Y Y Y Y ",
+"w": 126,
+"h": 23
+},
+{
+"page": 35,
+"name": "76",
+"type": "/Tx",
+"tip": "Your National Insurance (NI) number",
+"w": 216,
+"h": 23
+},
+{
+"page": 35,
+"name": "77",
+"type": "/Tx",
+"tip": "Your address, if different to the child\u2019s",
+"w": 217,
+"h": 23
+},
+{
+"page": 35,
+"name": "77_1",
+"type": "/Tx",
+"tip": "Second line of your address",
+"w": 217,
+"h": 23
+},
+{
+"page": 35,
+"name": "77_2",
+"type": "/Tx",
+"tip": "Third line of your address",
+"w": 217,
+"h": 23
+},
+{
+"page": 35,
+"name": "77_3",
+"type": "/Tx",
+"tip": "Postcode",
+"w": 165,
+"h": 23
+},
+{
+"page": 35,
+"name": "78",
+"type": "/Btn",
+"tip": "If you live in Wales do you want us to communicate with you in Welsh?",
+"w": 14,
+"h": 14
+},
+{
+"page": 35,
+"name": "78",
+"type": "/Btn",
+"tip": "If you live in Wales do you want us to communicate with you in Welsh?",
+"w": 14,
+"h": 14
+},
+{
+"page": 35,
+"name": "79",
+"type": "/Tx",
+"tip": "Email address",
+"w": 217,
+"h": 23
+},
+{
+"page": 35,
+"name": "79_1",
+"type": "/Tx",
+"tip": "Telephone number",
+"w": 217,
+"h": 24
+},
+{
+"page": 35,
+"name": "83",
+"type": "/Tx",
+"tip": "What is your nationality?",
+"w": 217,
+"h": 24
+},
+{
+"page": 35,
+"name": "80",
+"type": "/Btn",
+"tip": "Are you getting or waiting to hear about Income Support?",
+"w": 14,
+"h": 14
+},
+{
+"page": 35,
+"name": "80",
+"type": "/Btn",
+"tip": "Are you getting or waiting to hear about Income Support?",
+"w": 14,
+"h": 14
+},
+{
+"page": 35,
+"name": "81",
+"type": "/Btn",
+"tip": "Is anyone within your household getting or waiting to hear about Income Support?",
+"w": 14,
+"h": 14
+},
+{
+"page": 35,
+"name": "81",
+"type": "/Btn",
+"tip": "Is anyone within your household getting or waiting to hear about Income Support?",
+"w": 14,
+"h": 14
+},
+{
+"page": 35,
+"name": "81_1",
+"type": "/Tx",
+"tip": "Please tell us their name",
+"w": 217,
+"h": 23
+},
+{
+"page": 35,
+"name": "81_2",
+"type": "/Tx",
+"tip": "Their National Insurance number",
+"w": 217,
+"h": 23
+},
+{
+"page": 35,
+"name": "81_3",
+"type": "/Tx",
+"tip": "Their relationship to you",
+"w": 217,
+"h": 24
+},
+{
+"page": 36,
+"name": "84",
+"type": "/Tx",
+"tip": "Name of the account holder",
+"w": 217,
+"h": 23
+},
+{
+"page": 36,
+"name": "85",
+"type": "/Tx",
+"tip": "Full name of the bank or building society",
+"w": 217,
+"h": 23
+},
+{
+"page": 36,
+"name": "86",
+"type": "/Tx",
+"tip": "First and second numbers of the sort code",
+"w": 41,
+"h": 23
+},
+{
+"page": 36,
+"name": "86_1",
+"type": "/Tx",
+"tip": "Third and forth numbers of the sort code",
+"w": 41,
+"h": 23
+},
+{
+"page": 36,
+"name": "86_2",
+"type": "/Tx",
+"tip": "Fifth and sixth numbers of the sort code",
+"w": 42,
+"h": 23
+},
+{
+"page": 36,
+"name": "87",
+"type": "/Tx",
+"tip": "Account number",
+"w": 217,
+"h": 23
+},
+{
+"page": 36,
+"name": "88",
+"type": "/Tx",
+"tip": "Building society roll or reference number",
+"w": 382,
+"h": 23
+},
+{
+"page": 37,
+"name": "89",
+"type": "/Tx",
+"tip": "Tell us anything else you think we should know about the child\u2019s day to day difficulties. If you are sending t",
+"w": 480,
+"h": 607
+},
+{
+"page": 38,
+"name": "89_1",
+"type": "/Tx",
+"tip": "Print your name",
+"w": 217,
+"h": 44
+},
+{
+"page": 38,
+"name": "89_2",
+"type": "/Tx",
+"tip": "Date of signature. D D / M M / Y Y Y Y",
+"w": 126,
+"h": 23
+},
+{
+"page": 39,
+"name": "89_3",
+"type": "/Btn",
+"tip": "You have included full details for anyone else you have seen about the\nchild at question 25",
+"w": 14,
+"h": 14
+},
+{
+"page": 39,
+"name": "89_4",
+"type": "/Btn",
+"tip": "You have included full details of your GP at question 26",
+"w": 14,
+"h": 14
+},
+{
+"page": 39,
+"name": "89_5",
+"type": "/Btn",
+"tip": "The person who completed question 38 has signed the declaration on page 11",
+"w": 14,
+"h": 15
+},
+{
+"page": 39,
+"name": "89_6",
+"type": "/Btn",
+"tip": "You have ticked the relevant box about sharing information at question 39, and signed the statement about how ",
+"w": 14,
+"h": 14
+},
+{
+"page": 39,
+"name": "89_7",
+"type": "/Btn",
+"tip": "The person whose details are in About You on page 35 is the person who signs the consent and declaration on pa",
+"w": 14,
+"h": 14
+},
+{
+"page": 39,
+"name": "89_8",
+"type": "/Btn",
+"tip": "You have given us any extra information at question 89",
+"w": 14,
+"h": 14
+},
+{
+"page": 39,
+"name": "89_9",
+"type": "/Btn",
+"tip": "If your claim is going to be late getting to us, you have told us the reason at question 89",
+"w": 14,
+"h": 14
+}
+]

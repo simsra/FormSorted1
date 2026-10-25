@@ -1,0 +1,60 @@
+# Render Blueprint: FormSorted order app (free plan, Frankfurt). Secrets are set in the dashboard (sync: false).
+services:
+  - type: web
+    name: formsorted-app
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    autoDeploy: false
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: BRAND
+        value: FormSorted
+      - key: RETENTION_LOOP
+        value: "0"            # no always-on loop on free; the cron ping does deletion
+      - key: RETENTION_DAYS
+        value: "90"
+      - key: MAIL_BACKEND
+        value: resend
+      - key: MAIL_FROM
+        value: "FormSorted <hello@formsorted.com>"
+      - key: SUPABASE_BUCKET
+        value: orders
+      - key: LLM_PROVIDER      # drafting provider: anthropic | openai | gemini
+        value: anthropic
+      - key: LLM_MODEL
+        value: claude-opus-5-5
+      - key: LLM_FALLBACKS     # tried in order if the drafting model fails
+        value: "anthropic:claude-sonnet-5-5,gemini:gemini-3.8-flash,openai:gpt-5.5,openai:gpt-5.4"
+      - key: GROUNDING_PROVIDER  # fact-check uses a different model family from the drafter
+        value: openai
+      - key: GROUNDING_MODEL
+        value: gpt-5.4-mini
+      - key: GROUNDING_FALLBACKS # never skipped; same family as drafter only as last resort
+        value: "openai:gpt-5.4,gemini:gemini-3.8-flash,anthropic:claude-haiku-5-5,anthropic:claude-opus-5-5"
+      - key: CRON_SECRET
+        generateValue: true
+      - key: PUBLIC_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false

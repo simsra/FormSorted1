@@ -1,0 +1,9 @@
+data/
+out/
+__pycache__/
+*.db
+.env
+screenshots/
+*.pyc
+stripe_links_test.json
+.github/
