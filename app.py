@@ -20,9 +20,16 @@ def get(token):
     return r
 STEPS=["Choose","Pay","Agree","Conversation","Deadline","Strength check","Approve","Your documents"]
 def prog(n): return f"<p class=progress>Step {n} of {len(STEPS)}: {STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(STEPS)}%'></span></div>"
-def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability"): return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg><link rel=stylesheet href=/static/app.css><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body><a href="#main" class="skip">Skip to main content</a>
+def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
+    if minimal:  # order summary: no outbound links except Terms/Privacy
+        indep='<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not DWP or GOV.UK.</div></div>'
+        ftr='<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent, paid service. Not affiliated with DWP, GOV.UK or any government body. We can\'t guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a></p></div></footer>'
+    else:
+        indep=f'<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not DWP or GOV.UK. You can claim free at <a href="{gov}">GOV.UK</a>.</div></div>'
+        ftr='<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent, paid service. Not affiliated with DWP, GOV.UK or any government body. We can\'t guarantee an award or outcome.</p><p>Free help: Citizens Advice · Age UK 0800 678 1602 · Contact 0808 808 3555 · gov.uk</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a><a data-contact href="mailto:hello@formsorted.com">Contact</a></p></div></footer>'
+    return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg><link rel=stylesheet href=/static/app.css><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body><a href="#main" class="skip">Skip to main content</a>
 <header class="hdr"><div class="wrap"><a class="logo" href="/"><img src="/static/logo.svg" alt="FormSorted home" width="170" height="36"></a></div></header>
-<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not DWP or GOV.UK. You can claim free at <a href="{gov}">GOV.UK</a>.</div></div><main id=main><div class=wrap>{body}</div></main><footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent, paid service. Not affiliated with DWP, GOV.UK or any government body. We can't guarantee an award or outcome.</p><p>Free help: Citizens Advice · Age UK 0800 678 1602 · Contact 0808 808 3555 · gov.uk</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a><a data-contact href="mailto:hello@formsorted.com">Contact</a></p></div></footer></body></html>""")
+{indep}<main id=main><div class=wrap>{body}</div></main>{ftr}</body></html>""")
 def stripe(method,path,data=None):
     req=urllib.request.Request("https://api.stripe.com/v1"+path,urllib.parse.urlencode(data).encode() if data else None,method=method,
         headers={"Authorization":"Basic "+base64.b64encode((STRIPE+":").encode()).decode()})
@@ -49,10 +56,29 @@ def home(form:str="", tier:str=""):
 <div class=inset>Live in Scotland? We don't cover Scotland. Apply to Social Security Scotland instead (Pension Age, Child or Adult Disability Payment).</div>
 <button class=btn>Continue</button></form>""","Choose your form")
     f=FORMS[form]; ts=list(f["tiers"].items())
+    if tier in f["tiers"]: return order_summary(form,tier,pv)
     opts="".join(f"""<label class=radio><input type=radio name=tier value={t} {'checked' if (t==tier if tier in f['tiers'] else i==len(ts)-1) else ''} required><span><strong>{n} – £{p//100}</strong><span class=hint>{d}</span></span></label>""" for i,(t,(n,p,d)) in enumerate(ts))
     return page(prog(1)+pv+f"""<p class=caption>{f['short']}</p><form method=post action=/checkout><input type=hidden name=form value={form}><fieldset style="border:0;padding:0;margin:0"><legend><h1>Which service do you want?</h1></legend>{opts}</fieldset>
 <div class=promise><strong>Your words only.</strong> You approve every word before you send.</div><div class=inset>One-off fee. No success fee. Secure card payment. 14-day cancellation rights until your conversation starts.</div>
 <button class="btn">Continue to payment</button></form><p><a href=/>Choose a different form</a></p>""","Choose your service",f["gov"])
+PRICING_URL="https://formsorted.com/#prices"
+def pack_items(form,tier):
+    """What's included, as bullets, for one pack (a higher tier includes the lower one)."""
+    out=[]
+    for t,(n,p,d) in FORMS[form]["tiers"].items():
+        d=d.replace("Everything above, plus ","").replace(", ready to check, sign and post free.",", ready to check, sign and post.").rstrip(".")
+        out.append(d[0].upper()+d[1:])
+        if t==tier: break
+    return out
+def order_summary(form,tier,pv=""):
+    f=FORMS[form]; n,p,_=f["tiers"][tier]
+    items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,tier)+["You check and approve every word before anything is final"])
+    return page(prog(1)+pv+f"""<div class=summary><p class=caption>Your order</p><h1>{esc(n)}</h1><p class=sub>{esc(f['short'])}</p>
+<p class=lede><strong>We fill in your form. You check, sign and post.</strong> We ask you simple questions in plain English, then write it all up in your words.</p>
+<h2 class=h3>What's included</h2><ul class=ticks>{items}</ul>
+<div class=total><span>Total</span><strong>£{p//100}</strong></div><p class=hint>One-off fee. No success fee. 14-day cancellation rights until your conversation starts.</p>
+<form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={tier}><button class="btn btn-wide">Continue to payment</button></form>
+<p class=change><a href="{PRICING_URL}">Change form or pack</a></p></div>""",f"Your order: {n}",minimal=True)
 @app.post("/checkout")
 def checkout(tier:str=Form(...), form:str=Form("aa")):
     if form not in FORMS or tier not in FORMS[form]["tiers"]: raise HTTPException(400)

@@ -1,3 +1,4 @@
+import re
 """Test-mode end-to-end flow for every form against a running DEV server:
   ../../.venv/bin/uvicorn app:app --port 8011 &  then  ../../.venv/bin/python test_flows.py
 Covers: conversation -> deadline tracker -> strength check -> approval (required) -> download, save code -> review mode, MR letter, unit rules."""
@@ -73,6 +74,13 @@ assert req("/").status==200
 codes={}; atw_tokens={}
 for form,f in FORMS.items():
     assert req(f"/?form={form}").status==200
+    assert "Which service do you want?" in req(f"/?form={form}&tier=bogus").read().decode()   # invalid tier -> chooser
+    for t,(n,p,_) in f["tiers"].items():
+        h=req(f"/?form={form}&tier={t}").read().decode()   # valid -> single order summary
+        assert "Your order" in h and f"£{p//100}" in h and h.count("Continue to payment")==1 and "Which service" not in h, (form,t)
+        assert "We fill in your form. You check, sign and post." in h and 'name=tier value=' in h
+        low=h.lower(); assert "stripe" not in low and " ai " not in low and "free" not in low and "citizens advice" not in low, (form,t)
+        hrefs=set(re.findall(r'href="?(https?://[^" >]+)',h)); assert hrefs<={"https://formsorted.com/privacy.html","https://formsorted.com/terms.html","https://formsorted.com/#prices"}, hrefs
     for t in f["tiers"]:
         tok=req("/checkout",{"tier":t,"form":form}).headers["location"].split("/")[-1]
         req(f"/consent/{tok}",{"health":"on","digital":"on","truth":"on"})
