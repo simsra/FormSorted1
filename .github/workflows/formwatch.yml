@@ -1,0 +1,17 @@
+# Weekly (Mondays): compare GOV.UK's current AA1/DLA1A with the bundled copies; app switches pre-fill off if a new version appears.
+# Fails the run (so GitHub emails) if a form changed or pre-fill is off. Repo secrets: APP_URL, CRON_SECRET.
+name: formwatch
+on:
+  schedule: [{cron: "40 6 * * 1"}]
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          r=$(curl -fsS --retry 5 --retry-delay 20 --max-time 120 -X POST "${{ secrets.APP_URL }}/cron/formwatch" -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}")
+          echo "$r" | python3 -c 'import json,sys; d=json.load(sys.stdin); bad=0
+          for f in d["forms"]:
+              print(f["form"], f["ok"], f["reason"], "prefill_enabled=", f["prefill_enabled"])
+              bad |= (f["ok"] is False) or not f["prefill_enabled"]
+          sys.exit(1 if bad else 0)'
