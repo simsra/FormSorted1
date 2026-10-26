@@ -58,3 +58,11 @@ textarea:focus-visible,input:focus-visible{background-color:#fff;box-shadow:inse
 .letter{white-space:pre-wrap;background:#fff;border:2px solid var(--line);padding:1em;font:16px/1.5 Georgia,serif}
 input[type=date],input[type=tel],input:not([type]),select{font:inherit;padding:.4em;border:2px solid var(--ink);max-width:100%}
 .ground{border:2px solid var(--warn);background:#fdf3ef;padding:.5em 1em;margin:.6em 0}.ground ul{margin:.3em 0;padding-left:1.1em}.resopts{display:flex;flex-wrap:wrap;gap:.4em 1.2em;font-size:.95rem}.resopts input{width:22px;height:22px;vertical-align:middle;accent-color:var(--brand)}
+
+.summary{max-width:34rem}.summary .sub{color:#555;margin-top:-.4em}.summary .lede{font-size:1.1em}
+.summary ul.ticks{list-style:none;padding:0;margin:0 0 1.2em}.summary ul.ticks li{position:relative;padding:.35em 0 .35em 1.8em;border-bottom:1px solid #e3e8ea}
+.summary ul.ticks li:before{content:"\2713";position:absolute;left:.2em;top:.3em;color:#1e7a55;font-weight:700}
+.summary .total{display:flex;justify-content:space-between;align-items:baseline;font-size:1.3em;border-top:3px solid var(--ink);padding-top:.5em}
+.summary .total strong{font-size:1.5em}.summary .change{font-size:.9em;margin-top:1em}
+.btn-wide{width:100%;text-align:center}@media(min-width:640px){.btn-wide{width:auto;min-width:16rem}}
+.lockprev{margin:1em 0;text-align:center}.lockprev img{max-width:100%;height:auto;border:1px solid #c9d3d8}.lockprev figcaption{font-size:.85em;color:#555}

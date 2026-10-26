@@ -1,3 +1,4 @@
+import re
 """Test-mode end-to-end flow for every form against a running DEV server:
   ../../.venv/bin/uvicorn app:app --port 8011 &  then  ../../.venv/bin/python test_flows.py
 Covers: conversation -> deadline tracker -> strength check -> approval (required) -> download, save code -> review mode, MR letter, unit rules."""
@@ -14,7 +15,7 @@ def req(path,data=None,js=None):
     else: r=urllib.request.Request(B+path,urllib.parse.urlencode(data).encode() if data is not None else None)
     try: return op.open(r)
     except urllib.error.HTTPError as e:
-        if e.code in(302,303,403): return e
+        if e.code in(302,303,400,402,403,404,422): return e
         raise
 def body(p): return req(p).read().decode()
 # --- unit: strength check
@@ -73,12 +74,27 @@ assert req("/").status==200
 codes={}; atw_tokens={}
 for form,f in FORMS.items():
     assert req(f"/?form={form}").status==200
+    assert "How much should we do for you?" in req(f"/?form={form}&tier=bogus").read().decode()   # invalid tier -> chooser
+    for t,(n,p,_) in f["tiers"].items():
+        h=req(f"/?form={form}&tier={t}").read().decode()   # valid -> single order summary
+        assert "Your order" in h and f"£{p//100}" in h and h.count("Start my form")==1 and "Nothing to pay now" in h and "How much should we" not in h, (form,t)
+        assert "We fill in your form. You check, sign and post." in h and 'name=tier value=' in h
+        low=h.lower(); assert "stripe" not in low and " ai " not in low and "free" not in low and "citizens advice" not in low, (form,t)
+        hrefs=set(re.findall(r'href="?(https?://[^" >]+)',h)); assert hrefs<={"https://formsorted.com/privacy.html","https://formsorted.com/terms.html","https://formsorted.com/#prices"}, hrefs
     for t in f["tiers"]:
         tok=req("/checkout",{"tier":t,"form":form}).headers["location"].split("/")[-1]
         req(f"/consent/{tok}",{"health":"on","digital":"on","truth":"on"})
         n=0; j=json.load(req(f"/api/{tok}/message",js={"text":""}))
         while not j["done"]: n+=1; j=json.load(req(f"/api/{tok}/message",js={"text":f"Sample answer {n}"}))
-        nx=json.load(req(f"/api/{tok}/finish",{}))["next"]; assert nx==f"/deadline/{tok}"
+        assert req(f"/approve/{tok}").status==402 and req(f"/download/{tok}/answers.html").status==402 and req(f"/deadline/{tok}").status==402   # nothing before payment
+        nx=json.load(req(f"/api/{tok}/finish",{}))["next"]; assert nx==f"/preview/{tok}", nx
+        pv=body(nx); assert "Pay £" in pv and "Sample answer" not in pv and "preview-placeholder.svg" in pv and "stripe" not in pv.lower() and " ai " not in pv.lower()
+        for p_ in ("/approve/","/check/","/deadline/","/details/","/ticks/","/documents/","/prepare/","/download/%s/answers.html"):
+            u=p_%tok if "%s" in p_ else p_+tok; assert req(u).status==402, u   # no answer text before payment
+        assert json.load(req(f"/api/{tok}/message",js={"text":"more"}))["done"]   # interview closed once finished
+        assert req(f"/pay/{tok}",{"x":"1"}).status==422   # cancellation waiver required
+        assert req(f"/pay/{tok}",{"waive":"on"}).headers["location"]==f"/start/{tok}"   # DEV: marks paid
+        assert req(f"/start/{tok}").headers["location"]==f"/prepare/{tok}" and req(f"/prepare/{tok}").headers["location"]==f"/deadline/{tok}"
         assert req(f"/download/{tok}/answers.html").status==403  # not approved yet
         req(f"/deadline/{tok}",{"how":"employed" if form=="atw" else "phone","requested":"2026-10-20","received":""}); h=body(f"/deadline/{tok}")
         if form=="atw": assert "Apply by" in h and "6 weeks" in h and "0800 121 7479" in h and "Timing" in h
@@ -112,7 +128,7 @@ for form,f in FORMS.items():
         for u in files: dd=req(u).read(); assert len(dd)>2000,u
         if form=="atw":
             import io, zipfile
-            assert "review form" not in h.lower() and "AccessToWork-answers.docx" in h and "gov.uk/access-to-work/apply" in h and "Your answers are ready" in h
+            assert "review form" not in h.lower() and "AccessToWork-answers.docx" in h and "search 'Access to Work apply'" in h and "Your answers are ready" in h
             x=zipfile.ZipFile(io.BytesIO(req(f"/download/{tok}/AccessToWork-answers.docx").read())).read("word/document.xml").decode()
             heads=[l for _,l,_ in f["topics"]]; pos=[x.find(hd.replace("'","&apos;") if False else hd) for hd in heads]
             assert all(p_>=0 for p_ in pos) and pos==sorted(pos), pos   # answers in AtW question order
@@ -176,7 +192,7 @@ req(f"/consent/{tok}",{"health":"on","digital":"on","truth":"on"})
 assert req(f"/details/{tok}").headers["location"]==f"/approve/{tok}"          # details only after approval
 j=json.load(req(f"/api/{tok}/message",js={"text":""})); n=0
 while not j["done"]: n+=1; j=json.load(req(f"/api/{tok}/message",js={"text":f"Sample answer {n}"}))
-req(f"/api/{tok}/finish",{}); h=body(f"/approve/{tok}")
+nx=json.load(req(f"/api/{tok}/finish",{}))["next"]; assert nx==f"/prepare/{tok}"; req(nx); h=body(f"/approve/{tok}")
 all_ok={f"ok_{x}":"on" for x,_,_ in FORMS["aa"]["topics"]}
 for i,rn in enumerate(sorted(set(re.findall(r'name="(res_[^"]+)"',h)))): all_ok[rn]="keep"
 assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/ticks/{tok}"       # £79 AA1: tick-box preview next
@@ -226,5 +242,23 @@ assert json.loads(r.read())["ok"] and db.execute("select count(*) from orders wh
 assert json.loads(req("/healthz").read())["ok"]
 print("cron retention endpoint ok")
 print("90-day purge + erase-by-email ok")
+# unpaid (free interview) orders are deleted after 7 days; paid ones are kept
+uo=orders.new_token(); up=orders.new_token(); now_=time.time()
+db.execute("insert into orders(token,tier,status,created,form,history) values(?,?,?,?,?,?)",(uo,"79","free",now_-8*86400,"aa",'[{"role":"user","content":"x"}]'))
+db.execute("insert into orders(token,tier,status,created,form) values(?,?,?,?,?)",(up,"79","paid",now_-8*86400,"aa")); db.commit()
+op.open(urllib.request.Request(B+"/cron/retention",b"",{"X-Cron-Secret":os.getenv("CRON_SECRET","cron_test_local")}))
+assert db.execute("select count(*) from orders where token=?",(uo,)).fetchone()[0]==0 and db.execute("select count(*) from orders where token=?",(up,)).fetchone()[0]==1
+# free-interview cap per IP per day
+cap_ip="203.0.113.77"
+for _ in range(int(os.getenv("FREE_PER_IP_DAY","500"))): db.execute("insert into orders(token,tier,status,created,form,ip) values(?,?,?,?,?,?)",(orders.new_token(),"79","free",now_,"aa",cap_ip))
+db.commit()
+r=op.open(urllib.request.Request(B+"/checkout",b"tier=79&form=aa",{"True-Client-IP":cap_ip,"X-Forwarded-For":"1.2.3.4"})); assert "try tomorrow" in r.read().decode().lower()
+r=op.open(urllib.request.Request(B+"/checkout",b"tier=79&form=aa",{"X-Forwarded-For":"9.9.9.9, "+cap_ip+", 104.22.17.40"})); assert "try tomorrow" in r.read().decode().lower()   # spoofed leftmost XFF ignored
+r=req("/checkout",{"tier":"79","form":"aa"}); assert r.status==303   # other IPs unaffected
+db.execute("delete from orders where ip=?",(cap_ip,)); db.commit()
+print("unpaid 7-day purge + free cap ok")
 assert req("/cron/formwatch",{}).status==403   # weekly form-version check is protected
+# app copy: no free-help mentions or outbound GOV.UK links on customer pages
+for u in ("/","/?form=aa","/static/chat.html"):
+    h_=body(u); assert "Free help" not in h_ and "Citizens Advice" not in h_ and "gov.uk/" not in h_.lower().replace("www.gov.uk/government","") and "Not affiliated with DWP" in h_, u
 print("ALL OK")

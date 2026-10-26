@@ -22,7 +22,7 @@ def pack_html(brand, personal, draft, tier, filled_by="", prefill_off=False):
 <h2>Evidence checklist</h2><ul>{li(draft.get('checklist',[]))}</ul>
 <h2>Draft letter to the GP</h2><pre style="white-space:pre-wrap;font:inherit">{e(draft.get('gp_letter',''))}</pre>
 <h2>Draft statement from someone who knows them (AA1 page 28)</h2><p>{e(draft.get('carer_statement',''))}</p>{script}
-<p style="font-size:.85em;color:#555">Independent service, not affiliated with DWP. Free help: Age UK 0800 678 1602, Citizens Advice.</p></html>"""
+<p style="font-size:.85em;color:#555">Independent service, not affiliated with DWP.</p></html>"""
 
 from forms import FORMS, PIP_ACTIVITIES
 CSS="<style>body{font:18px/1.6 system-ui;max-width:800px;margin:2rem auto;padding:0 1rem;color:#14211f}h3{margin-bottom:.2rem}.box{background:#fffaf0;border-left:5px solid #f2c14e;padding:1rem}.tip{color:#3d4f4c;font-size:.9em}</style>"
@@ -63,7 +63,7 @@ def pack_form(brand, personal, draft, tier, form, prefill_off=False):
 <h2>Evidence checklist</h2><ul>{li(draft.get('checklist',[]))}</ul>
 <h2>Draft letter to the GP or consultant</h2><pre style="white-space:pre-wrap;font:inherit">{e(draft.get('gp_letter',''))}</pre>
 <h2>Draft statement from someone who knows {'the child' if form=='dla' else 'you'}</h2><p>{e(draft.get('carer_statement',''))}</p>{send}
-<p style="font-size:.85em;color:#555">Independent service, not affiliated with DWP. Free help: Citizens Advice, Contact (families with disabled children) 0808 808 3555, Scope.</p></html>"""
+<p style="font-size:.85em;color:#555">Independent service, not affiliated with DWP.</p></html>"""
 
 # ---- Access to Work ----
 from facts import v as _v
@@ -90,7 +90,7 @@ def pack_atw(brand, draft, tier):
         else: body+=f"<h2>{e(t)}</h2><ul>"+"".join(f"<li>{e(i)}</li>" for i in x)+"</ul>"
     return f"""<!doctype html><html lang="en-GB"><meta charset="utf-8"><title>Your Access to Work answers</title>{CSS}
 <h1>Your Access to Work answers</h1><p>Prepared by {e(brand)}.</p><div class=box>{e(ATW_TOP)}</div><h2>Your answers</h2>{body}
-<p style="font-size:.85em;color:#555">Independent service, not affiliated with DWP or Access to Work. Free help: Access to Work helpline {_v('atw_helpline')} (Mon–Fri 9am–5pm), Citizens Advice.</p></html>"""
+<p style="font-size:.85em;color:#555">Independent service, not affiliated with DWP or Access to Work.</p></html>"""
 def atw_docx(brand, draft, tier, path):
     from docx import Document
     d=Document(); d.add_heading("Your Access to Work answers",0); d.add_paragraph(f"Prepared by {brand}."); d.add_paragraph(ATW_TOP)
@@ -105,5 +105,5 @@ def atw_docx(brand, draft, tier, path):
         else:
             d.add_heading(t,1)
             for i in x: d.add_paragraph(i,style="List Bullet")
-    d.add_paragraph(f"Independent service, not affiliated with DWP or Access to Work. Free help: Access to Work helpline {_v('atw_helpline')}, Citizens Advice.")
+    d.add_paragraph(f"Independent service, not affiliated with DWP or Access to Work.")
     d.save(path)

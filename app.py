@@ -20,9 +20,16 @@ def get(token):
     return r
 STEPS=["Choose","Pay","Agree","Conversation","Deadline","Strength check","Approve","Your documents"]
 def prog(n): return f"<p class=progress>Step {n} of {len(STEPS)}: {STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(STEPS)}%'></span></div>"
-def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability"): return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg><link rel=stylesheet href=/static/app.css><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body><a href="#main" class="skip">Skip to main content</a>
+def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
+    if minimal:  # order summary: no outbound links except Terms/Privacy
+        indep='<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not affiliated with DWP or GOV.UK.</div></div>'
+        ftr='<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent, paid service. Not affiliated with DWP, GOV.UK or any government body. We can\'t guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a></p></div></footer>'
+    else:
+        indep=f'<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not affiliated with DWP or GOV.UK.</div></div>'
+        ftr='<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent, paid service. Not affiliated with DWP, GOV.UK or any government body. We can\'t guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a><a data-contact href="mailto:hello@formsorted.com">Contact</a></p></div></footer>'
+    return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg><link rel=stylesheet href=/static/app.css><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body><a href="#main" class="skip">Skip to main content</a>
 <header class="hdr"><div class="wrap"><a class="logo" href="/"><img src="/static/logo.svg" alt="FormSorted home" width="170" height="36"></a></div></header>
-<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not DWP or GOV.UK. You can claim free at <a href="{gov}">GOV.UK</a>.</div></div><main id=main><div class=wrap>{body}</div></main><footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent, paid service. Not affiliated with DWP, GOV.UK or any government body. We can't guarantee an award or outcome.</p><p>Free help: Citizens Advice · Age UK 0800 678 1602 · Contact 0808 808 3555 · gov.uk</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a><a data-contact href="mailto:hello@formsorted.com">Contact</a></p></div></footer></body></html>""")
+{indep}<main id=main><div class=wrap>{body}</div></main>{ftr}</body></html>""")
 def stripe(method,path,data=None):
     req=urllib.request.Request("https://api.stripe.com/v1"+path,urllib.parse.urlencode(data).encode() if data else None,method=method,
         headers={"Authorization":"Basic "+base64.b64encode((STRIPE+":").encode()).decode()})
@@ -45,27 +52,90 @@ def home(form:str="", tier:str=""):
     pv=PREVIEW if DEV else ""
     if form not in FORMS:
         opts="".join(f"""<label class=radio><input type=radio name=form value={k} {'checked' if i==0 else ''} required><span><strong>{f['short']}</strong><span class=hint>For {f['who']}. England &amp; Wales.</span></span></label>""" for i,(k,f) in enumerate(FORMS.items()))
-        return page(prog(1)+pv+f"""<form method=get action=/><fieldset style="border:0;padding:0;margin:0"><legend><h1>Which form do you need sorted?</h1></legend>{opts}</fieldset>
-<div class=inset>Live in Scotland? We don't cover Scotland. Apply to Social Security Scotland instead (Pension Age, Child or Adult Disability Payment).</div>
+        return page(prog(1)+pv+f"""<form method=get action=/><fieldset style="border:0;padding:0;margin:0"><legend><h1>Which form should we do for you?</h1></legend>{opts}</fieldset>
+<div class=inset>Live in Scotland? We don't cover Scotland yet.</div>
 <button class=btn>Continue</button></form>""","Choose your form")
     f=FORMS[form]; ts=list(f["tiers"].items())
+    if tier in f["tiers"]: return order_summary(form,tier,pv)
     opts="".join(f"""<label class=radio><input type=radio name=tier value={t} {'checked' if (t==tier if tier in f['tiers'] else i==len(ts)-1) else ''} required><span><strong>{n} – £{p//100}</strong><span class=hint>{d}</span></span></label>""" for i,(t,(n,p,d)) in enumerate(ts))
-    return page(prog(1)+pv+f"""<p class=caption>{f['short']}</p><form method=post action=/checkout><input type=hidden name=form value={form}><fieldset style="border:0;padding:0;margin:0"><legend><h1>Which service do you want?</h1></legend>{opts}</fieldset>
-<div class=promise><strong>Your words only.</strong> You approve every word before you send.</div><div class=inset>One-off fee. No success fee. Secure card payment. 14-day cancellation rights until your conversation starts.</div>
+    return page(prog(1)+pv+f"""<p class=caption>{f['short']}</p><form method=post action=/checkout><input type=hidden name=form value={form}><fieldset style="border:0;padding:0;margin:0"><legend><h1>How much should we do for you?</h1></legend>{opts}</fieldset>
+<div class=promise><strong>Done for you, in your words.</strong> We write the answers and fill in the form; you check, sign and post it.</div><div class=inset>One-off fee. No success fee. Secure card payment. 14-day cancellation rights until your conversation starts.</div>
 <button class="btn">Continue to payment</button></form><p><a href=/>Choose a different form</a></p>""","Choose your service",f["gov"])
+PRICING_URL="https://formsorted.com/#prices"
+def pack_items(form,tier):
+    """What's included, as bullets, for one pack (a higher tier includes the lower one)."""
+    out=[]
+    for t,(n,p,d) in FORMS[form]["tiers"].items():
+        d=d.replace("Everything above, plus ","").replace(", ready to check, sign and post free.",", ready to check, sign and post.").rstrip(".")
+        out.append(d[0].upper()+d[1:])
+        if t==tier: break
+    return out
+def order_summary(form,tier,pv=""):
+    f=FORMS[form]; n,p,_=f["tiers"][tier]
+    items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,tier)+["You check and approve every word before anything is final"])
+    return page(prog(1)+pv+f"""<div class=summary><p class=caption>Your order</p><h1>{esc(n)}</h1><p class=sub>{esc(f['short'])}</p>
+<p class=lede><strong>We fill in your form. You check, sign and post.</strong> We ask you simple questions in plain English, then write it all up in your words.</p>
+<h2 class=h3>What's included</h2><ul class=ticks>{items}</ul>
+<div class=total><span>Total</span><strong>£{p//100}</strong></div><p class=hint>Nothing to pay now. Answer the questions first; you pay once at the end, when your form is ready to prepare. One-off fee. No success fee.</p>
+<form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={tier}><button class="btn btn-wide">Start my form</button></form>
+<p class=change><a href="{PRICING_URL}">Change form or pack</a></p></div>""",f"Your order: {n}",minimal=True)
+FREE_PER_IP_DAY=int(os.getenv("FREE_PER_IP_DAY","5")); MAX_TURNS=int(os.getenv("MAX_TURNS","40")); FREE_PER_DAY_TOTAL=int(os.getenv("FREE_PER_DAY_TOTAL","500"))
+def client_ip(req):
+    """Real visitor IP. Render sits behind Cloudflare: True-Client-IP / CF-Connecting-IP are set by Cloudflare and can't be spoofed.
+    Render only appends to X-Forwarded-For (leftmost entries are client-controlled), so the fallback is the entry Cloudflare added
+    (second from the right, before the Cloudflare edge), then the socket address (local dev)."""
+    for h in ("true-client-ip","cf-connecting-ip"):
+        v=req.headers.get(h,"").strip()
+        if v: return v[:64]
+    xff=[x.strip() for x in req.headers.get("x-forwarded-for","").split(",") if x.strip()]
+    if len(xff)>=2: return xff[-2][:64]
+    return (xff[-1] if xff else (req.client.host if req.client else ""))[:64]
 @app.post("/checkout")
-def checkout(tier:str=Form(...), form:str=Form("aa")):
+def checkout(req:Request, tier:str=Form(...), form:str=Form("aa")):
+    """Pick a pack -> free interview (pay at the end, on the preview page)."""
     if form not in FORMS or tier not in FORMS[form]["tiers"]: raise HTTPException(400)
-    name,price,_=FORMS[form]["tiers"][tier]
-    token=orders.new_token(); c=db()
-    if DEV:
-        c.execute("insert into orders(token,tier,status,created,form) values(?,?,?,?,?)",(token,tier,"paid",time.time(),form)); c.commit()
-        return RedirectResponse(f"/start/{token}",303)
-    s=stripe("POST","/checkout/sessions",{"mode":"payment","line_items[0][quantity]":1,"line_items[0][price_data][currency]":"gbp",
+    ip=client_ip(req); c=db()
+    day=time.time()-86400
+    n=c.execute("select count(*) from orders where ip=? and created>?",(ip,day)).fetchone()[0]
+    tot=c.execute("select count(*) from orders where status='free' and created>?",(day,)).fetchone()[0]
+    if (ip and n>=FREE_PER_IP_DAY) or tot>=FREE_PER_DAY_TOTAL:
+        return page("<h1>You've started a few already today</h1><p class=lead>To keep things fair we limit how many new forms can be started from one connection each day. Please come back tomorrow, or use the link to a form you've already started.</p>","Please try tomorrow")
+    token=orders.new_token()
+    c.execute("insert into orders(token,tier,status,created,form,ip) values(?,?,?,?,?,?)",(token,tier,"free",time.time(),form,ip)); c.commit()
+    return RedirectResponse(f"/start/{token}",303)
+def stripe_session(o):
+    form=o["form"] or "aa"; name,price,_=FORMS[form]["tiers"][o["tier"]]; token=o["token"]
+    return stripe("POST","/checkout/sessions",{"mode":"payment","line_items[0][quantity]":1,"line_items[0][price_data][currency]":"gbp",
       "line_items[0][price_data][unit_amount]":price,"line_items[0][price_data][product_data][name]":f"{FORMS[form]['name']}: {name}",
       "client_reference_id":token,"adaptive_pricing[enabled]":"false","locale":"en-GB","allow_promotion_codes":"true","customer_creation":"always","consent_collection[terms_of_service]":"required",
-      "success_url":f"{PUBLIC}/success?session_id={{CHECKOUT_SESSION_ID}}","cancel_url":f"{PUBLIC}/?form={form}"})
-    c.execute("insert into orders(token,tier,status,stripe_session,created,form) values(?,?,?,?,?,?)",(token,tier,"pending",s["id"],time.time(),form)); c.commit()
+      "success_url":f"{PUBLIC}/success?session_id={{CHECKOUT_SESSION_ID}}","cancel_url":f"{PUBLIC}/preview/{token}"})
+def covered(o):
+    h=json.loads(o["history"] or "[]"); total=len(FORMS[o["form"] or "aa"]["topics"])
+    return min(sum(1 for m in h if m["role"]=="user" and m["content"].strip()),total),total
+@app.get("/preview/{token}")
+def preview(token:str):
+    o=ready(token,paid=False)
+    if o["status"]=="paid": return RedirectResponse(f"/start/{token}",303)
+    if not o["interview_done_at"]: return RedirectResponse(f"/static/chat.html#{token}",303)
+    f=FORMS[o["form"] or "aa"]; n,p,_=f["tiers"][o["tier"]]; got,total=covered(o)
+    facts=[f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa",o["tier"])]
+    return page(f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your form is ready to prepare</h1>
+<p class=lede><strong>We fill in your form. You check, sign and post.</strong> Pay once and we write up your answers in your own words, check every one against what you told us, and you approve them before anything is final.</p>
+<figure class=lockprev><img src="/static/preview-placeholder.svg" alt="Example illustration of a filled-in form (not your answers)" width=520 height=360><figcaption>Illustration only. Your own answers appear after payment.</figcaption></figure>
+<ul class=ticks>{''.join(f'<li>{x}</li>' for x in facts)}</ul>
+<div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
+<form method=post action=/pay/{token}><label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
+<button class="btn btn-wide">Pay £{p//100} to get your completed form</button></form>
+<p class=hint>One-off fee. No success fee. If you don't pay, we delete everything you told us after 7 days.</p></div>""","Your form is ready",minimal=True)
+@app.post("/pay/{token}")
+def pay(token:str, waive:str=Form(...)):
+    o=ready(token,paid=False)
+    if o["status"]=="paid": return RedirectResponse(f"/start/{token}",303)
+    if not o["interview_done_at"]: return RedirectResponse(f"/static/chat.html#{token}",303)
+    c=db()
+    if DEV:
+        c.execute("update orders set status='paid', paid_at=? where token=?",(time.time(),token)); c.commit(); return RedirectResponse(f"/start/{token}",303)
+    s=stripe_session(o); c.execute("update orders set stripe_session=? where token=?",(s["id"],token)); c.commit()
     return RedirectResponse(s["url"],303)
 @app.get("/success")
 def success(session_id:str=""):
@@ -75,9 +145,10 @@ def success(session_id:str=""):
     if s.get("payment_status")=="paid":
         c.execute("update orders set status='paid', email=coalesce(?,email) where stripe_session=?",((s.get("customer_details") or {}).get("email"),session_id)); c.commit()
         return RedirectResponse(f"/start/{s.get('client_reference_id') or row['token']}",303)
-    if row and row["status"]!="pending": return RedirectResponse(f"/start/{row['token']}",303)   # webhook already confirmed it
+    if row and row["status"]=="paid": return RedirectResponse(f"/start/{row['token']}",303)   # webhook already confirmed it
     if not s and session_id: return page("<h1>We're confirming your payment</h1><p>This can take a minute. <a href='/success?session_id="+urllib.parse.quote(session_id)+"'>Refresh this page</a>. If you were charged, email <a href=mailto:hello@formsorted.com>hello@formsorted.com</a>.</p>","Confirming payment")
-    return page("<h1>Payment not completed</h1><p>You have not been charged. <a href=/>Go back and try again</a>.</p>","Payment not completed")
+    back=f"/preview/{row['token']}" if row else "/"
+    return page(f"<h1>Payment not completed</h1><p>You have not been charged. <a href={back}>Go back and try again</a>.</p>","Payment not completed")
 WHSEC=os.getenv("STRIPE_WEBHOOK_SECRET","")
 @app.post("/webhooks/payment")
 async def payment_webhook(req:Request):
@@ -108,38 +179,55 @@ DELETED_PAGE="<h1>Your information has been deleted</h1><p>Everything you told u
 def start(token:str):
     o=get(token)
     if o["status"]=="deleted": return page(DELETED_PAGE,"Deleted")
-    if o["status"]!="paid": raise HTTPException(402)
-    if o["consent_at"]: return RedirectResponse(f"/static/chat.html#{token}",303)
-    return page(prog(3)+f"""<h1>Before we start</h1><p class=lead>Payment received. Please confirm 3 things.</p><form method=post action=/consent/{token}>
+    if o["status"] not in ("paid","free"): raise HTTPException(402)
+    if o["consent_at"]:
+        if o["status"]=="paid" and o["interview_done_at"] and not o["draft"]: return RedirectResponse(f"/prepare/{token}",303)
+        if o["status"]=="free" and o["interview_done_at"]: return RedirectResponse(f"/preview/{token}",303)
+        return RedirectResponse(f"/static/chat.html#{token}",303)
+    lead="Payment received. Please confirm 2 things." if o["status"]=="paid" else "The conversation is free. You only pay at the end, if you want your completed form. Please confirm 2 things."
+    return page(prog(3)+f"""<h1>Before we start</h1><p class=lead>{lead}</p><form method=post action=/consent/{token}>
 <label class=cb><input type=checkbox name=health required><span>I agree to {BRAND} using the health information I give to prepare this form. If it's about someone else, they agree, or I can act for them.</span></label>
-<label class=cb><input type=checkbox name=digital required><span>I want my answers prepared now. I understand that once the service starts I lose my 14-day right to cancel.</span></label>
 <label class=cb><input type=checkbox name=truth required><span>I'll only give true information and will check everything before sending it.</span></label>
 <div class=warning>Giving false information on a benefit claim is an offence.</div>
-<button class="btn btn-start">Start my conversation</button></form><p class=small>We delete your information after 90 days, or sooner if you ask. <a href="https://formsorted.com/privacy.html">Privacy notice</a></p>""","Before we start")
+<button class="btn btn-start">Start my conversation</button></form><p class=small>If you don't pay, we delete your information after 7 days. If you do, after 90 days, or sooner if you ask. <a href="https://formsorted.com/privacy.html">Privacy notice</a></p>""","Before we start")
 @app.post("/consent/{token}")
-def consent(token:str, health:str=Form(...), digital:str=Form(...), truth:str=Form(...)):
-    get(token); c=db(); c.execute("update orders set consent_at=? where token=?",(time.time(),token)); c.commit()
-    return RedirectResponse(f"/static/chat.html#{token}",303)
-def ready(token):
+def consent(token:str, health:str=Form(...), truth:str=Form(...), digital:str=Form("")):
     o=get(token)
-    if o["status"]!="paid" or not o["consent_at"]: raise HTTPException(403)
+    if o["status"] not in ("paid","free"): raise HTTPException(403)
+    c=db(); c.execute("update orders set consent_at=? where token=?",(time.time(),token)); c.commit()
+    return RedirectResponse(f"/static/chat.html#{token}",303)
+@app.get("/prepare/{token}")
+def prepare(token:str):
+    """After payment: draft from the interview (the only place drafting happens), then continue the paid flow."""
+    o=ready(token)
+    if not o["draft"]:
+        d=llm.draft(json.loads(o["history"]),o["form"] or "aa"); d.setdefault("answers",{})
+        c=db(); c.execute("update orders set draft=?, approved_at=null where token=? and draft is null",(json.dumps(d),token)); c.commit()
+    return RedirectResponse(f"/deadline/{token}",303)
+def ready(token,paid=True):
+    """paid=True (default) for everything that exposes or produces answers; paid=False only for the free interview."""
+    o=get(token)
+    if o["status"] not in (("paid",) if paid else ("paid","free")) or not o["consent_at"]: raise HTTPException(402 if o["status"]=="free" else 403)
     if o["created"] and o["created"]<time.time()-86400*orders.RETENTION_DAYS: raise HTTPException(410)
     return o
 @app.post("/api/{token}/message")
 async def message(token:str, req:Request):
-    o=ready(token); h=json.loads(o["history"]); msg=(await req.json()).get("text","").strip()
+    o=ready(token,paid=False); h=json.loads(o["history"]); msg=(await req.json()).get("text","").strip()
+    total=len(FORMS[o["form"] or "aa"]["topics"])+1
+    if o["interview_done_at"] and o["status"]!="paid": return {"reply":"[[DONE]]","done":True,"topic":total,"total":total}
     if msg: h.append({"role":"user","content":msg[:4000]})
+    if sum(1 for m in h if m["role"]=="user")>MAX_TURNS:
+        c=db(); c.execute("update orders set history=? where token=?",(json.dumps(h),token)); c.commit()
+        return {"reply":"[[DONE]]","done":True,"topic":total,"total":total}
     q=llm.next_question(h,o["form"] or "aa"); h.append({"role":"assistant","content":q})
     c=db(); c.execute("update orders set history=? where token=?",(json.dumps(h),token)); c.commit()
-    total=len(FORMS[o["form"] or "aa"]["topics"])+1; answered=sum(1 for m in h if m["role"]=="user" and m["content"].strip())
+    answered=sum(1 for m in h if m["role"]=="user" and m["content"].strip())
     return {"reply":q,"done":"[[DONE]]" in q,"topic":min(answered+1,total),"total":total}
 @app.post("/api/{token}/finish")
 def finish(token:str):
-    o=ready(token); h=json.loads(o["history"]); personal=json.loads(o["personal"])
-    form=o["form"] or "aa"; F=FORMS[form]
-    d=llm.draft(h,form); d.setdefault("answers",{})
-    c=db(); c.execute("update orders set draft=?, approved_at=null where token=?",(json.dumps(d),token)); c.commit()
-    return {"next":f"/deadline/{token}"}
+    o=ready(token,paid=False)
+    c=db(); c.execute("update orders set interview_done_at=coalesce(interview_done_at,?) where token=?",(time.time(),token)); c.commit()
+    return {"next":f"/prepare/{token}" if o["status"]=="paid" else f"/preview/{token}"}
 def build_files(token,o,d):
     form=o["form"] or "aa"; F=FORMS[form]; personal=json.loads(o["personal"] or "{}"); od=os.path.join(OUT,token); os.makedirs(od,exist_ok=True)
     if form=="atw":
@@ -177,7 +265,7 @@ def pip_sheet_pdf(form,personal,d):
     return contsheet.pip_sheets(name,items,code)
 @app.get("/api/{token}/info")
 def info(token:str):
-    o=ready(token); f=FORMS[o["form"] or "aa"]; return {"form":o["form"] or "aa","short":f["short"],"gov":f["gov"],"pdf":f.get("pdf_out")}
+    o=ready(token,paid=False); f=FORMS[o["form"] or "aa"]; return {"form":o["form"] or "aa","short":f["short"],"gov":f["gov"],"pdf":f.get("pdf_out")}
 @app.post("/api/{token}/personal")
 async def personal(token:str, req:Request):
     ready(token); c=db(); c.execute("update orders set personal=? where token=?",(json.dumps(await req.json()),token)); c.commit(); return {"ok":True}
@@ -277,7 +365,7 @@ def deadline_page(token:str):
     box=""
     if res:
         when=f"<p class=big>{'Apply by' if form=='atw' else 'Send it back by'} <strong>{datetime_fmt(res['deadline'])}</strong>{'' if res['days_left'] is None else f' · {res['days_left']} days left' if res['days_left']>=0 else ' · this date has passed, phone DWP now'}</p>" if res.get("deadline") else ""
-        box=f"""<div class="tracker" id=tracker>{when}<p>{esc(res['rule'])}</p>{f"<p><strong>{esc(res['backdate'])}</strong></p>" if res['backdate'] else ''}<p class=small>Source: <a href="{res['source']}">{res['source'].replace('https://www.','')}</a> (checked 24 Oct 2026)</p></div>
+        box=f"""<div class="tracker" id=tracker>{when}<p>{esc(res['rule'])}</p>{f"<p><strong>{esc(res['backdate'])}</strong></p>" if res['backdate'] else ''}<p class=small>Source: {res['source'].replace('https://www.','')} (checked 24 Oct 2026)</p></div>
 {'' if form=='atw' else "<h2>Need more time? What to say on the phone</h2><ol class=steps>"+''.join(f'<li>{esc(x)}</li>' for x in deadlines.script(form))+"</ol>"}{f"<p>Questions? Access to Work helpline: <strong>{facts.v('atw_helpline')}</strong> (Mon–Fri 9am–5pm). You can ask for all contact by email.</p>" if form=='atw' else ''}
 <p><a class="btn" href="/check/{token}">Continue to strength check</a></p>"""
     return page(prog(5)+(f"""<h1>Timing</h1><p class=lead>When you apply can affect who pays for equipment. Tell us when you started (or will start) this job.</p>""" if form=='atw' else f"""<h1>Your deadline</h1><p class=lead>Tell us when you asked for the form, and we'll show the date to send it back by, so you don't lose money.</p>""")+f"""
@@ -410,12 +498,12 @@ def documents_page(token:str):
     files=pack_files(o)
     dl=json.loads(o["deadline"] or "{}"); res=deadlines.compute(o["form"] or "aa",dl.get("how","phone"),dl.get("requested"),dl.get("received")) if dl.get("requested") else None
     saved=f"<div class=panel><p><strong>Your save code: <code>{o['save_code']}</code></strong><br>Keep it safe. {'Keep a copy of your answers too. They will help when your grant is due for renewal (you can apply to renew 12 weeks before it ends).' if o['form']=='atw' else "Use it at <a href=/review>/review</a> when your review form arrives, and we'll only ask what has changed."}</p></div>" if o["save_code"] else ""
-    return page(prog(8)+f"""<div class=done><h1>{"Your answers are ready" if o["form"]=="atw" else "Your claim is sorted"}</h1><p>You approved every answer. Your documents are ready.</p></div>
+    return page(prog(8)+f"""<div class=done><h1>{"Your answers are ready" if o["form"]=="atw" else "Your form is done"}</h1><p>You approved every answer. Your documents are ready.</p></div>
 {''.join(f'<div class=dl><span><strong>{lab.get(f,f)}</strong></span><a class=btn href="/download/{token}/{f}" download>Download</a></div>' for f in files)}
 {f"<div class=tracker><p class=big>Send it back by <strong>{datetime_fmt(res['deadline'])}</strong></p></div>" if res and res.get('deadline') else ''}{saved}
 {ATW_NEXT if o['form']=='atw' else ''}<h2{' hidden' if o['form']=='atw' else ''}>What to do next</h2><ol class=steps{' hidden' if o['form']=='atw' else ''}><li><strong>Read it once more</strong> before you send it.</li><li><strong>Copy the answers into your claim</strong>, or print, sign and post the filled-in form.</li><li><strong>Turned down?</strong> You can ask DWP to look again (mandatory reconsideration), usually within one month of the decision letter. <a href=/letter>Draft a letter</a>.</li></ol>
 <p class=small>We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>.</p>""","Your documents")
-ATW_NEXT=f"""<h2>What to do next</h2><ol class=steps><li><strong>Read it once more</strong> and change anything that isn't right.</li><li><strong>Apply online or by phone</strong> at <a href="https://www.gov.uk/access-to-work/apply">gov.uk/access-to-work/apply</a>, or call {facts.v('atw_helpline')} (Mon–Fri 9am–5pm). Paste or read out each answer.</li><li><strong>Add your own details</strong>: workplace address, workplace contact, NI number (or UTR if self-employed).</li><li><strong>Disagree with the decision?</strong> Call the helpline and ask for it to be reconsidered.</li></ol>"""
+ATW_NEXT=f"""<h2>What to do next</h2><ol class=steps><li><strong>Read it once more</strong> and change anything that isn't right.</li><li><strong>Apply online or by phone</strong> at GOV.UK (search 'Access to Work apply'), or call {facts.v('atw_helpline')} (Mon–Fri 9am–5pm). Paste or read out each answer.</li><li><strong>Add your own details</strong>: workplace address, workplace contact, NI number (or UTR if self-employed).</li><li><strong>Disagree with the decision?</strong> Call the helpline and ask for it to be reconsidered.</li></ol>"""
 FAMILY_ONLY="<h1>Coming soon with FormSorted Family</h1><p>This feature isn't available yet. We don't take payment for it until it's ready.</p>"
 @app.get("/review")
 def review_start(code:str=""):
@@ -461,7 +549,7 @@ def letter_form():
 <div class=field><label class=q for=n>Your name</label><input id=n name=name></div><div class=field><label class=q for=ad>Your address</label><textarea id=ad name=address rows=2></textarea></div>
 <div class=field><label class=q for=dd>Date on your decision letter</label><input type=date id=dd name=decision_date></div>{pts}
 <div class=field><label class=q for=ev>Evidence you'll send (one per line)</label><textarea id=ev name=evidence rows=3></textarea></div>
-<button class=btn>Draft my letter</button></form><p class=small>Source: <a href="https://www.gov.uk/mandatory-reconsideration">gov.uk/mandatory-reconsideration</a>. Free help: Citizens Advice.</p>""","Reconsideration letter")
+<button class=btn>Draft my letter</button></form>""","Reconsideration letter")
 @app.post("/letter")
 async def letter_make(req:Request):
     if not DEV: return page(FAMILY_ONLY,"Coming soon")
@@ -477,7 +565,7 @@ async def letter_make(req:Request):
         "points":[{"issue":fm.get(f"issue{i}",""),"why":fm.get(f"why{i}","")} for i in (1,2,3)],"evidence":str(fm.get("evidence","")).splitlines()})
     return page(f"""<h1>Your draft letter</h1>{warn}{PROMISE}<p>Read it, add your National Insurance number, sign it and send it to the address on your decision letter. You can also ask by phone.</p>
 <pre class=letter id=letter>{esc(txt)}</pre><button class=btn onclick="navigator.clipboard.writeText(document.getElementById('letter').innerText)">Copy letter</button>
-<p class=small>We only used what you typed. Free help with reconsideration: Citizens Advice.</p>""","Your draft letter")
+<p class=small>We only used what you typed.</p>""","Your draft letter")
 
 # ---------- 90-day deletion ----------
 # Render free has no always-on loop: an external scheduler calls POST /cron/retention daily with header X-Cron-Secret.

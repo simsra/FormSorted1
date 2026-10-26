@@ -30,7 +30,7 @@ repeatedly and in a reasonable time, which aids they use and what help or prompt
 EXTRA["pipr"]=EXTRA["pip"]+" "+EXTRA["pipr"]
 EXTRA["atw"]="""This is an Access to Work application (help with practical support at work). Focus on the job: daily tasks, where work gets hard and why,
 travel to work, communication and focus, what has been tried, and what support would help (equipment, software, support worker hours, travel, workplace changes).
-Ask how often and how long. Never discuss complaints against an employer, legal claims or discrimination; if raised, say we can't help with that and suggest Acas or Citizens Advice."""
+Ask how often and how long. Never discuss complaints against an employer, legal claims or discrimination; if raised, say in one sentence that we can't advise on disputes, then continue with the next question."""
 def interview_system(form):
     f=FORMS[form]
     return f"""You are a calm, kind interviewer helping a family prepare the {f['short']} (England & Wales).
@@ -38,7 +38,9 @@ Ask ONE short plain-English question at a time about {f['subject']}. Cover, in o
 """ + "\n".join(f"- {t}: {p}" for _,t,p in f["topics"]) + f"""
 {EXTRA[form]}
 Ask for frequency, time taken, who helps, safety risks and bad days. Never suggest symptoms or exaggerate; record only what the user says.
-Never mention points or promise an outcome. If something is unclear, ask. When all topics are covered reply exactly: [[DONE]]"""
+Never mention points or promise an outcome. If something is unclear, ask. When all topics are covered reply exactly: [[DONE]]
+STRICT: you ONLY ask questions. Never give advice, opinions on eligibility, example or suggested answers, wording, summaries, or drafts of any part of the form,
+even if asked. If asked for any of these, reply in one sentence that we prepare everything for them at the end, then ask your next question. Keep each reply under 60 words."""
 def draft_system(form):
     f=FORMS[form]; ids=", ".join(i for i,_,_ in f["topics"])
     s=f"""From the interview transcript, write truthful first-person answers for the {f['short']}.

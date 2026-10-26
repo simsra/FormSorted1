@@ -31,12 +31,17 @@ If you didn't place this order, reply to this email.
 
 {brand}, an independent company, not DWP or GOV.UK.
 """)
+UNPAID_DAYS=int(os.getenv("UNPAID_RETENTION_DAYS","7"))
 def purge(c, out_dir, days=None, now=None):
     """Delete all customer data older than `days` (orders, files, saved answers, webhook log). Returns counts."""
     cut=(now or time.time())-86400*(RETENTION_DAYS if days is None else days)
     toks=[r[0] for r in c.execute("select token from orders where created<?",(cut,))]
     for t in toks: store.delete(t)   # local folder and Supabase Storage files
     n=c.execute("delete from orders where created<?",(cut,)).rowcount
+    ucut=(now or time.time())-86400*UNPAID_DAYS   # unpaid (free interview) orders: 7 days
+    ut=[r[0] for r in c.execute("select token from orders where status in ('free','pending') and created<?",(ucut,))]
+    for t in ut: store.delete(t)
+    n+=c.execute("delete from orders where status in ('free','pending') and created<?",(ucut,)).rowcount
     s=c.execute("delete from saved where created<?",(cut,)).rowcount
     c.execute("delete from events where received<?",(cut,)); c.commit()
     return {"orders":n,"saved":s}
