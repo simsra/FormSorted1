@@ -5,12 +5,13 @@ import os, json, sqlite3, secrets, urllib.request, urllib.parse, base64, time
 from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 import orders, mailer, asyncio, hmac, store
-from fastapi.responses import Response
+from fastapi.responses import Response, PlainTextResponse
 import intake as INTAKE
 import llm, fill_pdf, documents, quality, deadlines, letters, grounding, facts, ticks as TICKS, contsheet, formwatch
 from html import escape as esc
 from forms import FORMS, is_full, tier_info, default_tier, is_premium
-import premium as PREMIUM, printmail
+import premium as PREMIUM
+import bluebadge as BB, printmail
 BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STRIPE_SECRET_KEY_PLACEHOLDER")
 PUBLIC=os.getenv("PUBLIC_URL","http://localhost:8000"); DEV=STRIPE.endswith("PLACEHOLDER")
 HERE=os.path.dirname(os.path.abspath(__file__)); OUT=store.OUT; DB=store.SQLITE_PATH
@@ -58,6 +59,7 @@ def home(form:str="", tier:str=""):
         return page(prog(1)+pv+f"""<form method=get action=/><fieldset style="border:0;padding:0;margin:0"><legend><h1>Which form should we do for you?</h1></legend>{opts}</fieldset>
 <div class=inset>Live in Scotland? We don't cover Scotland yet.</div>
 <button class=btn>Continue</button></form>""","Choose your form")
+    if form=="bb": return bb_summary(pv)
     f=FORMS[form]; ts=list(f["tiers"].items())
     if tier in f["tiers"]: return order_summary(form,tier,pv)
     if len(ts)<=2 and form!="atw": return order_summary(form,default_tier(form),pv)   # one product (+ optional upgrade shown on the summary)
@@ -69,7 +71,7 @@ PRICING_URL="https://formsorted.com/#prices"
 DWP_LINE="You can claim directly from DWP for free; FormSorted is a paid online form-filling service."
 TAPLINE="<div class=promise><strong>About 10 minutes. You only tap, we do the writing.</strong> Skip anything you're not sure about, and save your progress to finish later.</div>"
 TRUST="<div class=trust><h2 class=h3>Our promise</h2><ul class=ticks><li><strong>Fixed price.</strong> You pay this once. Never a percentage of any award.</li><li><strong>You approve everything</strong> before you sign. Nothing is sent without you.</li><li>You get a copy of every page to keep for reviews.</li></ul></div>"
-def chat_url(o): return f"/intake/{o['token']}" if (o["form"] or "aa") in INTAKE.FORMS_V3 else f"/static/chat.html#{o['token']}"
+def chat_url(o): return f"/bb/{o['token']}" if o["form"]=="bb" else f"/intake/{o['token']}" if (o["form"] or "aa") in INTAKE.FORMS_V3 else f"/static/chat.html#{o['token']}"
 def pack_items(form,tier):
     """What's included, as bullets, for one pack (a higher tier includes the lower one)."""
     out=[]
@@ -88,7 +90,7 @@ def order_summary(form,tier,pv=""):
 <h2 class=h3>What's included</h2><ul class=ticks>{items}</ul>
 <div class=total><span>Total</span><strong>£{p//100}</strong></div><p class=hint>Nothing to pay now. Answer the questions first; you pay once at the end, when your form is ready to prepare. One-off fee. No success fee.</p>
 <form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={tier}><button class="btn btn-wide">Start my form</button></form>
-{up}<p class=hint>{esc(DWP_LINE)}</p><p class=change><a href="{PRICING_URL}">Change form or pack</a></p></div>""",f"Your order: {n}",minimal=True)
+{up}{BB_ADDON_LINE if form in BB.PARENT_FORMS else ""}<p class=hint>{esc(DWP_LINE)}</p><p class=change><a href="{PRICING_URL}">Change form or pack</a></p></div>""",f"Your order: {n}",minimal=True)
 def upgrade_box(form,tier):
     """Clear side-by-side comparison of the two packs, with a button to switch."""
     ts=FORMS[form]["tiers"]
@@ -115,7 +117,7 @@ def client_ip(req):
 @app.post("/checkout")
 def checkout(req:Request, tier:str=Form(...), form:str=Form("aa")):
     """Pick a pack -> free interview (pay at the end, on the preview page)."""
-    if form not in FORMS or tier not in FORMS[form]["tiers"]: raise HTTPException(400)
+    if form not in FORMS or tier not in FORMS[form]["tiers"] or (form=="bb" and tier!=BB.SOLO_TIER): raise HTTPException(400)
     ip=client_ip(req); c=db()
     day=time.time()-86400
     n=c.execute("select count(*) from orders where ip=? and created>?",(ip,day)).fetchone()[0]
@@ -139,6 +141,7 @@ def preview(token:str):
     o=ready(token,paid=False)
     if o["status"]=="paid": return RedirectResponse(f"/start/{token}",303)
     if not o["interview_done_at"]: return RedirectResponse(chat_url(o),303)
+    if o["form"]=="bb": return bb_preview(o)
     f=FORMS[o["form"] or "aa"]; n,p,_=tier_info(o["form"] or "aa",o["tier"]); got,total=INTAKE.coverage(o["form"],json.loads(o["intake"])) if o["intake"] else covered(o)
     facts=[f"Your answers cover {got} of {total} sections of the form" if o["intake"] else f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa",o["tier"])]
     return page(f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your form is ready to prepare</h1>
@@ -205,6 +208,8 @@ def start(token:str):
     o=get(token)
     if o["status"]=="deleted": return page(DELETED_PAGE,"Deleted")
     if o["status"] not in ("paid","free"): raise HTTPException(402)
+    if o["consent_at"] and o["form"]=="bb":
+        return RedirectResponse(f"/bb/{token}/documents" if o["status"]=="paid" else f"/preview/{token}" if o["interview_done_at"] else f"/bb/{token}",303)
     if o["consent_at"]:
         if o["status"]=="paid" and o["interview_done_at"] and not o["draft"]:
             if o["intake"] and not json.loads(o["intake"]).get("uploads_done"): return RedirectResponse(f"/uploads/{token}",303)
@@ -216,7 +221,7 @@ def start(token:str):
     return page(prog(3)+f"""<h1>Before we start</h1><p class=lead>{lead}</p><form method=post action=/consent/{token}>
 <label class=cb><input type=checkbox name=health required><span>I agree to {BRAND} using the health information I give to prepare this form. If it's about someone else, they agree, or I can act for them.</span></label>
 <label class=cb><input type=checkbox name=truth required><span>I'll only give true information and will check everything before sending it.</span></label>
-<div class=warning>Giving false information on a benefit claim is an offence.</div>
+<div class=warning>{"Giving false information on a Blue Badge application is an offence." if o["form"]=="bb" else "Giving false information on a benefit claim is an offence."}</div>
 <button class="btn btn-start">Start</button></form><p class=small>If you don't pay, we delete your information after 7 days. If you do, after 90 days, or sooner if you ask. <a href="https://formsorted.com/privacy.html">Privacy notice</a></p>""","Before we start")
 @app.post("/consent/{token}")
 def consent(token:str, health:str=Form(...), truth:str=Form(...), digital:str=Form("")):
@@ -679,7 +684,7 @@ def documents_page(token:str):
     return page(prog(8)+f"""<div class=done><h1>{"Your answers are ready" if o["form"]=="atw" else "Your form is done"}</h1><p>You approved every answer. Your documents are ready.</p></div>
 {''.join(f'<div class=dl><span><strong>{lab.get(f,f)}</strong></span><a class=btn href="/download/{token}/{f}" download>Download</a></div>' for f in files)}
 {f"<div class=tracker><p class=big>Send it back by <strong>{datetime_fmt(res['deadline'])}</strong></p></div>" if res and res.get('deadline') else ''}{saved}
-{ATW_NEXT if o['form']=='atw' else ''}<h2{' hidden' if o['form']=='atw' else ''}>What to do next</h2><ol class=steps{' hidden' if o['form']=='atw' else ''}><li><strong>Read it once more</strong> before you send it.</li><li><strong>Copy the answers into your claim</strong>, or print, sign and post the filled-in form.</li><li><strong>Turned down?</strong> You can ask DWP to look again (mandatory reconsideration), usually within one month of the decision letter. <a href=/letter>Draft a letter</a>.</li></ol>
+{bb_addon_box(o)}{ATW_NEXT if o['form']=='atw' else ''}<h2{' hidden' if o['form']=='atw' else ''}>What to do next</h2><ol class=steps{' hidden' if o['form']=='atw' else ''}><li><strong>Read it once more</strong> before you send it.</li><li><strong>Copy the answers into your claim</strong>, or print, sign and post the filled-in form.</li><li><strong>Turned down?</strong> You can ask DWP to look again (mandatory reconsideration), usually within one month of the decision letter. <a href=/letter>Draft a letter</a>.</li></ol>
 <p class=small>We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>.</p>""","Your documents")
 ATW_NEXT=f"""<h2>What to do next</h2><ol class=steps><li><strong>Read it once more</strong> and change anything that isn't right.</li><li><strong>Apply online or by phone</strong> at GOV.UK (search 'Access to Work apply'), or call {facts.v('atw_helpline')} (Mon–Fri 9am–5pm). Paste or read out each answer.</li><li><strong>Add your own details</strong>: workplace address, workplace contact, NI number (or UTR if self-employed).</li><li><strong>Disagree with the decision?</strong> Call the helpline and ask for it to be reconsidered.</li></ol>"""
 FAMILY_ONLY="<h1>Coming soon with FormSorted Family</h1><p>This feature isn't available yet. We don't take payment for it until it's ready.</p>"
@@ -808,3 +813,78 @@ async def _retention_loop():
             except Exception as e: print("retention error",e)
             await asyncio.sleep(86400)
     asyncio.create_task(loop())
+
+# ---------------- Blue Badge answers (add-on £15 after an AA / DLA / PIP order, or £29 on its own) ----------------
+BB_ADDON_LINE="<p class=hint>Applying for a Blue Badge too? After you pay, you can add Blue Badge application answers for £15, made from the answers you give here.</p>"
+BB_ITEMS=["Answers for each health and walking question on the online Blue Badge application, ready to copy and paste","A hidden-disability write-up in your own words, if journeys are hard for reasons other than walking","A checklist of what to upload, and the photo and proof you need","If the council says no: a letter asking them to look at the decision again","You check every word. You apply yourself"]
+def bb_summary(pv=""):
+    n,p,_=FORMS["bb"]["tiers"][BB.SOLO_TIER]
+    return page(prog(1)+pv+f"""<div class=summary><p class=caption>Your order</p><h1>{esc(n)}</h1><p class=sub>For the Blue Badge application</p>
+<p class=lede><strong>Tap your answers. We write them up. You paste them into your application.</strong></p><div class=promise><strong>About 3 minutes. You only tap, we do the writing.</strong></div>
+<h2 class=h3>What's included</h2><ul class=ticks>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS)}</ul>
+<div class=total><span>Total</span><strong>£{p//100}</strong></div><p class=hint>Nothing to pay now. Answer the questions first; you pay once at the end. One-off fee.</p>
+<form method=post action=/checkout><input type=hidden name=form value=bb><input type=hidden name=tier value={BB.SOLO_TIER}><button class="btn btn-wide">Start my answers</button></form>
+<p class=hint>{esc(BB.NOT_ELIG)}</p><p class=hint>Already ordered an Attendance Allowance, DLA or PIP form with us? Add Blue Badge answers for £15 from your documents page instead.</p></div>""","Blue Badge answers",minimal=True)
+def bb_data(o): return json.loads(o["intake"] or "{}") or {"who":"me","else":{}}
+def bb_parent(o):
+    p=get(o["review_of"]) if o["review_of"] else None
+    return p if p and p["status"]=="paid" else None
+@app.get("/bb/{token}")
+def bb_form(token:str):
+    o=ready(token,paid=False)
+    if o["form"]!="bb": raise HTTPException(404)
+    if o["status"]=="paid": return RedirectResponse(f"/bb/{token}/documents",303)
+    d=bb_data(o); d.setdefault("else",{})
+    return page(prog(4)+f"""<h1>Your Blue Badge answers</h1><p class=lead>Tap what applies. It takes about 3 minutes.</p>
+<form method=post action=/bb/{token} class=intake>{BB.body(d)}<button class="btn btn-wide">Continue</button></form><p class=hint>{esc(BB.NOT_ELIG)}</p>""","Blue Badge answers",minimal=True)
+@app.post("/bb/{token}")
+async def bb_save(token:str, req:Request):
+    o=ready(token,paid=False)
+    if o["form"]!="bb": raise HTTPException(404)
+    if o["status"]=="paid": return RedirectResponse(f"/bb/{token}/documents",303)
+    fm=await req.form(); d=BB.save(bb_data(o),fm)
+    c=db(); c.execute("update orders set intake=?, interview_done_at=? where token=?",(json.dumps(d),time.time() if BB.ready(d) else None,token)); c.commit()
+    if not BB.ready(d): return page(f"<h1>Just one more thing</h1><p class=lead>Please tell us how far you can walk, or what makes journeys hard, so we have something to write up.</p><p><a class=btn href=/bb/{token}>Go back</a></p>","One more thing",minimal=True)
+    return RedirectResponse(f"/preview/{token}",303)
+def bb_preview(o):
+    token=o["token"]; n,p,_=tier_info("bb",o["tier"]); d=bb_data(o); k=len(BB.answers(d))+(1 if BB.hidden_writeup(d) else 0)
+    return page(f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your Blue Badge answers are ready to prepare</h1>
+<ul class=ticks><li>{k} answers to write up for the online application</li>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS[1:4])}</ul>
+<div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
+<form method=post action=/pay/{token}><label class=cb><input type=checkbox name=waive required><span>Please prepare my answers straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
+<button class="btn btn-wide">Pay £{p//100} to get your answers</button></form>{TRUST}<p class=change><a href="/bb/{token}">Change my answers</a></p>
+<p class=hint>{esc(BB.NOT_ELIG)}</p><p class=hint>If you don't pay, we delete everything you told us after 7 days.</p></div>""","Your Blue Badge answers",minimal=True)
+@app.get("/bb/{token}/documents")
+def bb_documents(token:str):
+    o=ready(token)
+    if o["form"]!="bb": raise HTTPException(404)
+    files=[("blue-badge-answers.html","Your Blue Badge answers, hidden-disability write-up and checklist")]
+    return page(f"""<div class=done><h1>Your Blue Badge answers are ready</h1><p>Copy each answer into the matching part of the online application, or your council's paper form. Change anything that isn't right.</p></div>
+{''.join(f'<div class=dl><span><strong>{esc(l)}</strong></span><a class=btn href="/bb/{token}/file/{f}" download>Download</a></div>' for f,l in files)}
+<div class=panel><h2 class=h3>Turned down?</h2><p>Tell us the date on the council's letter and what it said. We'll prepare a letter asking them to look again. You send it.</p>
+<form method=post action=/bb/{token}/letter><label>Date on the letter<input type=date name=decision_date required></label><label>What the letter said (optional)<textarea name=reason maxlength=600 rows=3></textarea></label><button class="btn btn-2">Make my letter</button></form></div>
+<p class=hint>{esc(BB.NOT_ELIG)}</p><p class=small>We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>.</p>""","Your Blue Badge answers")
+@app.get("/bb/{token}/file/{name}")
+def bb_file(token:str,name:str):
+    o=ready(token)
+    if o["form"]!="bb" or name!="blue-badge-answers.html": raise HTTPException(404)
+    return HTMLResponse(BB.answers_html(bb_data(o)),headers={"Content-Disposition":'attachment; filename="blue-badge-answers.html"'})
+@app.post("/bb/{token}/letter")
+def bb_letter(token:str, decision_date:str=Form(...), reason:str=Form("")):
+    o=ready(token)
+    if o["form"]!="bb": raise HTTPException(404)
+    return PlainTextResponse(BB.letter(bb_data(o),decision_date,reason),headers={"Content-Disposition":'attachment; filename="blue-badge-reconsideration-letter.txt"'})
+@app.post("/bb/addon/{parent}")
+def bb_addon(parent:str):
+    """Add-on from a paid AA / DLA / PIP order: prefilled from that order's taps (no re-asking), £15, paid separately at the end."""
+    p=ready(parent)
+    if (p["form"] or "aa") not in BB.PARENT_FORMS: raise HTTPException(404)
+    c=db(); ex=c.execute("select token from orders where form='bb' and review_of=? and status in ('free','paid')",(parent,)).fetchone()
+    if ex: return RedirectResponse(f"/start/{ex[0]}",303)
+    token=orders.new_token(); d=BB.prefill(p["form"] or "aa",json.loads(p["intake"] or "{}"))
+    c.execute("insert into orders(token,tier,status,created,form,ip,review_of,consent_at,intake,email) values(?,?,?,?,?,?,?,?,?,?)",(token,BB.ADDON_TIER,"free",time.time(),"bb",p["ip"],parent,time.time(),json.dumps(d),p["email"])); c.commit()
+    return RedirectResponse(f"/bb/{token}",303)
+def bb_addon_box(o):
+    if (o["form"] or "aa") not in BB.PARENT_FORMS: return ""
+    return f"""<div class=panel><h2 class=h3>Applying for a Blue Badge too?</h2><p>We can turn the answers you've already given us into answers for the online Blue Badge application, with a checklist of what to upload. £15, and you only pay once you've checked your answers.</p>
+<form method=post action=/bb/addon/{o['token']}><button class="btn btn-2">Add Blue Badge answers, £15</button></form><p class=hint>{esc(BB.NOT_ELIG)}</p></div>"""
