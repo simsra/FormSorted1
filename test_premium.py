@@ -36,10 +36,10 @@ ap=body(f"/approve/{tok}"); ok={f"ok_{t}":"on" for t,_,_ in FORMS["aa"]["topics"
 for rn in set(re.findall(r'name="(res_[^"]+)"',ap)): ok[rn]="keep"
 r=req(f"/approve/{tok}",ok); assert loc(r)==f"/ticks/{tok}"
 th=body(f"/ticks/{tok}"); tf=dict(re.findall(r'name="(t_[^"]+)" value="([^"]*)" checked',th)); tf["confirm"]="on"; req(f"/ticks/{tok}",tf)
-dh=body(f"/details/{tok}"); assert "Print and post my pack" in dh
+dh=body(f"/details/{tok}"); assert "Print and post my pack" not in dh   # disabled until a provider is live
 dd={"title":"Mrs","other_names":"Margaret","surname":"Tester","dob":"1940-01-02","addr1":"1 Test St","addr3":"Leeds","postcode":"LS1 1AA","post_pack":"1"}
 assert loc(req(f"/details/{tok}",dd))==f"/documents/{tok}"
-doc=body(f"/documents/{tok}"); m=re.search(r'href="/appeal/([^"]+)"',doc); assert m and "/review/"+m.group(1) in doc and "print and post your pack" in doc
+doc=body(f"/documents/{tok}"); m=re.search(r'href="/appeal/([^"]+)"',doc); assert m and "/review/"+m.group(1) in doc and "print and post your pack" not in doc
 code=m.group(1)
 for fn in ("assessment-briefing.html","supporting-letters.html","AA1-filled.pdf","answers.html"): assert f"/download/{tok}/{fn}" in doc, fn
 br=body(f"/download/{tok}/assessment-briefing.html"); sl=body(f"/download/{tok}/supporting-letters.html")
@@ -48,8 +48,8 @@ o=A.get(tok); d=json.loads(o["draft"])
 for x in re.findall(r"<p class=you>(.*?)</p>",br):   # every quoted block is an approved answer, word for word
     import html as H; assert H.unescape(x) in d["answers"].values(), x
 assert "Letter for: GP" in sl and "Letter for: Family carer" in sl and "http" not in br+sl
-assert o["keep_until"] and o["keep_until"]>time.time()+2.9*365*86400 and o["post_pack"]==1
-job=json.loads(A.db().execute("select v from settings where k=?",(f"printjob_{tok}",)).fetchone()[0]); assert job["status"]=="queued" and job["address"]["postcode"]=="LS1 1AA"
+assert o["keep_until"] and o["keep_until"]>time.time()+2.9*365*86400 and o["post_pack"]==0
+assert not A.db().execute("select v from settings where k=?",(f"printjob_{tok}",)).fetchone()
 # ---- appeal (reconsideration) included
 ah=body(f"/appeal/{code}"); assert "1 month from the date on your decision letter" in ah and "can't guarantee" in ah
 b=uuid.uuid4().hex; raw=(f'--{b}\r\nContent-Disposition: form-data; name="decision_date"\r\n\r\n2026-10-20\r\n--{b}\r\nContent-Disposition: form-data; name="topics"\r\n\r\n29\r\n'

@@ -7,7 +7,7 @@ PLUS_ITEMS=["Help if you're turned down: send us the decision letter and we prep
             "Assessment briefing: what DWP may ask, with your own answers to refer to",
             "Supporting letters drafted for your GP, carer, school or family to check and sign",
             "Renewal included: when the review form arrives, we fill it in from your saved answers at no extra charge",
-            "Printed and posted to you, with a return envelope (when available)",
+            "Printed and posted to you, with a return envelope (coming soon)",
             "We keep your answers for 3 years if you choose, so all of this is quick"]
 ASK={"aa":"DWP may phone you or the person who helps, to check details. They often ask:",
      "dla":"DWP may phone you or write to the school or doctor. They often ask:",

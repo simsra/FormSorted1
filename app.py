@@ -359,7 +359,7 @@ def details_page(token:str, err:str=""):
     who="the child" if form=="dla" else "the person claiming"
     rows="".join(f"""<div class=field><label class=q for=d_{k}>{esc(l)}</label><input id=d_{k} name={k} {'type='+t if t else ''} value="{esc(p.get(k,''))}" {'required' if req else ''} autocomplete=off></div>""" for k,l,t,req in detail_fields(form))
     return page(prog(8)+f"""<h1>Your details</h1><p class=lead>We add these to your documents{'' if form=='atw' else f' for {who}'} so you have less to fill in by hand. We only ask now, at the end, so we don't keep them longer than needed.</p>
-{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{POST_OPT if is_premium(o["tier"]) else ""}<button class=btn>Save and make my documents</button></form>
+{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{POST_OPT if (is_premium(o["tier"]) and printmail.ENABLED) else ""}<button class=btn>Save and make my documents</button></form>
 <form method=post action=/details/{token}><input type=hidden name=skip value=1><button class="btn btn-2">Skip. I'll write my details in by hand</button></form>
 <p class=small>We never ask for bank details. We delete everything 90 days after your order, or now: <a href=/delete/{token}>delete my information</a>.</p>""","Your details")
 @app.post("/details/{token}")
@@ -381,7 +381,7 @@ async def details_save(token:str, req:Request):
         if p.get("ni"):
             p["ni"]=p["ni"].replace(" ","").upper()
             if not NI_RE.match(p["ni"]): return back("That National Insurance number doesn't look right. It's 2 letters, 6 numbers, then A, B, C or D.")
-    c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),1 if (fm.get("post_pack") and is_premium(o["tier"]) and not fm.get("skip")) else 0,token)); c.commit()
+    c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),1 if (fm.get("post_pack") and is_premium(o["tier"]) and printmail.ENABLED and not fm.get("skip")) else 0,token)); c.commit()
     o=get(token); files=build_files(token,o,json.loads(o["draft"]))
     if o["post_pack"]: printmail.queue(c,token,{k:p.get(k,"") for k in ("title","other_names","surname","addr1","addr2","addr3","postcode")},files)
     return RedirectResponse(f"/documents/{token}",303)
