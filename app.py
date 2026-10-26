@@ -1,3 +1,4 @@
+import hashlib
 """FormSorted claim service prototype (AA1, DLA1A, PIP2, AR1). Run: uvicorn app:app --port 8000
 Env: STRIPE_SECRET_KEY, PUBLIC_URL, ANTHROPIC_API_KEY/GEMINI_API_KEY/OPENAI_API_KEY, LLM_PROVIDER/LLM_MODEL/LLM_FALLBACKS, GROUNDING_PROVIDER/GROUNDING_MODEL/GROUNDING_FALLBACKS (see SETUP_RENDER_SUPABASE.md), BRAND. Placeholders => DEV mode (no payment, mock LLM)."""
 import os, json, sqlite3, secrets, urllib.request, urllib.parse, base64, time
@@ -411,41 +412,88 @@ def source_text(o,d):
 def ground(o,d):
     F=FORMS[o["form"] or "aa"]
     return grounding.check({t:d["answers"].get(t,"") for t,_,_ in F["topics"]},source_text(o,d))
-def flag_html(t,fl):
-    if not fl: return ""
-    items="".join(f"""<li><p><strong>"{esc(x['phrase'])}"</strong> <span class=hint>({esc(x['kind'])})</span></p><div class=resopts>
-<label><input type=radio name="res_{t}_{i}" value=keep required> Keep, it's true</label><label><input type=radio name="res_{t}_{i}" value=edit> I've edited the answer</label><label><input type=radio name="res_{t}_{i}" value=remove> Remove it</label></div></li>""" for i,x in enumerate(fl))
-    return f"""<div class=ground><p class=flag>We couldn't find this in what you told us — keep, edit or remove</p><ul>{items}</ul></div>"""
+def _ghash(o,d):
+    F=FORMS[o["form"] or "aa"]
+    return hashlib.sha256(json.dumps([[d["answers"].get(t,"") for t,_,_ in F["topics"]],source_text(o,d)]).encode()).hexdigest()[:16]
+def ground_cached(o,d,token):
+    """The checker can return different phrases each call, so the flags shown on the page are stored and the same ones
+    are used when the page is submitted (otherwise choices no longer match and people get stuck)."""
+    h=_ghash(o,d); gc=d.get("gcache") or {}
+    if gc.get("h")==h: return gc["G"]
+    G=ground(o,d); d["gcache"]={"h":h,"G":G}
+    c=db(); c.execute("update orders set draft=? where token=?",(json.dumps(d),token)); c.commit()
+    return G
+def sentence_of(answer,phrase):
+    """The whole sentence in the answer that contains the flagged phrase (None if it isn't in the answer)."""
+    pl=" ".join(phrase.lower().split())
+    for snt in grounding.sentences(answer):
+        if pl and pl in " ".join(snt.lower().split()): return snt
+    return None
+def flag_items(o,d,G):
+    """One item per distinct flagged sentence. Identical sentences (even in different answers) share one choice."""
+    F=FORMS[o["form"] or "aa"]; items={}
+    for t,_,_ in F["topics"]:
+        for x in G.get(t,[]):
+            snt=sentence_of(d["answers"].get(t,""),x["phrase"])
+            if not snt: continue   # phrase not actually in this answer: nothing to approve or remove
+            k=hashlib.sha1(" ".join(snt.lower().split()).encode()).hexdigest()[:10]
+            it=items.setdefault(k,{"key":k,"sentence":snt,"topics":[],"kinds":[]})
+            if t not in it["topics"]: it["topics"].append(t)
+            if x["kind"] not in it["kinds"]: it["kinds"].append(x["kind"])
+    return list(items.values())
+def flag_html(t,its,fm,need,labels):
+    its=[i for i in its if i["topics"][0]==t]
+    if not its: return ""
+    def one(i):
+        ch=fm.get(f"res_{i['key']}") if fm else None; also=[labels[x] for x in i["topics"][1:]]
+        opts="".join(f'<label><input type=radio name="res_{i["key"]}" value={v} required {"checked" if ch==v else ""}> {l}</label>' for v,l in (("keep","Keep, it's true"),("edit","I've edited the answer"),("remove","Remove it")))
+        return f"""<li id="res_{i['key']}" class="{'needs' if i['key'] in need else ''}">{'<p class=err>Please choose one</p>' if i['key'] in need else ''}<p><strong>"{esc(i['sentence'])}"</strong> <span class=hint>({esc(', '.join(i['kinds']))})</span></p>{f'<p class=hint>Also in: {esc(", ".join(also))}. Your choice applies to both.</p>' if also else ''}<div class=resopts>{opts}</div></li>"""
+    return f"""<div class=ground><p class=flag>We couldn't find this in what you told us — keep, edit or remove</p><ul>{''.join(one(i) for i in its)}</ul></div>"""
+def render_approve(token,o,d,G,fm=None,need_ok=(),need_res=()):
+    F=FORMS[o["form"] or "aa"]; sm=said_map(o); added=d.get("user_added",{}); labels={t:l for t,l,_ in F["topics"]}; its=flag_items(o,d,G)
+    ans=lambda t: str(fm.get(f"ans_{t}")) if fm and fm.get(f"ans_{t}") is not None else d['answers'].get(t,'')
+    rows="".join(f"""<div class="trace{' needs' if t in need_ok else ''}" id="topic_{t}"><h3>{esc(l)}</h3><div class=cols><div><p class=lbl>What you told us</p><p class=you>{esc(sm.get(t,'')) or '<em>Nothing for this topic</em>'}{f'<br><strong>You added:</strong> {esc(added[t])}' if t in added else ''}</p></div>
+<div><p class=lbl>What goes on the form (edit if needed)</p><textarea name="ans_{t}" rows=4>{esc(ans(t))}</textarea></div></div>
+{flag_html(t,its,fm,need_res,labels)}{'<p class=err>Please tick to approve this answer</p>' if t in need_ok else ''}<label class=cb><input type=checkbox id="ok_{t}" name="ok_{t}" required {'checked' if fm and fm.get(f'ok_{t}') else ''}><span>I approve this answer. It is true and in my words.</span></label></div>""" for t,l,_ in F["topics"])
+    n=len(need_ok)+len(need_res); summary=""
+    if n:
+        links=[f'<li><a href="#topic_{t}">Approve: {esc(labels[t])}</a></li>' for t in need_ok]+[f'<li><a href="#res_{i["key"]}">Choose keep, edit or remove: "{esc(i["sentence"][:80])}{"…" if len(i["sentence"])>80 else ""}"</a></li>' for i in its if i["key"] in need_res]
+        summary=f"""<div class=errsum role=alert tabindex=-1 id=errsum><h2>{n} answer{'s' if n!=1 else ''} still need{'' if n!=1 else 's'} a choice</h2><ul>{''.join(links)}</ul></div>"""
+    pending=[i for i in its if not (fm and fm.get(f"res_{i['key']}") in ("keep","edit","remove"))]
+    keepall=f"""<p><button class="btn btn-2" name=keepall value=1 formnovalidate>Keep all remaining ({len(pending)}) as true</button> <span class=hint>Only if every one of them is true.</span></p>""" if pending else ""
+    return page(prog(7)+f"""{summary}<h1>Check and approve every answer</h1>{PROMISE}<p class=lead>Each answer is shown next to what you told us. Change anything that isn't right. Nothing is ready to download until you approve each answer.</p>
+<form method=post action=/approve/{token}>{rows}{keepall}
+<label class=cb><input type=checkbox name=save {'checked' if fm and fm.get('save') else ''}><span>Save my answers for next time (for a review or renewal). We'll give you a save code. Saved answers are kept for 90 days unless you delete them.</span></label>
+<div class=warning>Giving false information on a benefit claim is an offence.</div><button class="btn btn-start">I approve. Make my documents</button></form>""","Approve your answers")
 @app.get("/approve/{token}")
 def approve_page(token:str):
     r,o,d=ordered(token)
     if r: return r
-    F=FORMS[o["form"] or "aa"]; sm=said_map(o); added=d.get("user_added",{})
-    try: G=ground(o,d)
+    try: G=ground_cached(o,d,token)
     except grounding.GroundingUnavailable as e: print("grounding unavailable",e); return BUSY(token)
-    rows="".join(f"""<div class=trace><h3>{esc(l)}</h3><div class=cols><div><p class=lbl>What you told us</p><p class=you>{esc(sm.get(t,'')) or '<em>Nothing for this topic</em>'}{f'<br><strong>You added:</strong> {esc(added[t])}' if t in added else ''}</p></div>
-<div><p class=lbl>What goes on the form (edit if needed)</p><textarea name="ans_{t}" rows=4>{esc(d['answers'].get(t,''))}</textarea></div></div>
-{flag_html(t,G.get(t))}<label class=cb><input type=checkbox name="ok_{t}" required><span>I approve this answer. It is true and in my words.</span></label></div>""" for t,l,_ in F["topics"])
-    return page(prog(7)+f"""<h1>Check and approve every answer</h1>{PROMISE}<p class=lead>Each answer is shown next to what you told us. Change anything that isn't right. Nothing is ready to download until you approve each answer.</p>
-<form method=post action=/approve/{token}>{rows}
-<label class=cb><input type=checkbox name=save><span>Save my answers for next time (for a review or renewal). We'll give you a save code. Saved answers are kept for 90 days unless you delete them.</span></label>
-<div class=warning>Giving false information on a benefit claim is an offence.</div><button class="btn btn-start">I approve. Make my documents</button></form>""","Approve your answers")
+    return render_approve(token,o,d,G)
 @app.post("/approve/{token}")
 async def approve_save(token:str, req:Request):
     r,o,d=ordered(token)
     if r: return r
-    fm=await req.form(); F=FORMS[o["form"] or "aa"]
-    try: G=ground(o,d)
+    fm=dict((await req.form()).items()); F=FORMS[o["form"] or "aa"]
+    try: G=ground_cached(o,d,token)
     except grounding.GroundingUnavailable as e: print("grounding unavailable",e); return BUSY(token)
-    missing=[l for t,l,_ in F["topics"] if not fm.get(f"ok_{t}")]
-    unresolved=[f'"{x["phrase"]}"' for t,fl in G.items() for i,x in enumerate(fl) if fm.get(f"res_{t}_{i}") not in ("keep","edit","remove")]
-    if missing or unresolved: return page(f"<h1>Please approve every answer</h1>{f'<p>Not approved yet: {esc(chr(44).join(missing))}</p>' if missing else ''}{f'<p>Please choose keep, edit or remove for: {esc(chr(44).join(unresolved))}</p>' if unresolved else ''}<p><a href=/approve/{token}>Go back</a></p>","Approve every answer")
-    res=d.setdefault("grounding_resolved",[])
+    its=flag_items(o,d,G)
+    if fm.get("keepall"):
+        for i in its:
+            if fm.get(f"res_{i['key']}") not in ("keep","edit","remove"): fm[f"res_{i['key']}"]="keep"
+    need_ok=[t for t,_,_ in F["topics"] if not fm.get(f"ok_{t}")]
+    need_res=[i["key"] for i in its if fm.get(f"res_{i['key']}") not in ("keep","edit","remove")]
+    if need_ok or need_res: return render_approve(token,o,d,G,fm,need_ok,need_res)
+    d.pop("gcache",None)
+    res=d.setdefault("grounding_resolved",[]); removed=[]
+    for i in its:
+        ch=fm.get(f"res_{i['key']}"); res.append({"topics":i["topics"],"phrase":i["sentence"],"choice":ch,"at":time.time()})
+        if ch=="remove": removed.append(i["sentence"])
     for t,_,_ in F["topics"]:
         a=str(fm.get(f"ans_{t}",d["answers"].get(t,"")))[:4000]
-        for i,x in enumerate(G.get(t,[])):
-            ch=fm.get(f"res_{t}_{i}"); res.append({"topic":t,"phrase":x["phrase"],"choice":ch,"at":time.time()})
-            if ch=="remove": a=grounding.remove_phrase(a,x["phrase"])
+        for snt in removed: a=grounding.remove_sentence(a,snt)
         d["answers"][t]=a
     files=build_files(token,o,d); c=db(); code=o["save_code"]
     if fm.get("save"):

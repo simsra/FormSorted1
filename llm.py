@@ -171,6 +171,9 @@ numbers, frequencies, durations, aids or equipment, people, places, or any state
 Return JSON only: {"unsupported":[{"phrase":"exact words from the draft","reason":"short reason"}]}. Return {"unsupported":[]} if all supported."""
 def grounding(draft_text, source_text):
     """Mandatory grounding check (raises LLMUnavailable if every checker model fails). Returns list of {phrase,reason}. Empty in MOCK mode (deterministic layer still runs)."""
+    if MOCK and os.getenv("MOCK_GROUND_FLAKY") and draft_text.strip():   # tests only: mimic a checker that returns different fragments each call
+        import random; w=draft_text.split(); n=random.randint(2,4); i=random.randint(0,max(0,len(w)-n))
+        return [{"phrase":" ".join(w[i:i+n]).strip(".,").lower(),"reason":"not in your words"}]
     if MOCK or not draft_text.strip(): return []
     out=_call([{"role":"system","content":GROUNDING_PROMPT},{"role":"user","content":f"SOURCE:\n{source_text}\n\nDRAFT:\n{draft_text}"}],json_mode=True,chain=GROUND_CHAIN)
     return json.loads(out).get("unsupported",[])
