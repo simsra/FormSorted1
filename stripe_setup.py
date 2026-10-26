@@ -8,10 +8,12 @@ KEY=os.environ.get("STRIPE_KEY") or os.environ.get("STRIPE_TEST_KEY") or sys.exi
 MODE="test" if "_test_" in KEY else "live"
 THANKS=os.getenv("THANKS_URL","https://formsorted.com/thanks.html")
 PLANS=[("aa","99","STRIPE_LINK_AA_99"),("dla","99","STRIPE_LINK_DLA_99"),("pip","99","STRIPE_LINK_PIP_99"),("pipr","99","STRIPE_LINK_PIPR_99"),
-       ("atw","49","STRIPE_LINK_ATW_49"),("atw","79","STRIPE_LINK_ATW_79")]   # add e.g. ("aa","199","STRIPE_LINK_AA_199") when a premium tier exists
+       ("aa","199","STRIPE_LINK_AA_199"),("dla","199","STRIPE_LINK_DLA_199"),("pip","199","STRIPE_LINK_PIP_199"),
+       ("atw","49","STRIPE_LINK_ATW_49"),("atw","79","STRIPE_LINK_ATW_79")]
 DESC={"49":"Your answers for every question on the form, drafted from what you tell us, for you to check and copy across.",
       "59":"Your answers for every question on the form, drafted from what you tell us, for you to check and copy across.",
       "99":"Done for you: we prepare your answers from what you tell us and fill in the form where there is one, ready for you to check, sign and send.",
+      "199":"Done for you Plus: everything in Done for you, plus an assessment briefing, supporting letters, a reconsideration letter if needed and your renewal form, prepared from your answers.",
       "79":"Your answers drafted from what you tell us, plus a completed form ready to check, sign and send."}
 def api(method,path,data=None):
     body=urllib.parse.urlencode(data,doseq=True).encode() if data else None
@@ -35,7 +37,7 @@ def main():
         if not link:
             for old in [l for l in links if l["metadata"].get("fs_key")==k]: api("POST",f"/payment_links/{old['id']}",{"active":"false"})
             d={"line_items[0][price]":price["id"],"line_items[0][quantity]":1,"after_completion[type]":"redirect",
-               "after_completion[redirect][url]":THANKS,"customer_creation":"always","billing_address_collection":"auto",
+               "after_completion[redirect][url]":THANKS,"customer_creation":"always","billing_address_collection":"auto","allow_promotion_codes":"true",
                **{f"metadata[{a}]":b for a,b in {**md,"price":price["id"]}.items()},
                **{f"payment_intent_data[metadata][{a}]":b for a,b in md.items()}}
             link=api("POST","/payment_links",d)

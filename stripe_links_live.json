@@ -1,0 +1,95 @@
+{
+  "mode": "live",
+  "links": {
+    "STRIPE_LINK_AA_99": {
+      "url": "https://buy.stripe.com/9B600lc7U4a61VKgNc0kE00",
+      "payment_link": "plink_1UUv3aPOrrodFdVXgqEwTCTf",
+      "price": "price_1UUv3ZPOrrodFdVX9lhnH6g0",
+      "product": "prod_VVwxnb2XG8zVgQ",
+      "form": "aa",
+      "tier": "99",
+      "amount": 9900,
+      "name": "Attendance Allowance: Done for you"
+    },
+    "STRIPE_LINK_DLA_99": {
+      "url": "https://buy.stripe.com/6oUeVf7RE9uqdEsaoO0kE01",
+      "payment_link": "plink_1UUv3dPOrrodFdVXaSmSU2Xg",
+      "price": "price_1UUv3cPOrrodFdVXX1V3A2Vs",
+      "product": "prod_VVwxa6RpuxTlQq",
+      "form": "dla",
+      "tier": "99",
+      "amount": 9900,
+      "name": "Child DLA: Done for you"
+    },
+    "STRIPE_LINK_PIP_99": {
+      "url": "https://buy.stripe.com/cNidRbdbY8qmgQE40q0kE02",
+      "payment_link": "plink_1UUv3gPOrrodFdVXrZYS3m9N",
+      "price": "price_1UUv3fPOrrodFdVXis5eND0T",
+      "product": "prod_VVwxcKHZk4b4rx",
+      "form": "pip",
+      "tier": "99",
+      "amount": 9900,
+      "name": "PIP: Done for you"
+    },
+    "STRIPE_LINK_PIPR_99": {
+      "url": "https://buy.stripe.com/14A00lfk6bCyasg2Wm0kE03",
+      "payment_link": "plink_1UUv3kPOrrodFdVXOqEtth91",
+      "price": "price_1UUv3jPOrrodFdVX5iTiklTi",
+      "product": "prod_VVwxi09r6I7Eyt",
+      "form": "pipr",
+      "tier": "99",
+      "amount": 9900,
+      "name": "PIP review: Done for you"
+    },
+    "STRIPE_LINK_AA_199": {
+      "url": "https://buy.stripe.com/4gM7sN3BogWSbwkbsS0kE04",
+      "payment_link": "plink_1UUv3nPOrrodFdVXmGQryinB",
+      "price": "price_1UUv3mPOrrodFdVXT7QxEP4K",
+      "product": "prod_VVwxtdjiuZXxI1",
+      "form": "aa",
+      "tier": "199",
+      "amount": 19900,
+      "name": "Attendance Allowance: Done for you Plus"
+    },
+    "STRIPE_LINK_DLA_199": {
+      "url": "https://buy.stripe.com/cNifZjdbY7mieIwdB00kE05",
+      "payment_link": "plink_1UUv3qPOrrodFdVXUu5El5jv",
+      "price": "price_1UUv3pPOrrodFdVXDzRN0J5A",
+      "product": "prod_VVwxI9pW5UANJJ",
+      "form": "dla",
+      "tier": "199",
+      "amount": 19900,
+      "name": "Child DLA: Done for you Plus"
+    },
+    "STRIPE_LINK_PIP_199": {
+      "url": "https://buy.stripe.com/00w28t0pc4a68k82Wm0kE06",
+      "payment_link": "plink_1UUv3uPOrrodFdVXeL9d5R2a",
+      "price": "price_1UUv3tPOrrodFdVXc59KWPB4",
+      "product": "prod_VVwxH5HGM8CJTf",
+      "form": "pip",
+      "tier": "199",
+      "amount": 19900,
+      "name": "PIP: Done for you Plus"
+    },
+    "STRIPE_LINK_ATW_49": {
+      "url": "https://buy.stripe.com/4gM8wR6NA0XU1VK1Si0kE07",
+      "payment_link": "plink_1UUv3xPOrrodFdVX2e0pJUkT",
+      "price": "price_1UUv3wPOrrodFdVXzjOkfwT6",
+      "product": "prod_VVwxLqqLFxOvOm",
+      "form": "atw",
+      "tier": "49",
+      "amount": 4900,
+      "name": "Access to Work: Access to Work Answers"
+    },
+    "STRIPE_LINK_ATW_79": {
+      "url": "https://buy.stripe.com/7sY8wR9ZMayufMA54u0kE08",
+      "payment_link": "plink_1UUv41POrrodFdVXhetDz9WW",
+      "price": "price_1UUv40POrrodFdVX75oqxJrJ",
+      "product": "prod_VVwxaHFfcQeMFy",
+      "form": "atw",
+      "tier": "79",
+      "amount": 7900,
+      "name": "Access to Work: Access to Work Complete Pack"
+    }
+  }
+}
