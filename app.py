@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 import orders, mailer, asyncio, hmac, store
 from fastapi.responses import Response
+import intake as INTAKE
 import llm, fill_pdf, documents, quality, deadlines, letters, grounding, facts, ticks as TICKS, contsheet, formwatch
 from html import escape as esc
 from forms import FORMS
@@ -18,7 +19,7 @@ def get(token):
     r=db().execute("select * from orders where token=?",(token,)).fetchone()
     if not r: raise HTTPException(404)
     return r
-STEPS=["Choose","Pay","Agree","Conversation","Deadline","Strength check","Approve","Your documents"]
+STEPS=["Choose","Pay","Agree","Questions","Deadline","Strength check","Approve","Your documents"]
 def prog(n): return f"<p class=progress>Step {n} of {len(STEPS)}: {STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(STEPS)}%'></span></div>"
 def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
     if minimal:  # order summary: no outbound links except Terms/Privacy
@@ -62,6 +63,9 @@ def home(form:str="", tier:str=""):
 <div class=promise><strong>Done for you, in your words.</strong> We write the answers and fill in the form; you check, sign and post it.</div><div class=inset>One-off fee. No success fee. Secure card payment. 14-day cancellation rights until your conversation starts.</div>
 <button class="btn">Continue to payment</button></form><p><a href=/>Choose a different form</a></p>""","Choose your service",f["gov"])
 PRICING_URL="https://formsorted.com/#prices"
+TAPLINE="<div class=promise><strong>About 10 minutes. You only tap, we do the writing.</strong> Skip anything you're not sure about, and save your progress to finish later.</div>"
+TRUST="<div class=trust><h2 class=h3>Our promise</h2><ul class=ticks><li><strong>Fixed price.</strong> You pay this once. Never a percentage of any award.</li><li><strong>You approve everything</strong> before you sign. Nothing is sent without you.</li><li>You get a copy of every page to keep for reviews.</li></ul></div>"
+def chat_url(o): return f"/intake/{o['token']}" if (o["form"] or "aa") in INTAKE.FORMS_V3 else f"/static/chat.html#{o['token']}"
 def pack_items(form,tier):
     """What's included, as bullets, for one pack (a higher tier includes the lower one)."""
     out=[]
@@ -74,7 +78,7 @@ def order_summary(form,tier,pv=""):
     f=FORMS[form]; n,p,_=f["tiers"][tier]
     items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,tier)+["You check and approve every word before anything is final"])
     return page(prog(1)+pv+f"""<div class=summary><p class=caption>Your order</p><h1>{esc(n)}</h1><p class=sub>{esc(f['short'])}</p>
-<p class=lede><strong>We fill in your form. You check, sign and post.</strong> We ask you simple questions in plain English, then write it all up in your words.</p>
+<p class=lede><strong>We fill in your form. You check, sign and post.</strong> We ask you simple questions in plain English, then write it all up in your words.</p>{TAPLINE if form in INTAKE.FORMS_V3 else ""}
 <h2 class=h3>What's included</h2><ul class=ticks>{items}</ul>
 <div class=total><span>Total</span><strong>£{p//100}</strong></div><p class=hint>Nothing to pay now. Answer the questions first; you pay once at the end, when your form is ready to prepare. One-off fee. No success fee.</p>
 <form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={tier}><button class="btn btn-wide">Start my form</button></form>
@@ -116,22 +120,22 @@ def covered(o):
 def preview(token:str):
     o=ready(token,paid=False)
     if o["status"]=="paid": return RedirectResponse(f"/start/{token}",303)
-    if not o["interview_done_at"]: return RedirectResponse(f"/static/chat.html#{token}",303)
-    f=FORMS[o["form"] or "aa"]; n,p,_=f["tiers"][o["tier"]]; got,total=covered(o)
-    facts=[f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa",o["tier"])]
+    if not o["interview_done_at"]: return RedirectResponse(chat_url(o),303)
+    f=FORMS[o["form"] or "aa"]; n,p,_=f["tiers"][o["tier"]]; got,total=INTAKE.coverage(o["form"],json.loads(o["intake"])) if o["intake"] else covered(o)
+    facts=[f"Your answers cover {got} of {total} sections of the form" if o["intake"] else f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa",o["tier"])]
     return page(f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your form is ready to prepare</h1>
 <p class=lede><strong>We fill in your form. You check, sign and post.</strong> Pay once and we write up your answers in your own words, check every one against what you told us, and you approve them before anything is final.</p>
 <figure class=lockprev><img src="/static/preview-placeholder.svg" alt="Example illustration of a filled-in form (not your answers)" width=520 height=360><figcaption>Illustration only. Your own answers appear after payment.</figcaption></figure>
 <ul class=ticks>{''.join(f'<li>{x}</li>' for x in facts)}</ul>
 <div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
 <form method=post action=/pay/{token}><label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
-<button class="btn btn-wide">Pay £{p//100} to get your completed form</button></form>
+<button class="btn btn-wide">Pay £{p//100} to get your completed form</button></form>{TRUST}{f'<p class=change><a href="/intake/{token}?s=about">Change my answers</a></p>' if o["intake"] else ''}
 <p class=hint>One-off fee. No success fee. If you don't pay, we delete everything you told us after 7 days.</p></div>""","Your form is ready",minimal=True)
 @app.post("/pay/{token}")
 def pay(token:str, waive:str=Form(...)):
     o=ready(token,paid=False)
     if o["status"]=="paid": return RedirectResponse(f"/start/{token}",303)
-    if not o["interview_done_at"]: return RedirectResponse(f"/static/chat.html#{token}",303)
+    if not o["interview_done_at"]: return RedirectResponse(chat_url(o),303)
     c=db()
     if DEV:
         c.execute("update orders set status='paid', paid_at=? where token=?",(time.time(),token)); c.commit(); return RedirectResponse(f"/start/{token}",303)
@@ -181,29 +185,42 @@ def start(token:str):
     if o["status"]=="deleted": return page(DELETED_PAGE,"Deleted")
     if o["status"] not in ("paid","free"): raise HTTPException(402)
     if o["consent_at"]:
-        if o["status"]=="paid" and o["interview_done_at"] and not o["draft"]: return RedirectResponse(f"/prepare/{token}",303)
+        if o["status"]=="paid" and o["interview_done_at"] and not o["draft"]:
+            if o["intake"] and not json.loads(o["intake"]).get("uploads_done"): return RedirectResponse(f"/uploads/{token}",303)
+            return RedirectResponse(f"/prepare/{token}",303)
         if o["status"]=="free" and o["interview_done_at"]: return RedirectResponse(f"/preview/{token}",303)
-        return RedirectResponse(f"/static/chat.html#{token}",303)
-    lead="Payment received. Please confirm 2 things." if o["status"]=="paid" else "The conversation is free. You only pay at the end, if you want your completed form. Please confirm 2 things."
+        if o["draft"] and (o["form"] or "aa") in INTAKE.FORMS_V3: return RedirectResponse(f"/{'documents' if o['approved_at'] and o['details_at'] else 'details' if o['approved_at'] else 'deadline'}/{token}",303)
+        return RedirectResponse(chat_url(o),303)
+    lead="Payment received. Please confirm 2 things." if o["status"]=="paid" else "Answer the questions first. You only pay at the end, if you want your completed form. Please confirm 2 things."
     return page(prog(3)+f"""<h1>Before we start</h1><p class=lead>{lead}</p><form method=post action=/consent/{token}>
 <label class=cb><input type=checkbox name=health required><span>I agree to {BRAND} using the health information I give to prepare this form. If it's about someone else, they agree, or I can act for them.</span></label>
 <label class=cb><input type=checkbox name=truth required><span>I'll only give true information and will check everything before sending it.</span></label>
 <div class=warning>Giving false information on a benefit claim is an offence.</div>
-<button class="btn btn-start">Start my conversation</button></form><p class=small>If you don't pay, we delete your information after 7 days. If you do, after 90 days, or sooner if you ask. <a href="https://formsorted.com/privacy.html">Privacy notice</a></p>""","Before we start")
+<button class="btn btn-start">Start</button></form><p class=small>If you don't pay, we delete your information after 7 days. If you do, after 90 days, or sooner if you ask. <a href="https://formsorted.com/privacy.html">Privacy notice</a></p>""","Before we start")
 @app.post("/consent/{token}")
 def consent(token:str, health:str=Form(...), truth:str=Form(...), digital:str=Form("")):
     o=get(token)
     if o["status"] not in ("paid","free"): raise HTTPException(403)
     c=db(); c.execute("update orders set consent_at=? where token=?",(time.time(),token)); c.commit()
-    return RedirectResponse(f"/static/chat.html#{token}",303)
+    return RedirectResponse(chat_url(o),303)
 @app.get("/prepare/{token}")
 def prepare(token:str):
     """After payment: draft from the interview (the only place drafting happens), then continue the paid flow."""
     o=ready(token)
     if not o["draft"]:
-        d=llm.draft(json.loads(o["history"]),o["form"] or "aa"); d.setdefault("answers",{})
+        h=json.loads(o["history"]); I=json.loads(o["intake"] or "{}")
+        if I.get("doc_text"): h=h+[{"role":"assistant","content":"Documents you uploaded"},{"role":"user","content":I["doc_text"][:12000]}]
+        d=llm.draft(h,o["form"] or "aa"); d.setdefault("answers",{})
+        if I: merge_intake(o["form"] or "aa",d,I)
         c=db(); c.execute("update orders set draft=?, approved_at=null where token=? and draft is null",(json.dumps(d),token)); c.commit()
     return RedirectResponse(f"/deadline/{token}",303)
+def merge_intake(form,d,I):
+    """Facts the customer tapped go straight in (numbers, conditions, signing notes, tick boxes); the drafter only writes sentences."""
+    d.setdefault("extra",{}).update(INTAKE.extra(form,I))
+    if I.get("conds"): d["conditions"]=INTAKE.conditions(I)
+    d["notes_for_user"]=INTAKE.notes(form,I)+list(d.get("notes_for_user") or [])
+    if I.get("uploads"): d.setdefault("checklist",[]).append("Documents you uploaded to us: "+", ".join(u["name"] for u in I["uploads"])+". Send copies (not originals) with your form.")
+    d["intake_ticks"]=INTAKE.ticks(form,I)
 def ready(token,paid=True):
     """paid=True (default) for everything that exposes or produces answers; paid=False only for the free interview."""
     o=get(token)
@@ -306,6 +323,7 @@ def details_page(token:str, err:str=""):
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     p=json.loads(o["personal"] or "{}"); form=o["form"] or "aa"
+    if o["intake"] and not o["details_at"]: p={**INTAKE.personal_prefill(form,json.loads(o["intake"])),**p}
     who="the child" if form=="dla" else "the person claiming"
     rows="".join(f"""<div class=field><label class=q for=d_{k}>{esc(l)}</label><input id=d_{k} name={k} {'type='+t if t else ''} value="{esc(p.get(k,''))}" {'required' if req else ''} autocomplete=off></div>""" for k,l,t,req in detail_fields(form))
     return page(prog(8)+f"""<h1>Your details</h1><p class=lead>We add these to your documents{'' if form=='atw' else f' for {who}'} so you have less to fill in by hand. We only ask now, at the end, so we don't keep them longer than needed.</p>
@@ -335,11 +353,87 @@ async def details_save(token:str, req:Request):
     o=get(token); build_files(token,o,json.loads(o["draft"]))
     return RedirectResponse(f"/documents/{token}",303)
 
+# ---------- Intake v3: tap-first questions (AA1, DLA1A, PIP2) ----------
+def _intake_order(token):
+    o=ready(token,paid=False)
+    if (o["form"] or "aa") not in INTAKE.FORMS_V3: raise HTTPException(404)
+    return o
+def _intake_closed(o):
+    """Paid orders that have been drafted can't change their answers here (they edit on the approve page)."""
+    return o["status"]=="paid" and o["draft"]
+@app.get("/intake/{token}")
+def intake_page(token:str, s:str=""):
+    o=_intake_order(token)
+    if _intake_closed(o): return RedirectResponse(f"/start/{token}",303)
+    form=o["form"]; secs=INTAKE.SECTIONS[form]; ids=[k for k,_ in secs]; d=json.loads(o["intake"] or "{}")
+    sec=s if s in ids else (d.get("at") if d.get("at") in ids else ids[0]); i=ids.index(sec)
+    left=max(1,round(10*(len(ids)-i)/len(ids)))
+    bar="".join(f'<li class="{"done" if j<i else "now" if j==i else ""}">{esc(l)}</li>' for j,(k,l) in enumerate(secs))
+    reassure="<p class=reassure>It's normal for this to feel hard. You only tap, we do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
+    return page(f"""<div class=intake><p class=progress>Part {i+1} of {len(secs)}: {esc(secs[i][1])} · about {left} min left</p><div class=bar><span style='width:{(i)*100//len(secs)+8}%'></span></div><ol class=secs>{bar}</ol>
+{'<h1>Let\'s get your form done</h1><p class=lede>About 10 minutes. You only tap, we do the writing.</p>' if i==0 else f'<h1>{esc(secs[i][1])}</h1>'}{reassure}
+<form method=post action=/intake/{token}><input type=hidden name=sec value={sec}>{INTAKE.section_body(form,sec,d)}
+<div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==len(ids)-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
+<button class="linkbtn" name=nav value=save>Save and finish later</button></form></div>""",secs[i][1],minimal=True)
+@app.post("/intake/{token}")
+async def intake_save(token:str, req:Request):
+    o=_intake_order(token)
+    if _intake_closed(o): return RedirectResponse(f"/start/{token}",303)
+    form=o["form"]; ids=[k for k,_ in INTAKE.SECTIONS[form]]; fm=await req.form(); sec=str(fm.get("sec",""))
+    if sec not in ids: raise HTTPException(400)
+    d=INTAKE.save(form,sec,json.loads(o["intake"] or "{}"),fm); i=ids.index(sec); nav=fm.get("nav","next")
+    nxt=ids[max(0,i-1)] if nav=="back" else ids[i] if nav=="save" else (ids[i+1] if i+1<len(ids) else None)
+    d["at"]=nxt or sec; c=db()
+    if nxt is None:   # finished: build the answers transcript the rest of the pipeline uses
+        c.execute("update orders set intake=?, history=?, interview_done_at=? where token=?",(json.dumps(d),json.dumps(INTAKE.history(form,d)),time.time(),token)); c.commit()
+        return RedirectResponse(f"/start/{token}" if o["status"]=="paid" else f"/preview/{token}",303)
+    c.execute("update orders set intake=?, interview_done_at=null where token=? and status in ('free','paid')",(json.dumps(d),token)); c.commit()
+    if nav=="save":
+        return page(f"""<h1>Your answers are saved</h1><p class=lead>Come back any time in the next 7 days with this private link. Keep it safe: anyone with the link can see your answers.</p>
+<p class=savelink><code>{esc(PUBLIC)}/intake/{token}</code></p><button class=btn onclick="navigator.clipboard.writeText('{esc(PUBLIC)}/intake/{token}')">Copy link</button>
+<p><a href="/intake/{token}?s={nxt}">Carry on now</a></p>""","Saved",minimal=True)
+    return RedirectResponse(f"/intake/{token}?s={nxt}",303)
+UP_MAX=10*1024*1024; UP_TYPES={"application/pdf":"pdf","image/jpeg":"jpg","image/png":"png","image/heic":"heic","image/webp":"webp"}
+@app.get("/uploads/{token}")
+def uploads_page(token:str, err:str=""):
+    o=ready(token)   # paid only
+    if o["draft"]: return RedirectResponse(f"/start/{token}",303)
+    I=json.loads(o["intake"] or "{}"); ups=I.get("uploads") or []
+    lst="".join(f"<li>{esc(u['name'])}</li>" for u in ups)
+    return page(prog(4)+f"""<h1>Got any letters or lists? (optional)</h1><p class=lead>Payment received, thank you. If you have a photo or PDF of a medication list, hospital or clinic letter, care plan, EHCP or previous award letter, add it here. We use it to make your answers more complete. You'll still check everything before it's final.</p>
+{f'<div class=warning>{esc(err)}</div>' if err else ''}{f'<h2 class=h3>Added</h2><ul class=ticks>{lst}</ul>' if ups else ''}
+<form method=post action=/uploads/{token} enctype=multipart/form-data><div class=field><label class=q for=up>Add photos or PDFs (up to 10MB each)</label><input id=up type=file name=files multiple accept="image/*,application/pdf" capture=environment></div><button class="btn btn-2">Add</button></form>
+<form method=post action=/uploads/{token}/done><button class="btn btn-start">{'Continue' if ups else 'Skip. Prepare my form'}</button></form>
+<p class=small>Your documents are deleted with the rest of your order after 90 days, or sooner if you ask.</p>""","Add documents")
+@app.post("/uploads/{token}")
+async def uploads_add(token:str, req:Request):
+    o=ready(token)
+    if o["draft"]: return RedirectResponse(f"/start/{token}",303)
+    fm=await req.form(); I=json.loads(o["intake"] or "{}"); ups=I.setdefault("uploads",[]); err=""
+    from pypdf import PdfReader; import io
+    for f in fm.getlist("files"):
+        if not getattr(f,"filename",None): continue
+        data=await f.read(); ext=UP_TYPES.get(f.content_type or "")
+        if not ext or len(data)>UP_MAX or len(ups)>=10: err="Some files weren't added: we take photos and PDFs up to 10MB, 10 files at most."; continue
+        safe=_re.sub(r"[^A-Za-z0-9._-]","_",f.filename)[:60]; nm=f"upload-{len(ups)+1}-{safe}"
+        od=os.path.join(OUT,token,"up"); os.makedirs(od,exist_ok=True); open(os.path.join(od,nm),"wb").write(data); store.put_dir(token,od,[nm])
+        ups.append({"name":f.filename[:80],"key":nm,"type":ext})
+        if ext=="pdf":
+            try: I["doc_text"]=(I.get("doc_text","")+f"\n[{f.filename[:80]}]\n"+"\n".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(data)).pages[:15]))[:20000]
+            except Exception as e: print("pdf text failed",e)
+    c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
+    return RedirectResponse(f"/uploads/{token}"+("?err="+urllib.parse.quote(err) if err else ""),303)
+@app.post("/uploads/{token}/done")
+def uploads_done(token:str):
+    o=ready(token); I=json.loads(o["intake"] or "{}"); I["uploads_done"]=True
+    c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
+    return RedirectResponse(f"/prepare/{token}",303)
+
 # ---------- Deadline tracker, strength check, approval, saved answers, review mode, MR letter ----------
 PROMISE="<div class=promise><strong>Your words only.</strong> We only use what you told us. You approve every word before you send.</div>"
 def ordered(token):
     o=ready(token)
-    if not o["draft"]: return RedirectResponse(f"/static/chat.html#{token}",303),None,None
+    if not o["draft"]: return RedirectResponse(chat_url(o),303),None,None
     return None,o,json.loads(o["draft"])
 def said_map(o):
     """Traceability: what the customer said for each topic. Uses LLM-provided 'sources' if present, else conversation order
@@ -463,16 +557,17 @@ def ticks_page(token:str, err:str=""):
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     form=o["form"] or "aa"
     if not needs_ticks(o): return RedirectResponse(f"/details/{token}",303)
-    saved=d.get("ticks") if d.get("ticks_confirmed_at") else None; F=FORMS[form]; rows=""; last=None
+    saved=d.get("ticks") if d.get("ticks_confirmed_at") else None; F=FORMS[form]; rows=""; last=None; it=d.get("intake_ticks") or {}; nset=0
     for i,x in enumerate(TICKS.propose(form,d.get("answers",{}))):
-        cur=saved.get(x["field"],"") if saved is not None else x["proposed"]
+        if x["field"] in it and it[x["field"]] in x["options"]: x["proposed"]=it[x["field"]]; x["why"]="From what you tapped in the questions."
+        cur=saved.get(x["field"],"") if saved is not None else x["proposed"]; nset+=bool(cur)
         q=x["question"].split(":")[0]
         if q!=last: rows+=f"<h2 class=tickq>{esc(q)} <span class=hint>(page {x['page']} of the form)</span></h2>"; last=q
         opts="".join(f'<label><input type=radio name="t_{esc(x["field"])}" value="{esc(s)}" {"checked" if s==cur else ""}> Tick “{esc(TICKS.label(s))}”</label>' for s in x["options"])
         opts+=f'<label><input type=radio name="t_{esc(x["field"])}" value="" {"checked" if not cur else ""}> Leave blank</label>'
         rows+=f"""<div class=trace><p><strong>{esc(x['question'].split(':',1)[1].strip())}</strong></p><p class=hint>{esc(x['why'])}</p><div class=resopts>{opts}</div></div>"""
-    return page(prog(7)+f"""<h1>Check the tick boxes on your {esc(F['form'])}</h1>{PROMISE}<p class=lead>These are the tick boxes we will mark on the official form. We have suggested each one from the answers you approved. Change anything that isn't right. We only tick what you confirm here.</p>
-{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/ticks/{token}>{rows}
+    return page(prog(7)+f"""<h1>Check the tick boxes on your {esc(F['form'])}</h1>{PROMISE}<p class=lead>{f"We have already set {nset} tick boxes from your answers, so you don't need to answer anything again. Open the list if you want to check or change one." if it else "These are the tick boxes we will mark on the official form. We have suggested each one from the answers you approved. Change anything that isn't right. We only tick what you confirm here."}</p>
+{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/ticks/{token}>{f'<details class=tickall><summary>See or change the tick boxes</summary>{rows}</details>' if it else rows}
 <p class=small>We never tick the consent, declaration, bank or "signing for someone else" boxes. You do those yourself.</p>
 <label class=cb><input type=checkbox name=confirm required><span>I have checked every tick box above. They are true.</span></label>
 <button class="btn btn-start">Confirm tick boxes</button></form>""","Check the tick boxes")

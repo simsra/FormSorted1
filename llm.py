@@ -47,6 +47,8 @@ def draft_system(form):
 STRICT RULES: Use ONLY facts the USER stated in the transcript. Never add, infer or round any fact: no new conditions, symptoms, medicines, doses,
 numbers, frequencies, durations, aids, people or places. If the user didn't say how often or how long, don't write one. If a topic wasn't discussed, return "".
 Include how often, how long, who helps and what happens without help ONLY where the user said so. Plain English, no exaggeration.
+The transcript may be short tapped answers (e.g. "Dressing: finds this hard, needs help or reminding, like this most days, each time takes 10 to 30 minutes"). Turn them into natural sentences without adding facts.
+Describe what happens on most days. If the user said there are bad days on more than half the days (4 or more a week), describe bad days as the usual situation; otherwise mention bad days and how many a week, as stated. Never describe a worst day as typical.
 Never state or imply eligibility, award rates, amounts, points, descriptors or likely outcomes. Return JSON: {{"answers":{{one key per topic id: {ids}}},"extra":{{}},"conditions":[{{"name","since","meds","dose"}}],
 "checklist":[...evidence...],"gp_letter":"...","carer_statement":"...","notes_for_user":[...],
 "sources":{{topic id: [short verbatim quotes from the USER's messages each answer is based on]}}"""

@@ -50,5 +50,5 @@ def erase(c, out_dir, token):
     o=c.execute("select save_code from orders where token=?",(token,)).fetchone()
     store.delete(token)
     if o and o[0]: c.execute("delete from saved where code=?",(o[0],))
-    c.execute("update orders set status='deleted', history='[]', personal='{}', draft=null, email=null, deadline='{}', save_code=null, stripe_session=null where token=?",(token,))
+    c.execute("update orders set status='deleted', history='[]', intake=null, personal='{}', draft=null, email=null, deadline='{}', save_code=null, stripe_session=null where token=?",(token,))
     c.commit()
