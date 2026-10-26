@@ -54,7 +54,7 @@ def checkout(tier:str=Form(...), form:str=Form("aa")):
         return RedirectResponse(f"/start/{token}",303)
     s=stripe("POST","/checkout/sessions",{"mode":"payment","line_items[0][quantity]":1,"line_items[0][price_data][currency]":"gbp",
       "line_items[0][price_data][unit_amount]":price,"line_items[0][price_data][product_data][name]":f"{FORMS[form]['name']}: {name}",
-      "client_reference_id":token,"adaptive_pricing[enabled]":"false","customer_creation":"always","consent_collection[terms_of_service]":"required",
+      "client_reference_id":token,"adaptive_pricing[enabled]":"false","locale":"en-GB","customer_creation":"always","consent_collection[terms_of_service]":"required",
       "success_url":f"{PUBLIC}/success?session_id={{CHECKOUT_SESSION_ID}}","cancel_url":f"{PUBLIC}/?form={form}"})
     c.execute("insert into orders(token,tier,status,stripe_session,created,form) values(?,?,?,?,?,?)",(token,tier,"pending",s["id"],time.time(),form)); c.commit()
     return RedirectResponse(s["url"],303)
