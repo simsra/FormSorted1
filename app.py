@@ -23,6 +23,8 @@ def get(token):
     if not r: raise HTTPException(404)
     return r
 STEPS=["Choose","Pay","Agree","Questions","Deadline","Strength check","Approve","Your documents"]
+BB_STEPS=["Choose","Agree","Your answers","Check and pay","Your Blue Badge answers"]
+def bbprog(n): return f"<p class=progress>Step {n} of {len(BB_STEPS)}: {BB_STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(BB_STEPS)}%'></span></div>"
 def prog(n): return f"<p class=progress>Step {n} of {len(STEPS)}: {STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(STEPS)}%'></span></div>"
 def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
     if minimal:  # order summary: no outbound links except Terms/Privacy
@@ -218,7 +220,7 @@ def start(token:str):
         if o["draft"] and (o["form"] or "aa") in INTAKE.FORMS_V3: return RedirectResponse(f"/{'documents' if o['approved_at'] and o['details_at'] else 'details' if o['approved_at'] else 'deadline'}/{token}",303)
         return RedirectResponse(chat_url(o),303)
     lead="Payment received. Please confirm 2 things." if o["status"]=="paid" else "Answer the questions first. You only pay at the end, if you want your completed form. Please confirm 2 things."
-    return page(prog(3)+f"""<h1>Before we start</h1><p class=lead>{lead}</p><form method=post action=/consent/{token}>
+    return page((bbprog(2) if o["form"]=="bb" else prog(3))+f"""<h1>Before we start</h1><p class=lead>{lead}</p><form method=post action=/consent/{token}>
 <label class=cb><input type=checkbox name=health required><span>I agree to {BRAND} using the health information I give to prepare this form. If it's about someone else, they agree, or I can act for them.</span></label>
 <label class=cb><input type=checkbox name=truth required><span>I'll only give true information and will check everything before sending it.</span></label>
 <div class=warning>{"Giving false information on a Blue Badge application is an offence." if o["form"]=="bb" else "Giving false information on a benefit claim is an offence."}</div>
@@ -816,10 +818,11 @@ async def _retention_loop():
 
 # ---------------- Blue Badge answers (add-on £15 after an AA / DLA / PIP order, or £29 on its own) ----------------
 BB_ADDON_LINE="<p class=hint>Applying for a Blue Badge too? After you pay, you can add Blue Badge application answers for £15, made from the answers you give here.</p>"
+BB_TRUST="<div class=trust><h2 class=h3>Our promise</h2><ul class=ticks><li><strong>Fixed price.</strong> You pay this once. No subscription, nothing more to pay us.</li><li><strong>Only your words.</strong> Every answer is built from what you told us. You check and change anything before you use it.</li><li><strong>You stay in control.</strong> You apply yourself, and we never contact your council for you.</li><li><strong>Yours to keep.</strong> Download your answers and checklist to use now, or later if you need to ask the council to look again.</li></ul></div>"
 BB_ITEMS=["Answers for each health and walking question on the online Blue Badge application, ready to copy and paste","A hidden-disability write-up in your own words, if journeys are hard for reasons other than walking","A checklist of what to upload, and the photo and proof you need","If the council says no: a letter asking them to look at the decision again","You check every word. You apply yourself"]
 def bb_summary(pv=""):
     n,p,_=FORMS["bb"]["tiers"][BB.SOLO_TIER]
-    return page(prog(1)+pv+f"""<div class=summary><p class=caption>Your order</p><h1>{esc(n)}</h1><p class=sub>For the Blue Badge application</p>
+    return page(bbprog(1)+pv+f"""<div class=summary><p class=caption>Your order</p><h1>{esc(n)}</h1><p class=sub>For the Blue Badge application</p>
 <p class=lede><strong>Tap your answers. We write them up. You paste them into your application.</strong></p><div class=promise><strong>About 3 minutes. You only tap, we do the writing.</strong></div>
 <h2 class=h3>What's included</h2><ul class=ticks>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS)}</ul>
 <div class=total><span>Total</span><strong>£{p//100}</strong></div><p class=hint>Nothing to pay now. Answer the questions first; you pay once at the end. One-off fee.</p>
@@ -835,7 +838,7 @@ def bb_form(token:str):
     if o["form"]!="bb": raise HTTPException(404)
     if o["status"]=="paid": return RedirectResponse(f"/bb/{token}/documents",303)
     d=bb_data(o); d.setdefault("else",{})
-    return page(prog(4)+f"""<h1>Your Blue Badge answers</h1><p class=lead>Tap what applies. It takes about 3 minutes.</p>
+    return page(bbprog(3)+f"""<h1>Your Blue Badge answers</h1><p class=lead>Tap what applies. It takes about 3 minutes.</p>
 <form method=post action=/bb/{token} class=intake>{BB.body(d)}<button class="btn btn-wide">Continue</button></form><p class=hint>{esc(BB.NOT_ELIG)}</p>""","Blue Badge answers",minimal=True)
 @app.post("/bb/{token}")
 async def bb_save(token:str, req:Request):
@@ -848,18 +851,18 @@ async def bb_save(token:str, req:Request):
     return RedirectResponse(f"/preview/{token}",303)
 def bb_preview(o):
     token=o["token"]; n,p,_=tier_info("bb",o["tier"]); d=bb_data(o); k=len(BB.answers(d))+(1 if BB.hidden_writeup(d) else 0)
-    return page(f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your Blue Badge answers are ready to prepare</h1>
+    return page(bbprog(4)+f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your Blue Badge answers are ready to prepare</h1>
 <ul class=ticks><li>{k} answers to write up for the online application</li>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS[1:4])}</ul>
 <div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
 <form method=post action=/pay/{token}><label class=cb><input type=checkbox name=waive required><span>Please prepare my answers straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
-<button class="btn btn-wide">Pay £{p//100} to get your answers</button></form>{TRUST}<p class=change><a href="/bb/{token}">Change my answers</a></p>
+<button class="btn btn-wide">Pay £{p//100} to get your answers</button></form>{BB_TRUST}<p class=change><a href="/bb/{token}">Change my answers</a></p>
 <p class=hint>{esc(BB.NOT_ELIG)}</p><p class=hint>If you don't pay, we delete everything you told us after 7 days.</p></div>""","Your Blue Badge answers",minimal=True)
 @app.get("/bb/{token}/documents")
 def bb_documents(token:str):
     o=ready(token)
     if o["form"]!="bb": raise HTTPException(404)
     files=[("blue-badge-answers.html","Your Blue Badge answers, hidden-disability write-up and checklist")]
-    return page(f"""<div class=done><h1>Your Blue Badge answers are ready</h1><p>Copy each answer into the matching part of the online application, or your council's paper form. Change anything that isn't right.</p></div>
+    return page(bbprog(5)+f"""<div class=done><h1>Your Blue Badge answers are ready</h1><p>Copy each answer into the matching part of the online application, or your council's paper form. Change anything that isn't right.</p></div>
 {''.join(f'<div class=dl><span><strong>{esc(l)}</strong></span><a class=btn href="/bb/{token}/file/{f}" download>Download</a></div>' for f,l in files)}
 <div class=panel><h2 class=h3>Turned down?</h2><p>Tell us the date on the council's letter and what it said. We'll prepare a letter asking them to look again. You send it.</p>
 <form method=post action=/bb/{token}/letter><label>Date on the letter<input type=date name=decision_date required></label><label>What the letter said (optional)<textarea name=reason maxlength=600 rows=3></textarea></label><button class="btn btn-2">Make my letter</button></form></div>

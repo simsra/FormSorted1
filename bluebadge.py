@@ -66,15 +66,15 @@ def body(d):
         h+=q("Their first name (if it's not you)",f'<input name=name value="{esc(d.get("name",""))}" maxlength=40 autocomplete=off>',"Optional.")
     conds=", ".join(c["name"] for c in d.get("conds") or [])
     h+=q("Health conditions or disabilities",f'<input name=conds value="{esc(conds)}" maxlength=300 placeholder="e.g. Arthritis, COPD, autism">',"Separate them with commas. No diagnosis needed.")
-    h+=q(f"How far can {you} walk before needing to stop?",radios("dist",DIST,d.get("dist")),"Using any aids you normally use, on flat ground.")
-    h+=q("How long does that take?",radios("time",TIME,d.get("time")))
     h+=q("What happens when walking?",checks("eff",EFFECTS,d.get("eff"),d["else"].get("eff","")))
     h+=q("What do "+("you" if me else "they")+" use to get around?",checks("aids",AIDS,d.get("aids"),d["else"].get("aids","")))
+    h+=q(f"How far can {you} walk before needing to stop?",radios("dist",DIST,d.get("dist")),"Using any aids you normally use, on flat ground.")
+    h+=q("How long does that take?",radios("time",TIME,d.get("time")))
     h+=q("How long to recover after walking that far?",radios("rec",RECOVER,d.get("rec")))
     h+=q("On journeys: anything that isn't about walking?",checks("hidden",HIDDEN,d.get("hidden"),d["else"].get("hidden","")),"For example anxiety, distress or risk near traffic. Skip if none.")
     h+=q("How often does that happen?",radios("hfreq",HFREQ,d.get("hfreq")))
-    h+=q("Who treats or supports "+("you" if me else "them")+"?",checks("pros",PROS,d.get("pros"),d["else"].get("pros","")))
     h+=q("Medicines or treatments (optional)",f'<input name=meds value="{esc(d.get("meds",""))}" maxlength=300 placeholder="e.g. Morphine patches, inhalers, physio">')
+    h+=q("Who treats or supports "+("you" if me else "them")+"?",checks("pros",PROS,d.get("pros"),d["else"].get("pros","")))
     h+=q("Which of these do you have?",checks("docs",DOCS,d.get("docs"),d["else"].get("docs","")),"We list what to upload with the application.")
     return h
 
@@ -96,28 +96,41 @@ def _list(keys,opts,extra=""):
     t=T(opts); xs=[t[k] if t[k][:2].isupper() else t[k][0].lower()+t[k][1:] for k in keys if k in t]+([extra] if extra else [])
     return ", ".join(xs[:-1])+(" and " if len(xs)>1 else "")+xs[-1] if xs else ""
 
+def reasons(d):
+    """Which of the online pre-check's 'main reasons' options the taps relate to. The customer picks; we never say they qualify."""
+    r=[]
+    if d.get("dist")=="none": r.append("I am unable to walk")
+    elif d.get("dist") or d.get("eff") or [k for k in d.get("aids") or [] if k!="none"]: r.append("I find walking very difficult")
+    h=set(d.get("hidden") or [])
+    if h&{"panic","melt","freeze","lost","toilet"} or d["else"].get("hidden"): r.append("I experience psychological distress when walking or on journeys")
+    if h&{"danger","runs"}: r.append("I am a risk near vehicles or in traffic")
+    return r
 def answers(d):
-    """(section, answer) pairs in the order of the online application's health and walking questions."""
-    me=d.get("who","me")=="me"; I="I" if me else nm(d).capitalize(); my="my" if me else "their"; out=[]
-    if d.get("conds"): out.append(("Your health conditions",("I have " if me else f"{I} has ")+", ".join(c["name"] for c in d["conds"])+"."))
-    if d.get("meds"): out.append(("Medicines and treatments",d["meds"].rstrip(".")+"."))
-    if d.get("dist"):
+    """(section, answer) pairs in the order the online application asks them (public council and adviser guides, Oct 2026):
+    main reasons (pre-check) -> conditions and how long -> what happens when walking -> aids -> how far and how long -> journeys -> treatments -> professionals."""
+    me=d.get("who","me")=="me"; I="I" if me else nm(d).capitalize(); out=[]
+    rs=reasons(d)
+    if rs: out.append(("Main reasons you need a Blue Badge (options that match your answers; you choose)","; ".join(rs if me else [x.replace("I am","They are").replace("I find","They find").replace("I experience","They experience") for x in rs])+"."))
+    if d.get("conds"):
+        cs=[c["name"]+(f" (since {c['since']})" if c.get("since") else "") for c in d["conds"]]
+        out.append(("Conditions or disabilities that affect walking or journeys",("I have " if me else f"{I} has ")+", ".join(cs)+"."))
+    ef=_list(d.get("eff") or [],EFFECTS,d["else"].get("eff",""))
+    if ef: out.append(("Describe the difficulties with walking",("When I walk I get " if me else f"When {I} walks, they get ")+ef+"."))
+    ai=[k for k in d.get("aids") or [] if k!="none"]
+    al=_list(ai,[("stick","a walking stick"),("crutches","crutches"),("frame","a walking frame"),("wheelchair","a wheelchair"),("scooter","a mobility scooter"),("arm","someone's arm")],d["else"].get("aids",""))
+    if al: out.append(("Walking aids",("I use " if me else f"{I} uses ")+al+" to get around."))
+    elif "none" in (d.get("aids") or []): out.append(("Walking aids",("I don't" if me else f"{I} doesn't")+" use any walking aids."))
+    if d.get("dist") and d["dist"]!="ns":
         if d["dist"]=="none": s=f"{I} can't walk at all."
-        elif d["dist"]=="ns": s=""
         else:
             s=f"{I} can walk {T(DIST)[d['dist']].lower()} before {'I have' if me else 'they have'} to stop"
             if d.get("time") not in ("","ns",None): s+=f", and it takes {T(TIME)[d['time']].lower()}"
             s+="."
-        if s: out.append(("How far you can walk",s))
-    ef=_list(d.get("eff") or [],EFFECTS,d["else"].get("eff",""))
-    if ef: out.append(("What happens when you walk",("When I walk I get " if me else f"When {I} walks, they get ")+ef+"."))
-    if d.get("rec") not in ("","ns",None): out.append(("Recovering after walking",f"It takes {'me' if me else 'them'} {T(RECOVER)[d['rec']].lower()} to recover."))
-    ai=[k for k in d.get("aids") or [] if k!="none"]
-    al=_list(ai,[("stick","a walking stick"),("crutches","crutches"),("frame","a walking frame"),("wheelchair","a wheelchair"),("scooter","a mobility scooter"),("arm","someone's arm")],d["else"].get("aids",""))
-    if al: out.append(("Mobility aids",("I use " if me else f"{I} uses ")+al+" to get around."))
-    elif "none" in (d.get("aids") or []): out.append(("Mobility aids",("I don't" if me else f"{I} doesn't")+" use any mobility aids."))
+            if d.get("rec") not in ("","ns",None): s+=f" It takes {'me' if me else 'them'} {T(RECOVER)[d['rec']].lower()} to recover."
+        out.append(("How far you can walk, and how long it takes",s))
     hl=_list(d.get("hidden") or [],HIDDEN,d["else"].get("hidden",""))
     if hl: out.append(("Difficulties on journeys",("On journeys I have: " if me else f"On journeys {I} has: ")+hl+(f". This happens on {T(HFREQ)[d['hfreq']].lower()}." if d.get("hfreq") else ".")))
+    if d.get("meds"): out.append(("Treatments and medicines",d["meds"].rstrip(".")+"."))
     pl=_list(d.get("pros") or [],[(k,("my " if me else "their ")+(k if k=="GP" else k.lower())) for k,_ in PROS],d["else"].get("pros",""))
     if pl: out.append(("Healthcare professionals",("I see " if me else f"{I} sees ")+pl+"."))
     return out
@@ -131,11 +144,15 @@ def hidden_writeup(d):
 
 def checklist(d):
     have=set(d.get("docs") or []); t=T(DOCS); out=[]
-    for k in ("photo","id","addr"): out.append(("✓ " if k in have else "☐ ")+t[k])
+    out.append("Upload: "+("✓ " if "photo" in have else "☐ ")+"Recent colour passport-style photo (head and shoulders, plain background)")
+    out.append("Upload: "+("✓ " if "id" in have else "☐ ")+"Proof of identity (e.g. passport, driving licence or birth certificate)")
+    out.append("Upload: "+("✓ " if "addr" in have else "☐ ")+"Proof of address (e.g. council tax bill, or a bank statement or utility bill from the last 3 months)")
+    if not have&{"pip","dla","aa","meds","hosp","ot","ehcp"}: out.append("Upload: ☐ Recent medical evidence (e.g. a GP patient summary or hospital letter)")
     for k in ("pip","dla","aa","meds","hosp","ot","ehcp"):
-        if k in have: out.append("✓ "+t[k]+" (upload a clear photo or scan of every page)")
+        if k in have: out.append("Upload: ✓ "+t[k]+" (medical or benefit evidence; upload a clear photo or scan of every page)")
     if d["else"].get("docs"): out.append("✓ "+d["else"]["docs"])
     out.append("☐ Your National Insurance number, if you have one")
+    out.append("☐ Your council may charge a fee of up to £10 when the badge is issued")
     return out
 
 def letter(d,decision_date,reason):
