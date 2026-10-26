@@ -128,8 +128,8 @@ def answers(d):
             s+="."
             if d.get("rec") not in ("","ns",None): s+=f" It takes {'me' if me else 'them'} {T(RECOVER)[d['rec']].lower()} to recover."
         out.append(("How far you can walk, and how long it takes",s))
-    hl=_list(d.get("hidden") or [],HIDDEN,d["else"].get("hidden",""))
-    if hl: out.append(("Difficulties on journeys",("On journeys I have: " if me else f"On journeys {I} has: ")+hl+(f". This happens on {T(HFREQ)[d['hfreq']].lower()}." if d.get("hfreq") else ".")))
+    hw=hidden_writeup(d)
+    if hw: out.append(("Difficulties on journeys (hidden disability)",hw))
     if d.get("meds"): out.append(("Treatments and medicines",d["meds"].rstrip(".")+"."))
     pl=_list(d.get("pros") or [],[(k,("my " if me else "their ")+(k if k=="GP" else k.lower())) for k,_ in PROS],d["else"].get("pros",""))
     if pl: out.append(("Healthcare professionals",("I see " if me else f"{I} sees ")+pl+"."))
@@ -163,17 +163,13 @@ def letter(d,decision_date,reason):
            f"I am writing to ask you to look again at your decision not to issue a Blue Badge to {who}. Please consider the information below, which may not have been clear in the application.",""]
     if reason.strip(): lines+=["Your letter said: "+re.sub(r"\s+"," ",reason.strip())[:600],""]
     for s,a in answers(d): lines.append(f"{s}: {a}")
-    hw=hidden_writeup(d)
-    if hw: lines+=["",hw]
     lines+=["","I have enclosed copies of: "+", ".join(T(DOCS)[k] for k in d.get("docs") or [] if k not in ("photo","id","addr")) if [k for k in d.get("docs") or [] if k not in ("photo","id","addr")] else "", "",
             "Please contact me if you need anything else.","","Yours faithfully,","","[Signature]","[Your name]"]
     return "\n".join(l for l in lines if l is not None)
 
 def answers_html(d,brand="FormSorted"):
     rows="".join(f"<h2>{esc(s)}</h2><p class=you>{esc(a)}</p>" for s,a in answers(d))
-    hw=hidden_writeup(d)
     return f"""<!doctype html><meta charset=utf-8><title>Blue Badge answers</title><style>body{{font:16px/1.5 system-ui;max-width:720px;margin:2em auto;padding:0 1em}}h2{{font-size:1.05em;margin:1.4em 0 .3em}}.you{{background:#f3f6f8;padding:.6em .8em;border-radius:6px}}</style>
 <h1>Your Blue Badge answers</h1><p>Copy each answer into the matching part of the online Blue Badge application, or onto your council's paper form. Change anything that isn't right. You apply yourself.</p>{rows}
-{f"<h2>Hidden disability: in your own words</h2><p class=you>{esc(hw)}</p>" if hw else ""}
 <h2>What to have ready</h2><ul>{"".join(f"<li>{esc(x)}</li>" for x in checklist(d))}</ul>
 <p><small>{esc(NOT_ELIG)}</small></p>"""

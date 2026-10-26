@@ -850,7 +850,7 @@ async def bb_save(token:str, req:Request):
     if not BB.ready(d): return page(f"<h1>Just one more thing</h1><p class=lead>Please tell us how far you can walk, or what makes journeys hard, so we have something to write up.</p><p><a class=btn href=/bb/{token}>Go back</a></p>","One more thing",minimal=True)
     return RedirectResponse(f"/preview/{token}",303)
 def bb_preview(o):
-    token=o["token"]; n,p,_=tier_info("bb",o["tier"]); d=bb_data(o); k=len(BB.answers(d))+(1 if BB.hidden_writeup(d) else 0)
+    token=o["token"]; n,p,_=tier_info("bb",o["tier"]); d=bb_data(o); k=len(BB.answers(d))
     return page(bbprog(4)+f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your Blue Badge answers are ready to prepare</h1>
 <ul class=ticks><li>{k} answers to write up for the online application</li>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS[1:4])}</ul>
 <div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
