@@ -85,6 +85,12 @@ FORMS={
             "79":("Access to Work Complete Pack",7900,"Everything above, plus a support-needs summary and cost list, a call prep sheet, and notes for asking for a reconsideration if you disagree with the decision.")},
    "subject":"you"},
 }
+FORMS["bb"]={"name":"Blue Badge","short":"Blue Badge application answers","form":"Blue Badge","gov":"",
+   "who":"anyone applying for a Blue Badge, or helping someone apply","topics":[],"pdf":None,"kind":"bluebadge",
+   "tiers":{"29":("Blue Badge answers",2900,"Answers for the online Blue Badge application, ready to paste, a hidden-disability write-up, a checklist of what to upload, and a letter asking the council to look again if refused"),
+            "15":("Blue Badge answers (add-on)",1500,"Answers for the online Blue Badge application, ready to paste, prepared from the answers you already gave us")},
+   "subject":"the person the badge is for"}
+
 
 # Tick-"Yes" questions, derived from which topics have an approved answer (the model doesn't know DLA question numbers).
 TICK_MAP={"dla":{"42":"42","walking":"44","outdoors":"49","daycare":"54–60 (each care need you described)","senses":"61–64 (the ones you described)",

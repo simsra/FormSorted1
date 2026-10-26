@@ -73,6 +73,7 @@ assert facts.v("aa_helpline") in deadlines.script("aa")[0]
 assert req("/").status==200
 codes={}; atw_tokens={}
 for form,f in FORMS.items():
+    if form=="bb": continue   # Blue Badge has its own flow: test_bluebadge.py
     assert req(f"/?form={form}").status==200
     assert ("How much should we do for you?" if form=="atw" else "Your order") in req(f"/?form={form}&tier=bogus").read().decode()   # invalid tier -> chooser (atw) or the one product
     for t,(n,p,_) in f["tiers"].items():

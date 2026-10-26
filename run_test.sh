@@ -6,6 +6,7 @@ export STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_test_local} CRON_SEC
 $PY/uvicorn app:app --port ${PORT:-8019} >/tmp/aa-test-server.log 2>&1 & S=$!
 sleep 3; $PY/python test_flows.py http://localhost:${PORT:-8019}; R=$?
 $PY/python test_intake.py http://localhost:${PORT:-8019} || R=1
-$PY/python test_premium.py http://localhost:${PORT:-8019} || R=1; kill $S
+$PY/python test_premium.py http://localhost:${PORT:-8019} || R=1
+$PY/python test_bluebadge.py http://localhost:${PORT:-8019} || R=1; kill $S
 MOCK_GROUND_FLAKY=1 $PY/uvicorn app:app --port 8032 >/tmp/aa-test-flaky.log 2>&1 & F=$!; sleep 3; $PY/python test_approve.py http://localhost:8032 || R=1; kill $F
 $PY/python test_prefill.py || R=1; exit $R
