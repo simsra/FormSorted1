@@ -26,7 +26,7 @@ def req(p,data=None,js=None):
     try: return op.open(r)
     except urllib.error.HTTPError as e: return e
 body=lambda p: req(p).read().decode()
-for form,tier in (("dla","49"),("aa","49"),("pip","59")):
+for form,tier in (("dla","99"),("aa","99"),("pip","99")):
     tok=req("/checkout",{"tier":tier,"form":form}).headers["location"].split("/")[-1]
     req(f"/consent/{tok}",{"health":"on","digital":"on","truth":"on"})
     j=json.load(req(f"/api/{tok}/message",js={"text":""})); n=0
@@ -42,6 +42,6 @@ for form,tier in (("dla","49"),("aa","49"),("pip","59")):
     assert "Check and approve every answer" in eh and "Go back" not in eh and '","' not in eh
     if len(r1)>1: assert f'href="#{r1[1]}"' in eh and f'id="{r1[1]}" class="needs"' in eh and "Keep all remaining" in eh
     fm[f"ok_{topics[-1]}"]="on"; fm["keepall"]="1"
-    r=req(f"/approve/{tok}",fm); assert r.status==303 and r.headers["location"]==f"/details/{tok}", (r.status, r.read()[:300])
+    r=req(f"/approve/{tok}",fm); assert r.status==303 and r.headers["location"] in (f"/details/{tok}",f"/ticks/{tok}"), (r.status, r.read()[:300])
     print(form,"approve e2e ok",len(r1),"flagged sentences")
 print("APPROVE ALL OK")

@@ -57,23 +57,27 @@ ATW_TOPICS=[
 FORMS={
  "aa":{"name":"Attendance Allowance","short":"Attendance Allowance (AA1)","form":"AA1","gov":"https://www.gov.uk/attendance-allowance",
    "who":"State Pension age and over","topics":AA_TOPICS,"pdf":"aa1.pdf","pdf_out":"AA1-filled.pdf",
-   "tiers":{"49":("Claim Answers",4900,"Prepared answers for every AA1 care question, evidence checklist, GP and carer letters."),
-            "79":("Complete Claim Pack",7900,"Everything above, plus the official AA1 form filled in for you, ready to print and sign.")},
+   "tiers":{"99":("Done for you",9900,"We fill in the official AA1 form for you, ready to print and sign. Plus answers to every care question in your own words, an evidence checklist, and GP and carer letters."),
+            "199":("Done for you Plus",19900,"Everything in Done for you, plus help if you're turned down, an assessment briefing, supporting letters to sign, renewal included, and printed and posted to you.")},
+   "legacy_tiers":{"49":("Claim Answers",4900,""),"79":("Form pack",7900,"")},
    "subject":"the person claiming"},
  "dla":{"name":"Child DLA","short":"Disability Living Allowance for children (DLA1A)","form":"DLA1A","gov":"https://www.gov.uk/disability-living-allowance-children",
    "who":"children under 16","topics":DLA_TOPICS,"pdf":"dla1a.pdf","pdf_out":"DLA1A-filled.pdf",
-   "tiers":{"49":("Answers",4900,"Prepared answers for each DLA1A question, mapped to question numbers, plus a school and medical evidence checklist."),
-            "79":("Complete Claim Pack",7900,"Everything above, plus the official DLA1A form filled in for you, ready to check, sign and post free.")},
+   "tiers":{"99":("Done for you",9900,"We fill in the official DLA1A form for you, ready to check, sign and post free. Plus answers to every question in your own words, mapped to the question numbers, and a school and medical evidence checklist."),
+            "199":("Done for you Plus",19900,"Everything in Done for you, plus help if you're turned down, an assessment briefing, supporting letters to sign, renewal included, and printed and posted to you.")},
+   "legacy_tiers":{"49":("Answers",4900,""),"79":("Form pack",7900,"")},
    "subject":"the child"},
  "pip":{"name":"PIP","short":"PIP: How your disability affects you (PIP2)","form":"PIP2","gov":"https://www.gov.uk/pip",
    "who":"16 to State Pension age","topics":PIP_TOPICS,"pdf":None,
-   "tiers":{"59":("PIP Answers",5900,"Typed answers for all 12 activities, mapped to each PIP2 question, plus an evidence checklist."),
-            "79":("PIP Complete Pack",7900,"Everything above, plus a phone-call prep sheet, assessment notes and supporting-letter drafts.")},
+   "tiers":{"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each PIP2 question, PIP extra sheets ready to print and send with your form, an evidence checklist, a phone-call prep sheet, assessment notes and supporting-letter drafts."),
+            "199":("Done for you Plus",19900,"Everything in Done for you, plus help if you're turned down, an assessment briefing, supporting letters to sign, renewal included, and printed and posted to you.")},
+   "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,"")},
    "subject":"you (or the person you help)"},
  "pipr":{"name":"PIP review","short":"PIP review form (AR1)","form":"AR1","gov":"https://www.gov.uk/pip/when-your-pip-claim-is-reviewed",
    "who":"people already getting PIP","topics":PIP_TOPICS,"pdf":None,
-   "tiers":{"59":("PIP Answers",5900,"Typed answers for all 12 activities, mapped to each AR1 activity section, plus an evidence checklist."),
-            "79":("PIP Complete Pack",7900,"Everything above, plus a 'what has changed' summary, assessment-call prep sheet and supporting-letter drafts.")},
+   "tiers":{"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each AR1 activity section, extra sheets ready to send, an evidence checklist, a 'what has changed' summary, an assessment-call prep sheet and supporting-letter drafts."),
+            "199":("Done for you Plus",19900,"Everything in Done for you, plus help if you're turned down, an assessment briefing, supporting letters to sign, renewal included, and printed and posted to you.")},
+   "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,"")},
    "subject":"you (or the person you help)"},
  "atw":{"name":"Access to Work","short":"Access to Work application","form":"AtW","gov":"https://www.gov.uk/access-to-work",
    "who":"people in or starting paid work","topics":ATW_TOPICS,"pdf":None,
@@ -90,3 +94,13 @@ def tick_list(form, answers):
     a=answers or {}; ids=[t for t,_,_ in FORMS[form]["topics"] if (a.get(t) or "").strip()]
     if form=="aa": return [t for t in ids if t.isdigit()]
     m=TICK_MAP.get(form); return [m[t] for t in ids if t in m] if m else []
+
+# One "done for you" product per form (priced at FULL). A premium tier (e.g. "199") can be added to a form's "tiers" later;
+# anything in FULL_TIERS gets the complete pack. "legacy_tiers" only describe orders bought before the price change.
+FULL_TIERS={"79","99","199"}
+def is_full(tier): return str(tier) in FULL_TIERS
+def tier_info(form,tier):
+    f=FORMS[form]; return f["tiers"].get(tier) or f.get("legacy_tiers",{}).get(tier) or next(iter(f["tiers"].values()))
+def default_tier(form): return list(FORMS[form]["tiers"])[0]
+PREMIUM_TIERS={"199"}
+def is_premium(tier): return str(tier) in PREMIUM_TIERS
