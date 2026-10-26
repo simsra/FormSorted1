@@ -230,14 +230,19 @@ async def details_save(token:str, req:Request):
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     fm=await req.form(); form=o["form"] or "aa"; p={}
+    def back(msg):  # keep what they typed so a validation error doesn't wipe the form
+        c=db(); c.execute("update orders set personal=? where token=?",(json.dumps(p),token)); c.commit()
+        return RedirectResponse(f"/details/{token}?err="+urllib.parse.quote(msg),303)
     if not fm.get("skip"):
+        missing=False
         for k,_,_,need in detail_fields(form):
             v=str(fm.get(k,"")).strip()[:200]
-            if need and not v: return RedirectResponse(f"/details/{token}?err="+urllib.parse.quote("Please fill in every required box, or choose Skip."),303)
+            if need and not v: missing=True
             if v: p[k]=v
+        if missing: return back("Please fill in every required box, or choose Skip.")
         if p.get("ni"):
             p["ni"]=p["ni"].replace(" ","").upper()
-            if not NI_RE.match(p["ni"]): return RedirectResponse(f"/details/{token}?err="+urllib.parse.quote("That National Insurance number doesn't look right. It's 2 letters, 6 numbers, then A, B, C or D."),303)
+            if not NI_RE.match(p["ni"]): return back("That National Insurance number doesn't look right. It's 2 letters, 6 numbers, then A, B, C or D.")
     c=db(); c.execute("update orders set personal=?, details_at=? where token=?",(json.dumps(p),time.time(),token)); c.commit()
     o=get(token); build_files(token,o,json.loads(o["draft"]))
     return RedirectResponse(f"/documents/{token}",303)

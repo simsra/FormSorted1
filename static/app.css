@@ -56,5 +56,5 @@ textarea:focus-visible,input:focus-visible{background-color:#fff;box-shadow:inse
 .cols{display:grid;gap:12px}@media(min-width:700px){.cols{grid-template-columns:1fr 1fr}}
 .lbl{font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin:0 0 .2em}.you{background:var(--alt);padding:.6em .8em;margin:0;border-left:4px solid var(--line);font-size:.95rem}
 .letter{white-space:pre-wrap;background:#fff;border:2px solid var(--line);padding:1em;font:16px/1.5 Georgia,serif}
-input[type=date],input:not([type]),select{font:inherit;padding:.4em;border:2px solid var(--ink);max-width:100%}
+input[type=date],input[type=tel],input:not([type]),select{font:inherit;padding:.4em;border:2px solid var(--ink);max-width:100%}
 .ground{border:2px solid var(--warn);background:#fdf3ef;padding:.5em 1em;margin:.6em 0}.ground ul{margin:.3em 0;padding-left:1.1em}.resopts{display:flex;flex-wrap:wrap;gap:.4em 1.2em;font-size:.95rem}.resopts input{width:22px;height:22px;vertical-align:middle;accent-color:var(--brand)}
