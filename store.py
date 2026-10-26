@@ -35,7 +35,8 @@ class _PgConn:
 _local=threading.local()
 SCHEMA=[f"create table if not exists orders(token text primary key, tier text, status text, stripe_session text, email text, consent_at {_REAL}, history text default '[]', personal text default '{{}}', created {_REAL})",
         f"create table if not exists events(id text primary key, received {_REAL})",   # webhook idempotency
-        f"create table if not exists saved(code text primary key, form text, answers text, personal text, created {_REAL})"]
+        f"create table if not exists saved(code text primary key, form text, answers text, personal text, created {_REAL})",
+        "create table if not exists settings(k text primary key, v text)"]   # e.g. prefill_disabled_aa (form watch)
 COLS=(("form","text default 'aa'"),("draft","text"),("deadline","text default '{}'"),("approved_at",_REAL),("save_code","text"),("review_of","text"),("details_at",_REAL),("paid_at",_REAL))
 _ready=False
 def _migrate(c):

@@ -2,7 +2,7 @@ import html
 def _esc(s): return html.escape("" if s is None else str(s))  # model JSON may return numbers
 from questions import CARE_QUESTIONS
 from forms import tick_list
-def pack_html(brand, personal, draft, tier, filled_by=""):
+def pack_html(brand, personal, draft, tier, filled_by="", prefill_off=False):
     e=_esc
     rows="".join(f"<h3>Question {q}: {e(t)}</h3><p>{e(draft['answers'].get(str(q),'')) or '<em>Not discussed. Leave blank or answer No if it does not apply.</em>'}</p>" for q,t,_,_ in CARE_QUESTIONS)
     answered=tick_list("aa",draft.get("answers",{})); model=[str(x) for x in draft.get("tick_yes",[]) if str(x) in answered]
@@ -11,8 +11,8 @@ def pack_html(brand, personal, draft, tier, filled_by=""):
     script=""
     if tier=="79":
         script="""<h2>Online claim: step by step</h2><ol><li>Go to gov.uk/attendance-allowance/how-to-claim and choose to apply online (if available to you) or print the filled-in AA1 (attached).</li>
-<li>Keep this document open next to you. For each care question, tick the box that matches, then paste our prepared answer into the "tell us more" box.</li>
-<li>Questions where you described help (tick Yes): """+e(ticks)+"""</li><li>Add the NI number, bank details, signature and date yourself. We never fill these in.</li><li>Attach or post copies (never originals) of the evidence on your checklist.</li><li>Keep a copy and note the date you sent it. DWP usually writes within a few weeks.</li></ol>"""
+<li>"""+("The filled-in AA1 already has your approved answers and the tick boxes you confirmed. Anything too long for the boxes is on extra sheets at the end of the PDF. Check every page." if not prefill_off else "GOV.UK has just published a new version of the AA1, so we have not filled it in this time. Download the latest form and copy each answer below into it.")+"""</li>
+<li>Applying online instead? Keep this document open next to you, tick the box that matches each care question, and paste our prepared answer into the "tell us more" box. Questions where you described help (tick Yes): """+e(ticks)+"""</li><li>Add the NI number, bank details, signature and date yourself. We never fill these in.</li><li>Attach or post copies (never originals) of the evidence on your checklist.</li><li>Keep a copy and note the date you sent it. DWP usually writes within a few weeks.</li></ol>"""
     return f"""<!doctype html><html lang="en-GB"><meta charset="utf-8"><title>Your Attendance Allowance answers</title>
 <style>body{{font:18px/1.6 system-ui;max-width:800px;margin:2rem auto;padding:0 1rem;color:#14211f}}h3{{margin-bottom:.2rem}}.box{{background:#fffaf0;border-left:5px solid #f2c14e;padding:1rem}}</style>
 <h1>Your Attendance Allowance (AA1) answers</h1><p>Prepared by {e(brand)} for {e(personal.get('title',''))} {e(personal.get('other_names',''))} {e(personal.get('surname',''))}. {e(filled_by)}</p>
@@ -26,14 +26,16 @@ def pack_html(brand, personal, draft, tier, filled_by=""):
 
 from forms import FORMS, PIP_ACTIVITIES
 CSS="<style>body{font:18px/1.6 system-ui;max-width:800px;margin:2rem auto;padding:0 1rem;color:#14211f}h3{margin-bottom:.2rem}.box{background:#fffaf0;border-left:5px solid #f2c14e;padding:1rem}.tip{color:#3d4f4c;font-size:.9em}</style>"
-def pack_form(brand, personal, draft, tier, form):
-    if form=="aa": return pack_html(brand,personal,draft,tier)
+NEWVER=("<div class=box><strong>GOV.UK has just published a new version of this form</strong>, so we have not filled it in for you this time. "
+        "Download the latest form from GOV.UK and copy each answer below into it.</div>")
+def pack_form(brand, personal, draft, tier, form, prefill_off=False):
+    if form=="aa": return pack_html(brand,personal,draft,tier,prefill_off=prefill_off)
     e=_esc; F=FORMS[form]; a=draft.get("answers",{})
     li=lambda xs:"".join(f"<li>{e(x)}</li>" for x in xs)
     nd='<em>Not discussed. If this applies, add it in your own words; if not, tick "No".</em>'
     if form=="dla":
         rows="".join(f"<h3>{e(t)}</h3><p>{e(a.get(i,'')) or nd}</p>" for i,t,_ in F["topics"])
-        delivery=("<p>Your filled-in DLA1A is attached. The long answer boxes are filled; tick boxes are listed below for you to tick by hand.</p>" if tier=="79"
+        delivery=(NEWVER if tier=="79" and prefill_off else "<p>Your filled-in DLA1A is attached. The answer boxes and the tick boxes you confirmed are filled. Anything too long for the boxes is on extra sheets at the end of the PDF. Check every page, then add what we never fill in (below).</p>" if tier=="79"
           else "<p>Copy each answer into the matching question on the DLA1A form (download it from gov.uk/disability-living-allowance-children/how-to-claim).</p>")
         extra=f"<p><strong>Tick 'Yes' on questions:</strong> {e(', '.join(tick_list(form,a)) or ', '.join(map(str,draft.get('tick_yes',[]))))}</p>"
         nights="".join(f"<li>{e(k.replace('night_','').title())}: {e(v[0])} nights a week, {e(v[1])} minutes, {e(v[2])} times a night</li>" for k,v in draft.get("extra",{}).items() if k.startswith("night_"))
@@ -48,7 +50,7 @@ def pack_form(brand, personal, draft, tier, form):
         rows+=f"<h3>Additional information ({'PIP2 Q15' if form=='pip' else 'AR1 final question'})</h3><p>{e(a.get('other',''))}</p>"
         extra="<p class=tip>For each activity, describe what happens on most days (more than half), and whether you can do it safely, to a good standard, as often as you need to and in a reasonable time. Include aids and any help or prompting. We do not estimate points or outcomes.</p>"
         if form=="pipr" and draft.get("changes"): extra=f"<h3>What has changed since your last award</h3><p>{e(draft['changes'])}</p>"+extra
-        delivery="<p>The PIP form is sent to you by DWP (or emailed as an online link after your call), so we can't fill it in for you. Copy or paste each answer into the matching box.</p>"
+        delivery="<p>The PIP form is sent to you by DWP (or emailed as an online link after your call), so we can't fill it in for you. Copy or paste each answer into the matching box. If you are filling in a paper form, you can print the extra sheets we've made (one per question), write your NI number on each, and send them with it. Write \'see extra sheet\' in any box that is too small.</p>"
         send=""
         if tier=="79":
             send=f"<h2>Phone call and assessment prep</h2><ul>{li(draft.get('call_prep',[]))}</ul><p>PIP new claims line: 0800 917 2222 (Mon–Fri 8am–5pm). Return the form within 1 month, or call the PIP enquiry line if you need more time.</p>"

@@ -94,7 +94,13 @@ for form,f in FORMS.items():
             assert "We couldn't find this in what you told us" in h
             assert "Please choose keep, edit or remove" in req(f"/approve/{tok}",all_ok).read().decode()
             for i,rn in enumerate(resn): all_ok[rn]=("keep","remove","edit")[i%3]
-        assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/details/{tok}"
+        if form in ("aa","dla") and t=="79":   # tick-box preview before the pack
+            assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/ticks/{tok}"
+            assert req(f"/documents/{tok}").headers["location"]==f"/ticks/{tok}"
+            th=body(f"/ticks/{tok}"); assert "Check the tick boxes" in th and "stripe" not in th.lower() and " ai " not in th.lower()
+            tf={n:v for n,v in re.findall(r'name="(t_[^"]+)" value="([^"]*)" checked',th)}; tf["confirm"]="on"
+            assert req(f"/ticks/{tok}",tf).headers["location"]==f"/details/{tok}"
+        else: assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/details/{tok}"
         assert req(f"/documents/{tok}").headers["location"]==f"/details/{tok}" and req(f"/download/{tok}/answers.html").status==403  # details step first
         h=body(f"/details/{tok}"); assert "Your details" in h and "bank details" in h
         if form=="atw": dd_={"other_names":"Sam","surname":"Tester","ni":"AB 12 34 56 C"}
@@ -173,7 +179,12 @@ while not j["done"]: n+=1; j=json.load(req(f"/api/{tok}/message",js={"text":f"Sa
 req(f"/api/{tok}/finish",{}); h=body(f"/approve/{tok}")
 all_ok={f"ok_{x}":"on" for x,_,_ in FORMS["aa"]["topics"]}
 for i,rn in enumerate(sorted(set(re.findall(r'name="(res_[^"]+)"',h)))): all_ok[rn]="keep"
-assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/details/{tok}"
+assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/ticks/{tok}"       # £79 AA1: tick-box preview next
+assert req(f"/details/{tok}").headers["location"]==f"/ticks/{tok}"              # no details/documents before ticks confirmed
+th=body(f"/ticks/{tok}"); assert "Check the tick boxes" in th and "Leave blank" in th and "stripe" not in th.lower()
+tick_form={n:v for n,v in re.findall(r'name="(t_[^"]+)" value="([^"]*)" checked',th)}; tick_form["t_x29"]="/Yes"
+assert req(f"/ticks/{tok}",tick_form).headers["location"].startswith(f"/ticks/{tok}?err")   # must confirm
+tick_form["confirm"]="on"; assert req(f"/ticks/{tok}",tick_form).headers["location"]==f"/details/{tok}"
 import store; db=store.connect()  # Postgres if DATABASE_URL set, else SQLite
 assert db.execute("select personal from orders where token=?",(tok,)).fetchone()[0]=="{}"  # not stored until needed
 req(f"/details/{tok}",{"title":"Mr","other_names":"Webhook","surname":"Buyer","dob":"1941-03-04","addr1":"2 Hook Rd","addr3":"York","postcode":"YO1 1AA"})
@@ -182,6 +193,8 @@ h=body(f"/documents/{tok}"); files=re.findall(r'href="(/download/[^"]+)"',h); as
 assert b"Webhook" in req(f"/download/{tok}/answers.html").read()
 from pypdf import PdfReader; import io
 assert "Buyer" in str(PdfReader(io.BytesIO(req(f"/download/{tok}/AA1-filled.pdf").read())).get_fields().get("01-01i",{}).get("/V",""))
+_pf=PdfReader(io.BytesIO(req(f"/download/{tok}/AA1-filled.pdf").read())).get_fields(); assert str(_pf["x29"].get("/V"))=="/Yes", _pf["x29"]   # confirmed tick written
+assert str(_pf.get("x15",{}).get("/V","/Off")) in ("/Off","None","")                                                   # consent-type boxes never ticked
 print("webhook -> order -> email link -> details -> documents ok")
 # pending order from in-app checkout gets marked paid by the webhook (client_reference_id)
 pt=orders.new_token(); db.execute("insert into orders(token,tier,status,stripe_session,created,form) values(?,?,?,?,?,?)",(pt,"49","pending","cs_pending_"+pt[:8],time.time(),"pip")); db.commit()
@@ -212,4 +225,6 @@ r=op.open(urllib.request.Request(B+"/cron/retention",b"",{"X-Cron-Secret":os.get
 assert json.loads(r.read())["ok"] and db.execute("select count(*) from orders where token=?",(old2,)).fetchone()[0]==0
 assert json.loads(req("/healthz").read())["ok"]
 print("cron retention endpoint ok")
-print("90-day purge + erase-by-email ok"); print("ALL OK")
+print("90-day purge + erase-by-email ok")
+assert req("/cron/formwatch",{}).status==403   # weekly form-version check is protected
+print("ALL OK")

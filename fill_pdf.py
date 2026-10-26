@@ -1,4 +1,5 @@
-"""Fill the official AA1 PDF (AcroForm) with prepared answers. Text fields only; tick boxes listed for the user."""
+"""Fill the official AA1 / DLA1A PDFs (AcroForm) with approved answers and the tick boxes the customer confirmed.
+Answers too long even for the extra-information box go onto continuation sheets appended to the same PDF."""
 import os
 from pypdf import PdfReader, PdfWriter
 from questions import CARE_QUESTIONS, EXTRA_FIELDS, PERSONAL_FIELDS, CONDITION_FIELDS
@@ -18,15 +19,26 @@ def build_values(personal, draft):
     if draft.get("carer_statement"): v["344"]=draft["carer_statement"]
     return v
 AA_LABELS={f:f"Question {q} ({t})" for q,t,_,f in CARE_QUESTIONS}
-def fill(personal, draft, out_path):
-    r=PdfReader(os.path.join(HERE,"aa1.pdf"))
+def fill(personal, draft, out_path, ticks=None):
+    return _write("aa",build_values(personal,draft),personal,out_path,ticks)
+VERSION={"aa":("AA1","11/25"),"dla":("DLA1A","10/25")}
+OVERFLOW={"aa":("354","Question 63"),"dla":("89","Question 89")}
+def _write(form, values, personal, out_path, ticks=None):
+    import io, ticks as T, contsheet
+    pdf={"aa":"aa1.pdf","dla":"dla1a.pdf"}[form]; ov,ovl=OVERFLOW[form]
+    vals,spill=fit(values,pdf,ov,AA_LABELS if form=="aa" else DLA_LABELS,ovl)
+    r=PdfReader(os.path.join(HERE,pdf))
     if r.is_encrypted: r.decrypt("")
     w=PdfWriter(); w.append(r)
-    vals=fit(build_values(personal,draft),"aa1.pdf","354",AA_LABELS)
-    for p in w.pages:
-        w.update_page_form_field_values(p,vals,auto_regenerate=False)
+    for p in w.pages: w.update_page_form_field_values(p,vals,auto_regenerate=False)
+    if ticks: T.apply(w,T.validate(form,ticks))
     w.set_need_appearances_writer(True)
+    if spill:
+        name=" ".join(x for x in (personal.get("title"),personal.get("other_names"),personal.get("surname")) if x)
+        code,ver=VERSION[form]
+        for pg in PdfReader(io.BytesIO(contsheet.continuation(code,ver,name,spill))).pages: w.add_page(pg)
     with open(out_path,"wb") as f: w.write(f)
+    vals["_continuation_sections"]=len(spill)
     return vals
 
 # ---- Child DLA (DLA1A, GOV.UK version 10/25) ----
@@ -50,15 +62,9 @@ def dla_values(personal, draft):
             if c.get(key): v[f]=c[key]
     return v
 DLA_LABELS={"42_1":"Question 42","48_1":"Question 48","53":"Question 53","65_1":"Question 65","68_7":"Question 68","72":"Question 72","38_3":"Question 38"}
-def fill_form(form, personal, draft, out_path):
-    if form=="aa": return fill(personal,draft,out_path)
-    r=PdfReader(os.path.join(HERE,"dla1a.pdf"))
-    if r.is_encrypted: r.decrypt("")
-    w=PdfWriter(); w.append(r); vals=fit(dla_values(personal,draft),"dla1a.pdf","89",DLA_LABELS)
-    for p in w.pages: w.update_page_form_field_values(p,vals,auto_regenerate=False)
-    w.set_need_appearances_writer(True)
-    with open(out_path,"wb") as f: w.write(f)
-    return vals
+def fill_form(form, personal, draft, out_path, ticks=None):
+    if form=="aa": return fill(personal,draft,out_path,ticks)
+    return _write("dla",dla_values(personal,draft),personal,out_path,ticks)
 
 # ---- Fit long answers into boxes; overflow goes to the additional-information box ----
 import re as _re
@@ -80,17 +86,30 @@ def capacity(pdf,name):
     w,h=_RC[pdf].get(name,(0,0))
     cols=int((w-4)/(FS*0.52)); rows=max(1,int((h-2)/(FS*1.2)))
     return cols*rows - cols//2*rows//3  # allow ~1/6 for word-wrap waste
-def fit(values, pdf, overflow_field, labels):
-    """Trim each long value to its box; collect the rest into overflow_field with 'Qx continued:' headings."""
-    spill=[]
+CONT=" (continued on the extra sheet at the end of this form)"
+def fit(values, pdf, overflow_field, labels, overflow_label="the additional information box"):
+    """Trim each long value to its box; the rest goes to overflow_field under 'Qx continued:' headings.
+    Whatever doesn't fit in overflow_field either is returned as continuation-sheet sections [(heading,text)]."""
+    chunks=[]
     for f,txt in list(values.items()):
         if f==overflow_field or not isinstance(txt,str): continue
         cap=capacity(pdf,f)
         if cap<=0 or len(txt)<=cap: continue
         cut=txt[:max(0,cap-len(NOTE))]; cut=cut[:cut.rfind(" ")] if " " in cut else cut
         values[f]=cut.rstrip(" ,;")+"…"+NOTE
-        spill.append(f"{labels.get(f,'Question '+f)} continued: …{txt[len(cut):].strip()}")
-    if spill:
-        prev=values.get(overflow_field,"")
-        values[overflow_field]=("\n\n".join(spill)+("\n\n"+prev if prev else ""))
-    return values
+        chunks.append((f"{labels.get(f,'Question '+f)} continued",txt[len(cut):].strip()))
+    prev=values.get(overflow_field,"")
+    if prev: chunks.append((overflow_label,prev))
+    if not chunks: return values,[]
+    cap=capacity(pdf,overflow_field); room=cap-len(CONT)-2; box=[]; sheet=[]
+    for h,t in chunks:
+        piece=f"{h}: …{t}" if h!=overflow_label else t
+        used=len("\n\n".join(box))
+        if not sheet and used+len(piece)+2<=room: box.append(piece); continue
+        if not sheet and room-used>200:   # split this chunk: start it in the box, finish it on the sheet
+            k=room-used-2; part=piece[:k]; part=part[:part.rfind(" ")] if " " in part else part
+            box.append(part.rstrip(" ,;")+"…"); sheet.append((h if h!=overflow_label else f"{overflow_label} continued","…"+piece[len(part):].strip()))
+            continue
+        sheet.append((h,t))
+    values[overflow_field]="\n\n".join(box)+(CONT if sheet else "")
+    return values,sheet

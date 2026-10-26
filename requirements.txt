@@ -5,3 +5,4 @@ pypdf
 cryptography
 python-docx
 psycopg[binary]
+fpdf2

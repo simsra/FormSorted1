@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 import orders, mailer, asyncio, hmac, store
 from fastapi.responses import Response
-import llm, fill_pdf, documents, quality, deadlines, letters, grounding, facts
+import llm, fill_pdf, documents, quality, deadlines, letters, grounding, facts, ticks as TICKS, contsheet, formwatch
 from html import escape as esc
 from forms import FORMS
 BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STRIPE_SECRET_KEY_PLACEHOLDER")
@@ -146,11 +146,35 @@ def build_files(token,o,d):
         open(os.path.join(od,"answers.html"),"w").write(documents.pack_atw(BRAND,d,o["tier"]))
         documents.atw_docx(BRAND,d,o["tier"],os.path.join(od,"AccessToWork-answers.docx")); files=["answers.html","AccessToWork-answers.docx"]
         store.put_dir(token,od,files); return files
-    open(os.path.join(od,"answers.html"),"w").write(documents.pack_form(BRAND,personal,d,o["tier"],form))
+    pf=pack_files(o); off=prefill_off(o)
+    open(os.path.join(od,"answers.html"),"w").write(documents.pack_form(BRAND,personal,d,o["tier"],form,prefill_off=bool(off)))
     files=["answers.html"]
-    if o["tier"]=="79" and F["pdf"]: fill_pdf.fill_form(form,personal,d,os.path.join(od,F["pdf_out"])); files.append(F["pdf_out"])
+    if F.get("pdf_out") in pf:
+        fill_pdf.fill_form(form,personal,d,os.path.join(od,F["pdf_out"]),ticks=d.get("ticks") if d.get("ticks_confirmed_at") else None); files.append(F["pdf_out"])
+    if "PIP-extra-sheets.pdf" in pf:
+        open(os.path.join(od,"PIP-extra-sheets.pdf"),"wb").write(pip_sheet_pdf(form,personal,d)); files.append("PIP-extra-sheets.pdf")
     store.put_dir(token,od,files)   # to private Supabase bucket when configured (local temp copy removed)
     return files
+def prefill_off(o):
+    """Reason pre-fill is switched off for this order's form (e.g. GOV.UK published a new version), else None."""
+    F=FORMS[o["form"] or "aa"]
+    return formwatch.disabled_reason(o["form"] or "aa") if (o["tier"]=="79" and F["pdf"]) else None
+def pack_files(o):
+    form=o["form"] or "aa"; F=FORMS[form]
+    if form=="atw": return ["answers.html","AccessToWork-answers.docx"]
+    files=["answers.html"]
+    if o["tier"]=="79" and F["pdf"] and not prefill_off(o): files.append(F["pdf_out"])
+    if form in ("pip","pipr"): files.append("PIP-extra-sheets.pdf")
+    return files
+def needs_ticks(o): return (o["form"] or "aa") in TICKS.CATALOG and o["tier"]=="79" and FORMS[o["form"] or "aa"]["pdf"] and not prefill_off(o)
+def pip_sheet_pdf(form,personal,d):
+    from forms import PIP_ACTIVITIES
+    a=d.get("answers",{}); code="AR1" if form=="pipr" else "PIP2"
+    items=[("Questions 1 and 2: Health conditions, medicines and treatments",a.get("conditions",""))]
+    items+=[(f"{'Activity '+str(n) if form=='pipr' else 'Question '+q[1:]}: {name}",a.get(f"a{n}","")) for n,name,q,_ in PIP_ACTIVITIES]
+    items+=[("Question 15: Additional information",a.get("other",""))]
+    name=" ".join(x for x in (personal.get("title"),personal.get("other_names"),personal.get("surname")) if x)
+    return contsheet.pip_sheets(name,items,code)
 @app.get("/api/{token}/info")
 def info(token:str):
     o=ready(token); f=FORMS[o["form"] or "aa"]; return {"form":o["form"] or "aa","short":f["short"],"gov":f["gov"],"pdf":f.get("pdf_out")}
@@ -161,7 +185,7 @@ async def personal(token:str, req:Request):
 def download(token:str,name:str):
     o=ready(token)
     if not o["approved_at"] or not o["details_at"]: raise HTTPException(403,"Approve your answers first")
-    if name not in ("answers.html","AA1-filled.pdf","DLA1A-filled.pdf","AccessToWork-answers.docx"): raise HTTPException(404)
+    if name not in ("answers.html","AA1-filled.pdf","DLA1A-filled.pdf","AccessToWork-answers.docx","PIP-extra-sheets.pdf"): raise HTTPException(404)
     data=store.read(token,name)
     if data is None: raise HTTPException(404)
     ct={"html":"text/html; charset=utf-8","pdf":"application/pdf","docx":"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}[name.rsplit(".",1)[1]]
@@ -192,6 +216,7 @@ NI_RE=_re.compile(r"^[A-CEGHJ-PR-TW-Z]{2}\d{6}[A-D]$")
 def details_page(token:str, err:str=""):
     o=ready(token)
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
+    if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     p=json.loads(o["personal"] or "{}"); form=o["form"] or "aa"
     who="the child" if form=="dla" else "the person claiming"
     rows="".join(f"""<div class=field><label class=q for=d_{k}>{esc(l)}</label><input id=d_{k} name={k} {'type='+t if t else ''} value="{esc(p.get(k,''))}" {'required' if req else ''} autocomplete=off></div>""" for k,l,t,req in detail_fields(form))
@@ -203,6 +228,7 @@ def details_page(token:str, err:str=""):
 async def details_save(token:str, req:Request):
     o=ready(token)
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
+    if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     fm=await req.form(); form=o["form"] or "aa"; p={}
     if not fm.get("skip"):
         for k,_,_,need in detail_fields(form):
@@ -332,15 +358,51 @@ async def approve_save(token:str, req:Request):
     if fm.get("save"):
         code=code or secrets.token_urlsafe(9); sm=said_map(o)
         c.execute("insert into saved(code,form,answers,personal,created) values(?,?,?,?,?) on conflict(code) do update set form=excluded.form, answers=excluded.answers, personal=excluded.personal, created=excluded.created",(code,o["form"] or "aa",json.dumps({"answers":d["answers"],"said":{t:sm.get(t,"") for t,_,_ in F["topics"]}}),o["personal"],time.time()))
+    d.pop("ticks_confirmed_at",None)   # answers changed: ticks must be checked again
     c.execute("update orders set draft=?, approved_at=?, save_code=? where token=?",(json.dumps(d),time.time(),code,token)); c.commit()
+    return RedirectResponse(f"/ticks/{token}" if needs_ticks(o) else f"/details/{token}",303)
+def ticks_pending(o):
+    return needs_ticks(o) and not json.loads(o["draft"] or "{}").get("ticks_confirmed_at")
+@app.get("/ticks/{token}")
+def ticks_page(token:str, err:str=""):
+    r,o,d=ordered(token)
+    if r: return r
+    if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
+    form=o["form"] or "aa"
+    if not needs_ticks(o): return RedirectResponse(f"/details/{token}",303)
+    saved=d.get("ticks") if d.get("ticks_confirmed_at") else None; F=FORMS[form]; rows=""; last=None
+    for i,x in enumerate(TICKS.propose(form,d.get("answers",{}))):
+        cur=saved.get(x["field"],"") if saved is not None else x["proposed"]
+        q=x["question"].split(":")[0]
+        if q!=last: rows+=f"<h2 class=tickq>{esc(q)} <span class=hint>(page {x['page']} of the form)</span></h2>"; last=q
+        opts="".join(f'<label><input type=radio name="t_{esc(x["field"])}" value="{esc(s)}" {"checked" if s==cur else ""}> Tick “{esc(TICKS.label(s))}”</label>' for s in x["options"])
+        opts+=f'<label><input type=radio name="t_{esc(x["field"])}" value="" {"checked" if not cur else ""}> Leave blank</label>'
+        rows+=f"""<div class=trace><p><strong>{esc(x['question'].split(':',1)[1].strip())}</strong></p><p class=hint>{esc(x['why'])}</p><div class=resopts>{opts}</div></div>"""
+    return page(prog(7)+f"""<h1>Check the tick boxes on your {esc(F['form'])}</h1>{PROMISE}<p class=lead>These are the tick boxes we will mark on the official form. We have suggested each one from the answers you approved. Change anything that isn't right. We only tick what you confirm here.</p>
+{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/ticks/{token}>{rows}
+<p class=small>We never tick the consent, declaration, bank or "signing for someone else" boxes. You do those yourself.</p>
+<label class=cb><input type=checkbox name=confirm required><span>I have checked every tick box above. They are true.</span></label>
+<button class="btn btn-start">Confirm tick boxes</button></form>""","Check the tick boxes")
+@app.post("/ticks/{token}")
+async def ticks_save(token:str, req:Request):
+    r,o,d=ordered(token)
+    if r: return r
+    if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
+    if not needs_ticks(o): return RedirectResponse(f"/details/{token}",303)
+    fm=await req.form(); form=o["form"] or "aa"
+    if not fm.get("confirm"): return RedirectResponse(f"/ticks/{token}?err="+urllib.parse.quote("Please confirm you have checked every tick box."),303)
+    d["ticks"]=TICKS.validate(form,{x["field"]:str(fm.get("t_"+x["field"],"")) for x in TICKS.propose(form,d.get("answers",{}))})
+    d["ticks_confirmed_at"]=time.time()
+    c=db(); c.execute("update orders set draft=? where token=?",(json.dumps(d),token)); c.commit()
     return RedirectResponse(f"/details/{token}",303)
 @app.get("/documents/{token}")
 def documents_page(token:str):
     o=ready(token)
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
+    if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     if not o["details_at"]: return RedirectResponse(f"/details/{token}",303)
-    F=FORMS[o["form"] or "aa"]; lab={'answers.html':'Your approved answers, checklist and letters','AA1-filled.pdf':'Official AA1 form, filled in (PDF)','DLA1A-filled.pdf':'Official DLA1A form, filled in (PDF)','AccessToWork-answers.docx':'Your answers as a Word document (DOCX), in application order'}
-    files=["answers.html"]+([F["pdf_out"]] if o["tier"]=="79" and F["pdf"] else [])+(["AccessToWork-answers.docx"] if o["form"]=="atw" else [])
+    F=FORMS[o["form"] or "aa"]; lab={'PIP-extra-sheets.pdf':'Printable extra sheets, one per question (PDF), to send with your form','answers.html':'Your approved answers, checklist and letters','AA1-filled.pdf':'Official AA1 form, filled in (PDF)','DLA1A-filled.pdf':'Official DLA1A form, filled in (PDF)','AccessToWork-answers.docx':'Your answers as a Word document (DOCX), in application order'}
+    files=pack_files(o)
     dl=json.loads(o["deadline"] or "{}"); res=deadlines.compute(o["form"] or "aa",dl.get("how","phone"),dl.get("requested"),dl.get("received")) if dl.get("requested") else None
     saved=f"<div class=panel><p><strong>Your save code: <code>{o['save_code']}</code></strong><br>Keep it safe. {'Keep a copy of your answers too. They will help when your grant is due for renewal (you can apply to renew 12 weeks before it ends).' if o['form']=='atw' else "Use it at <a href=/review>/review</a> when your review form arrives, and we'll only ask what has changed."}</p></div>" if o["save_code"] else ""
     return page(prog(8)+f"""<div class=done><h1>{"Your answers are ready" if o["form"]=="atw" else "Your claim is sorted"}</h1><p>You approved every answer. Your documents are ready.</p></div>
@@ -422,6 +484,12 @@ def cron_retention(req:Request):
     got=req.headers.get("x-cron-secret","")
     if not CRON_SECRET or not hmac.compare_digest(got,CRON_SECRET): raise HTTPException(403)
     return {"ok":True,"purged":orders.purge(db(),OUT)}
+@app.post("/cron/formwatch")
+def cron_formwatch(req:Request):
+    """Weekly: compare GOV.UK's current AA1/DLA1A with the bundled copies; switches pre-fill off if a new version appears."""
+    got=req.headers.get("x-cron-secret","")
+    if not CRON_SECRET or not hmac.compare_digest(got,CRON_SECRET): raise HTTPException(403)
+    return {"ok":True,"forms":[{k:v for k,v in r.items() if k!="expected"} for r in formwatch.run(db())]}
 @app.on_event("startup")
 async def _retention_loop():
     if os.getenv("RETENTION_LOOP","1")!="1": return   # set RETENTION_LOOP=0 on Render (cron endpoint does the work)
