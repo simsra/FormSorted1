@@ -28,6 +28,15 @@ def stripe(method,path,data=None):
         headers={"Authorization":"Basic "+base64.b64encode((STRIPE+":").encode()).decode()})
     return json.load(urllib.request.urlopen(req,timeout=30))
 app=FastAPI()
+@app.middleware("http")
+async def _canonical_host(request:Request, call_next):
+    # Old onrender.com address -> app.formsorted.com (keep health checks, webhooks and cron working on either host)
+    host=(request.headers.get("host") or "").split(":")[0]
+    p=request.url.path
+    if host.endswith(".onrender.com") and PUBLIC.startswith("https://") and request.method in ("GET","HEAD") and not (p=="/healthz" or p.startswith("/webhooks") or p.startswith("/cron")):
+        q=("?"+request.url.query) if request.url.query else ""
+        return RedirectResponse(PUBLIC+p+q,301)
+    return await call_next(request)
 from fastapi.staticfiles import StaticFiles
 app.mount("/static",StaticFiles(directory=os.path.join(HERE,"static")),name="static")
 PREVIEW="<div class=panel><p><strong>Preview mode:</strong> no payment is taken and answers are sample drafts.</p></div>"
