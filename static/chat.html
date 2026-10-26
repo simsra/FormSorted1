@@ -1,40 +1,32 @@
 <!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><link rel="icon" href="/static/favicon.svg"><link rel="stylesheet" href="/static/app.css"><title>Your claim conversation | FormSorted</title></head><body>
 <a href="#main" class="skip">Skip to main content</a>
 <header class="hdr"><div class="wrap"><a class="logo" href="/"><img src="/static/logo.svg" alt="FormSorted home" width="170" height="36"></a></div></header>
-<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not DWP or GOV.UK. You can claim free at <a id="govlink" href="https://www.gov.uk/browse/benefits/disability">GOV.UK</a>.</div></div>
+<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not affiliated with DWP or GOV.UK.</div></div>
 <main id="main"><div class="wrap">
 <section id="ask">
 <p class="progress" id="ptext">Step 4 of 8: Conversation · topic <span id="qn">1</span> of <span id="qt">…</span></p><div class="bar"><span id="pbar" style="width:70%"></span></div>
-<div class="promise"><strong>Your words only.</strong> We only use what you tell us. You approve every word before you send.</div>
+<div class="promise"><strong>Done for you, in your words.</strong> We only use what you tell us. You check and approve every word.</div>
 <p class="caption" id="fname">Tell us in your own words</p>
 <form id="f"><div class="field"><label for="t" class="q" id="q" aria-live="polite">Loading your first question…</label>
 <span class="hint">Short answers are fine. Only tell us what's true. Your progress is saved; come back with the same link.</span>
 <textarea id="t" rows="5"></textarea></div>
 <button class="btn" id="send">Continue</button></form>
-<div id="ready" hidden><div class="panel"><p><strong>That covers everything.</strong> Next we'll prepare your answers, show your deadline, check them for missing detail, and ask you to approve each one.</p></div><button class="btn btn-start" id="fin">Prepare my answers</button></div>
-<details id="hist"><summary>What you've told us so far</summary><div id="log"></div></details>
-</section>
-<section id="out" hidden>
-<p class="progress">Step 5 of 5: Your documents</p><div class="bar"><span style="width:100%"></span></div>
-<div class="done"><h1>Your claim is sorted</h1><p>Your documents are ready to download.</p></div>
-<div id="files"></div>
-<h2>What to do next</h2><ol class="steps"><li><strong>Read every answer</strong> and change anything that isn't quite right.</li><li><strong>Copy the answers into your claim</strong>, or print, sign and post the filled-in form.</li><li><strong>Send the GP and carer letters</strong> if you want supporting evidence.</li></ol>
-<div class="inset">You check and send the form yourself. We can't guarantee an award – DWP decides.</div>
+<div id="ready" hidden><div class="panel"><p><strong>That covers everything.</strong> Your answers are saved. Next, we prepare your form: we write up your answers in your words, show your deadline, check them for missing detail, and ask you to approve each one.</p></div><button class="btn btn-start" id="fin">Continue</button></div>
 </section>
 <hr><p><button class="btn btn-warn" id="del">Delete my information</button></p>
 </div></main>
-<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent, paid service. Not affiliated with DWP, GOV.UK or any government body. We can't guarantee an award or outcome.</p><p>Free help: Citizens Advice · Age UK 0800 678 1602 · Contact 0808 808 3555 · gov.uk</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a><a data-contact href="mailto:hello@formsorted.com">Contact</a></p></div></footer>
+<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent, paid service. Not affiliated with DWP, GOV.UK or any government body. We can't guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a><a data-contact href="mailto:hello@formsorted.com">Contact</a></p></div></footer>
 <script>
 const tok=location.hash.slice(1),$=id=>document.getElementById(id);let n=0;
 const clean=t=>t.replace('[[DONE]]','').trim();
 const md=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\*\*([^*\n]+?)\*\*/g,'<strong>$1</strong>').replace(/\*\*/g,'');
-function said(t,c){const d=document.createElement('p');d.className='said';if(c=='me')d.textContent='You: '+t;else d.innerHTML='We asked: '+md(t);$('log').appendChild(d)}
+function said(t,c){}  // no transcript view
 async function send(text){$('send').disabled=true;const r=await fetch(`/api/${tok}/message`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});const j=await r.json();
  n++;if(j.topic){$('qn').textContent=j.topic;$('qt').textContent=j.total;$('pbar').style.width=(60+Math.round(20*(j.topic-1)/j.total))+'%'}
  if(j.done){$('f').hidden=true;$('ready').hidden=false;$('fin').focus()}else{$('q').innerHTML=md(clean(j.reply));said(clean(j.reply),'ai');$('t').focus()}$('send').disabled=false}
 $('f').onsubmit=e=>{e.preventDefault();const t=$('t');if(!t.value.trim()){t.focus();return}said(t.value,'me');send(t.value);t.value=''};
-$('fin').onclick=async()=>{$('fin').disabled=true;$('fin').textContent='Preparing…';const j=await(await fetch(`/api/${tok}/finish`,{method:'POST'})).json();location.href=j.next};
+$('fin').onclick=async()=>{$('fin').disabled=true;$('fin').textContent='One moment…';const j=await(await fetch(`/api/${tok}/finish`,{method:'POST'})).json();location.href=j.next};
 $('del').onclick=async()=>{if(confirm('Delete everything you have told us? This cannot be undone.')){await fetch(`/api/${tok}/delete`,{method:'POST'});$('main').innerHTML='<div class="wrap"><h1>Your information has been deleted</h1></div>'}};
-fetch(`/api/${tok}/info`).then(r=>r.json()).then(i=>{$('fname').textContent=i.short+' · tell us in your own words';$('govlink').href=i.gov;document.title=i.short+' | FormSorted'});
+fetch(`/api/${tok}/info`).then(r=>r.json()).then(i=>{$('fname').textContent=i.short+' · tell us in your own words';document.title=i.short+' | FormSorted'});
 send('');
 </script></body></html>

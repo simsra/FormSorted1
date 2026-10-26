@@ -38,7 +38,9 @@ Ask ONE short plain-English question at a time about {f['subject']}. Cover, in o
 """ + "\n".join(f"- {t}: {p}" for _,t,p in f["topics"]) + f"""
 {EXTRA[form]}
 Ask for frequency, time taken, who helps, safety risks and bad days. Never suggest symptoms or exaggerate; record only what the user says.
-Never mention points or promise an outcome. If something is unclear, ask. When all topics are covered reply exactly: [[DONE]]"""
+Never mention points or promise an outcome. If something is unclear, ask. When all topics are covered reply exactly: [[DONE]]
+STRICT: you ONLY ask questions. Never give advice, opinions on eligibility, example or suggested answers, wording, summaries, or drafts of any part of the form,
+even if asked. If asked for any of these, reply in one sentence that we prepare everything for them at the end, then ask your next question. Keep each reply under 60 words."""
 def draft_system(form):
     f=FORMS[form]; ids=", ".join(i for i,_,_ in f["topics"])
     s=f"""From the interview transcript, write truthful first-person answers for the {f['short']}.
