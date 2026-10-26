@@ -32,7 +32,7 @@ from fastapi.staticfiles import StaticFiles
 app.mount("/static",StaticFiles(directory=os.path.join(HERE,"static")),name="static")
 PREVIEW="<div class=panel><p><strong>Preview mode:</strong> no payment is taken and answers are sample drafts.</p></div>"
 @app.get("/")
-def home(form:str=""):
+def home(form:str="", tier:str=""):
     pv=PREVIEW if DEV else ""
     if form not in FORMS:
         opts="".join(f"""<label class=radio><input type=radio name=form value={k} {'checked' if i==0 else ''} required><span><strong>{f['short']}</strong><span class=hint>For {f['who']}. England &amp; Wales.</span></span></label>""" for i,(k,f) in enumerate(FORMS.items()))
@@ -40,7 +40,7 @@ def home(form:str=""):
 <div class=inset>Live in Scotland? We don't cover Scotland. Apply to Social Security Scotland instead (Pension Age, Child or Adult Disability Payment).</div>
 <button class=btn>Continue</button></form>""","Choose your form")
     f=FORMS[form]; ts=list(f["tiers"].items())
-    opts="".join(f"""<label class=radio><input type=radio name=tier value={t} {'checked' if i==len(ts)-1 else ''} required><span><strong>{n} – £{p//100}</strong><span class=hint>{d}</span></span></label>""" for i,(t,(n,p,d)) in enumerate(ts))
+    opts="".join(f"""<label class=radio><input type=radio name=tier value={t} {'checked' if (t==tier if tier in f['tiers'] else i==len(ts)-1) else ''} required><span><strong>{n} – £{p//100}</strong><span class=hint>{d}</span></span></label>""" for i,(t,(n,p,d)) in enumerate(ts))
     return page(prog(1)+pv+f"""<p class=caption>{f['short']}</p><form method=post action=/checkout><input type=hidden name=form value={form}><fieldset style="border:0;padding:0;margin:0"><legend><h1>Which service do you want?</h1></legend>{opts}</fieldset>
 <div class=promise><strong>Your words only.</strong> You approve every word before you send.</div><div class=inset>One-off fee. No success fee. Secure card payment. 14-day cancellation rights until your conversation starts.</div>
 <button class="btn">Continue to payment</button></form><p><a href=/>Choose a different form</a></p>""","Choose your service",f["gov"])
