@@ -85,3 +85,6 @@ fieldset.iq{border:0;padding:0;margin:0 0 1.3rem}fieldset.iq legend{font-weight:
 .intake .navrow{position:sticky;bottom:0;background:#fff;padding:.6rem 0;border-top:1px solid var(--line)}
 .trust{border:2px solid var(--ok);border-radius:12px;padding:.4rem 1rem;margin:1rem 0}.savelink code{word-break:break-all}
 details.tickall{margin:1rem 0}details.tickall summary{cursor:pointer;font-weight:700;color:var(--brand)}
+/* approve page: inline errors */
+.errsum{border:3px solid #b3261e;padding:.6em 1em;margin:0 0 1em;background:#fff}.errsum h2{margin:.2em 0;color:#b3261e;font-size:1.2rem}.errsum a{color:#b3261e;font-weight:600}
+.trace.needs,.ground li.needs{border-left:5px solid #b3261e;padding-left:.7em}.err{color:#b3261e;font-weight:700;margin:.3em 0}

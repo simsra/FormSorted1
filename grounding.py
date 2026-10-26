@@ -67,6 +67,36 @@ def check(answers, source_text, use_llm=None):
             except Exception as e: raise GroundingUnavailable(str(e)[:300]) from None  # mandatory: never silently skip
         if f: res[tid]=f
     return res
+_ABBR=r"(?:Mr|Mrs|Ms|Dr|St|etc|e\.g|i\.e|approx|no|vs)"
+def sentences(text):
+    """Split into whole sentences: only at . ! ? followed by space and a capital/digit/quote, not after common abbreviations
+    or inside 24/7, 1.5 etc. Line breaks also end a sentence."""
+    out=[]
+    for para in re.split(r"\n+",text or ""):
+        for snt in _split(para):
+            if snt.strip(): out.append(snt.strip())
+    return out
+def _split(para):
+    parts=[]; cur=""
+    for tok in re.split(r"(?<=[.!?])\s+",para):
+        cur=(cur+" "+tok).strip() if cur else tok
+        prev=re.search(r"(\w+)\.$",cur)
+        if prev and re.fullmatch(_ABBR,prev.group(1),re.I): continue
+        parts.append(cur); cur=""
+    if cur: parts.append(cur)
+    # glue lower-case starts back on (a split mid-sentence, e.g. "...lost. for hours")
+    out=[]
+    for x in parts:
+        if out and x[:1].islower(): out[-1]+=" "+x
+        else: out.append(x)
+    return out
+def remove_sentence(answer, sentence):
+    """Remove one whole sentence (whitespace-insensitive), keeping the rest."""
+    key=" ".join(sentence.lower().split()); out=[]
+    for para in re.split(r"(\n+)",answer or ""):
+        if para.startswith("\n"): out.append(para); continue
+        out.append(" ".join(x for x in _split(para) if " ".join(x.lower().split())!=key))
+    return "".join(out).strip()
 def remove_phrase(answer, phrase):
     """Remove the sentence(s) containing phrase."""
     parts=re.split(r"(?<=[.!?])\s+",answer)

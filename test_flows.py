@@ -103,12 +103,12 @@ for form,f in FORMS.items():
         req(f"/check/{tok}",{"add_"+f["topics"][0][0]:"Extra true detail from me"})
         h=body(f"/approve/{tok}"); assert "What you told us" in h and "Sample answer 2" in h and "Extra true detail from me" in h and "approve every word" in h
         part={f"ok_{x}":"on" for x,_,_ in f["topics"][:-1]}
-        assert "Please approve every answer" in req(f"/approve/{tok}",part).read().decode()
+        eh=req(f"/approve/{tok}",part).read().decode(); assert "1 answer still needs a choice" in eh or "answers still need a choice" in eh; assert "Please tick to approve this answer" in eh and 'href="#topic_' in eh and "Check and approve every answer" in eh and 'name="ok_'+f["topics"][0][0]+'" required checked' in eh
         all_ok={f"ok_{x}":"on" for x,_,_ in f["topics"]}; all_ok["save"]="on"
         resn=sorted(set(re.findall(r'name="(res_[^"]+)"',h)))
         if resn:  # sample drafts don't match "Sample answer N", so grounding flags must be resolved
             assert "We couldn't find this in what you told us" in h
-            assert "Please choose keep, edit or remove" in req(f"/approve/{tok}",all_ok).read().decode()
+            eh=req(f"/approve/{tok}",all_ok).read().decode(); assert "Please choose one" in eh and "Keep all remaining" in eh and 'href="#res_' in eh
             for i,rn in enumerate(resn): all_ok[rn]=("keep","remove","edit")[i%3]
         if form in ("aa","dla") and t=="79":   # tick-box preview before the pack
             assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/ticks/{tok}"
