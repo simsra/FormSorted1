@@ -88,3 +88,8 @@ details.tickall{margin:1rem 0}details.tickall summary{cursor:pointer;font-weight
 /* approve page: inline errors */
 .errsum{border:3px solid #b3261e;padding:.6em 1em;margin:0 0 1em;background:#fff}.errsum h2{margin:.2em 0;color:#b3261e;font-size:1.2rem}.errsum a{color:#b3261e;font-weight:600}
 .trace.needs,.ground li.needs{border-left:5px solid #b3261e;padding-left:.7em}.err{color:#b3261e;font-weight:700;margin:.3em 0}
+/* 'Something else' chip reveals a short text box */
+.else{display:contents}.elsebox{display:none;flex-basis:100%;width:100%;padding:.55em .7em;font-size:1rem;border:2px solid var(--brand);border-radius:6px;margin:.2em 0 .4em}
+.else:has(input[type=checkbox]:checked) .elsebox{display:block}
+/* pack comparison (order summary) */
+.compare{margin:1.4em 0;border:2px solid var(--brand);border-radius:8px;padding:.8em 1em}.compare table{width:100%;border-collapse:collapse;font-size:.95rem}.compare th,.compare td{padding:.45em .3em;border-bottom:1px solid #dde3e6;text-align:center;vertical-align:top}.compare td:first-child,.compare th:first-child{text-align:left}.compare form{margin-top:.8em}

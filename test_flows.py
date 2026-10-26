@@ -4,7 +4,7 @@ import re
 Covers: conversation -> deadline tracker -> strength check -> approval (required) -> download, save code -> review mode, MR letter, unit rules."""
 import json, urllib.request, urllib.parse, sys, re
 from datetime import date
-from forms import FORMS
+from forms import FORMS, tier_info, is_full
 import quality, deadlines, letters
 B=sys.argv[1] if len(sys.argv)>1 else "http://localhost:8011"
 class NoRedir(urllib.request.HTTPRedirectHandler):
@@ -74,12 +74,14 @@ assert req("/").status==200
 codes={}; atw_tokens={}
 for form,f in FORMS.items():
     assert req(f"/?form={form}").status==200
-    assert "How much should we do for you?" in req(f"/?form={form}&tier=bogus").read().decode()   # invalid tier -> chooser
+    assert ("How much should we do for you?" if form=="atw" else "Your order") in req(f"/?form={form}&tier=bogus").read().decode()   # invalid tier -> chooser (atw) or the one product
     for t,(n,p,_) in f["tiers"].items():
         h=req(f"/?form={form}&tier={t}").read().decode()   # valid -> single order summary
         assert "Your order" in h and f"£{p//100}" in h and h.count("Start my form")==1 and "Nothing to pay now" in h and "How much should we" not in h, (form,t)
         assert "We fill in your form. You check, sign and post." in h and 'name=tier value=' in h
-        low=h.lower(); assert "stripe" not in low and " ai " not in low and "free" not in low and "citizens advice" not in low, (form,t)
+        assert h.count("You can claim directly from DWP for free; FormSorted is a paid online form-filling service.")==1, (form,t)
+        low=h.lower().replace("you can claim directly from dwp for free; formsorted is a paid online form-filling service.",""); assert "we claim for you" not in low and "we submit your claim" not in low
+        assert "stripe" not in low and " ai " not in low and "free" not in low and "citizens advice" not in low, (form,t)
         hrefs=set(re.findall(r'href="?(https?://[^" >]+)',h)); assert hrefs<={"https://formsorted.com/privacy.html","https://formsorted.com/terms.html","https://formsorted.com/#prices"}, hrefs
     for t in f["tiers"]:
         tok=req("/checkout",{"tier":t,"form":form}).headers["location"].split("/")[-1]
@@ -110,7 +112,7 @@ for form,f in FORMS.items():
             assert "We couldn't find this in what you told us" in h
             eh=req(f"/approve/{tok}",all_ok).read().decode(); assert "Please choose one" in eh and "Keep all remaining" in eh and 'href="#res_' in eh
             for i,rn in enumerate(resn): all_ok[rn]=("keep","remove","edit")[i%3]
-        if form in ("aa","dla") and t=="79":   # tick-box preview before the pack
+        if form in ("aa","dla") and is_full(t):   # tick-box preview before the pack
             assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/ticks/{tok}"
             assert req(f"/documents/{tok}").headers["location"]==f"/ticks/{tok}"
             th=body(f"/ticks/{tok}"); assert "Check the tick boxes" in th and "stripe" not in th.lower() and " ai " not in th.lower()
@@ -163,8 +165,8 @@ def hook(ev,secret=SECRET,t=None):
     raw=json.dumps(ev).encode(); r=urllib.request.Request(B+"/webhooks/payment",raw,{"Content-Type":"application/json","Stripe-Signature":orders.sign(raw,secret,t)})
     try: return op.open(r)
     except urllib.error.HTTPError as e: return e
-def ev(eid,sid,email,form="aa",tier="79",amount=None,status="paid",typ="checkout.session.completed"):
-    return {"id":eid,"type":typ,"data":{"object":{"id":sid,"payment_status":status,"amount_total":amount if amount is not None else FORMS[form]["tiers"][tier][1],
+def ev(eid,sid,email,form="aa",tier="99",amount=None,status="paid",typ="checkout.session.completed"):
+    return {"id":eid,"type":typ,"data":{"object":{"id":sid,"payment_status":status,"amount_total":amount if amount is not None else tier_info(form,tier)[1],
             "customer_details":{"email":email},"metadata":{"form":form,"tier":tier}}}}
 # unit: signature
 raw=b'{"a":1}'; assert orders.verify_signature(raw,orders.sign(raw,"k"),"k")=={"a":1}
@@ -195,7 +197,7 @@ while not j["done"]: n+=1; j=json.load(req(f"/api/{tok}/message",js={"text":f"Sa
 nx=json.load(req(f"/api/{tok}/finish",{}))["next"]; assert nx==f"/prepare/{tok}"; req(nx); h=body(f"/approve/{tok}")
 all_ok={f"ok_{x}":"on" for x,_,_ in FORMS["aa"]["topics"]}
 for i,rn in enumerate(sorted(set(re.findall(r'name="(res_[^"]+)"',h)))): all_ok[rn]="keep"
-assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/ticks/{tok}"       # £79 AA1: tick-box preview next
+assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/ticks/{tok}"       # AA1 done-for-you: tick-box preview next
 assert req(f"/details/{tok}").headers["location"]==f"/ticks/{tok}"              # no details/documents before ticks confirmed
 th=body(f"/ticks/{tok}"); assert "Check the tick boxes" in th and "Leave blank" in th and "stripe" not in th.lower()
 tick_form={n:v for n,v in re.findall(r'name="(t_[^"]+)" value="([^"]*)" checked',th)}; tick_form["t_x29"]="/Yes"
@@ -252,9 +254,9 @@ assert db.execute("select count(*) from orders where token=?",(uo,)).fetchone()[
 cap_ip="203.0.113.77"
 for _ in range(int(os.getenv("FREE_PER_IP_DAY","500"))): db.execute("insert into orders(token,tier,status,created,form,ip) values(?,?,?,?,?,?)",(orders.new_token(),"79","free",now_,"aa",cap_ip))
 db.commit()
-r=op.open(urllib.request.Request(B+"/checkout",b"tier=79&form=aa",{"True-Client-IP":cap_ip,"X-Forwarded-For":"1.2.3.4"})); assert "try tomorrow" in r.read().decode().lower()
-r=op.open(urllib.request.Request(B+"/checkout",b"tier=79&form=aa",{"X-Forwarded-For":"9.9.9.9, "+cap_ip+", 104.22.17.40"})); assert "try tomorrow" in r.read().decode().lower()   # spoofed leftmost XFF ignored
-r=req("/checkout",{"tier":"79","form":"aa"}); assert r.status==303   # other IPs unaffected
+r=op.open(urllib.request.Request(B+"/checkout",b"tier=99&form=aa",{"True-Client-IP":cap_ip,"X-Forwarded-For":"1.2.3.4"})); assert "try tomorrow" in r.read().decode().lower()
+r=op.open(urllib.request.Request(B+"/checkout",b"tier=99&form=aa",{"X-Forwarded-For":"9.9.9.9, "+cap_ip+", 104.22.17.40"})); assert "try tomorrow" in r.read().decode().lower()   # spoofed leftmost XFF ignored
+r=req("/checkout",{"tier":"99","form":"aa"}); assert r.status==303   # other IPs unaffected
 db.execute("delete from orders where ip=?",(cap_ip,)); db.commit()
 print("unpaid 7-day purge + free cap ok")
 assert req("/cron/formwatch",{}).status==403   # weekly form-version check is protected

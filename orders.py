@@ -35,14 +35,16 @@ UNPAID_DAYS=int(os.getenv("UNPAID_RETENTION_DAYS","7"))
 def purge(c, out_dir, days=None, now=None):
     """Delete all customer data older than `days` (orders, files, saved answers, webhook log). Returns counts."""
     cut=(now or time.time())-86400*(RETENTION_DAYS if days is None else days)
-    toks=[r[0] for r in c.execute("select token from orders where created<?",(cut,))]
+    now_=now or time.time()   # 'Done for you Plus' customers who opted in keep their answers until keep_until (3 years)
+    keep="(keep_until is null or keep_until<?)"
+    toks=[r[0] for r in c.execute(f"select token from orders where created<? and {keep}",(cut,now_))]
     for t in toks: store.delete(t)   # local folder and Supabase Storage files
-    n=c.execute("delete from orders where created<?",(cut,)).rowcount
+    n=c.execute(f"delete from orders where created<? and {keep}",(cut,now_)).rowcount
     ucut=(now or time.time())-86400*UNPAID_DAYS   # unpaid (free interview) orders: 7 days
     ut=[r[0] for r in c.execute("select token from orders where status in ('free','pending') and created<?",(ucut,))]
     for t in ut: store.delete(t)
     n+=c.execute("delete from orders where status in ('free','pending') and created<?",(ucut,)).rowcount
-    s=c.execute("delete from saved where created<?",(cut,)).rowcount
+    s=c.execute("delete from saved where created<? and code not in (select save_code from orders where save_code is not null and keep_until>=?)",(cut,now_)).rowcount
     c.execute("delete from events where received<?",(cut,)); c.commit()
     return {"orders":n,"saved":s}
 def erase(c, out_dir, token):
@@ -50,5 +52,5 @@ def erase(c, out_dir, token):
     o=c.execute("select save_code from orders where token=?",(token,)).fetchone()
     store.delete(token)
     if o and o[0]: c.execute("delete from saved where code=?",(o[0],))
-    c.execute("update orders set status='deleted', history='[]', intake=null, personal='{}', draft=null, email=null, deadline='{}', save_code=null, stripe_session=null where token=?",(token,))
+    c.execute("update orders set status='deleted', history='[]', intake=null, personal='{}', draft=null, email=null, deadline='{}', save_code=null, stripe_session=null, keep_until=null, appeal=null where token=?",(token,))
     c.commit()

@@ -31,12 +31,26 @@ h=I.history("aa",d); assert len(h)==2+2*len(FORMS["aa"]["topics"])   # one answe
 # every question in every section has a skip/'not sure' route: rendering with no data must work
 for f in I.FORMS_V3:
     for s,_ in I.SECTIONS[f]: assert I.section_body(f,s,{})
+# 'Something else' on every tap list: stored per question, mapped to the right topic, only when its chip is on
+class FM(dict):
+    def getlist(self,k): v=self.get(k); return v if isinstance(v,list) else ([] if v is None else [v])
+dd=I.save("aa","daily",{},FM({"r_bed_c":[],"r_bed_c_xon":"1","r_bed_c_x":"Needs the bed rail"}))
+dd=I.save("aa","safety",dd,FM({"fallx_xon":"1","fallx_x":"Hits her head","eye_x":"typed but chip off"}))
+dd=I.save("aa","finish",dd,FM({"aids_xon":"1","aids_x":"Bath lift","people_xon":"1","people_x":"Dementia nurse"}))
+dd=I.save("aa","conds",dd,FM({"cond_0":"1","cond_0_t_xon":"1","cond_0_t_x":"Hydrotherapy"}))
+_,T=I.topic_texts("aa",dd)
+assert dd["rows"]["bed"]["x"]=="Needs the bed rail" and "also: Needs the bed rail" in T["29"], T["29"]
+assert "After a fall, also: Hits her head." in T["34"] and "typed but chip off" not in str(T) and dd["else"]["eye"]==""
+assert "Other aids used: Bath lift." in T["33"] and "Dementia nurse" in T["40"] and "Hydrotherapy" in str(T)+I.topic_texts("aa",dd)[0]
+for f in I.FORMS_V3:
+    for sname,_ in I.SECTIONS[f]:
+        if sname!="about": assert "Something else" in I.section_body(f,sname,{}), (f,sname)
 print("intake units ok")
 SAMPLE={
  "aa":[("about",{"who":"parent","name":"Margaret","signer":"poa"}),("conds",{"cond_0":"1","cond_0_since":"2015","cond_0_t":["tabs"],"cond_1":"1","cond_1_since":"2021","oc_0":"Macular degeneration","oc_0_since":"ns"}),
-       ("daily",{"bad":"3","days_help":"7","r_bed_hard":"1","r_bed_help":"1","r_bed_c":["out","in"],"r_bed_freq":"every","r_bed_time":"10_30","r_wash_help":"1","r_wash_c":["in","fell"],"r_wash_freq":"most","r_indoors_hard":"1","r_indoors_c":["stairs","chair"],"r_meds_help":"1","r_meds_c":["forget"],"r_comm_hard":"1","r_comm_c":["mem","phone"]}),
+       ("daily",{"bad":"3","days_help":"7","r_bed_hard":"1","r_bed_help":"1","r_bed_c":["out","in"],"r_bed_freq":"every","r_bed_c_xon":"1","r_bed_c_x":"Grips the bed rail for ages","r_bed_time":"10_30","r_wash_help":"1","r_wash_c":["in","fell"],"r_wash_freq":"most","r_indoors_hard":"1","r_indoors_c":["stairs","chair"],"r_meds_help":"1","r_meds_c":["forget"],"r_comm_hard":"1","r_comm_c":["mem","phone"]}),
        ("safety",{"falls":"3-5","lastfall":"month","fallx":["getup","alarm"],"eye":["confused","wander"],"alone":"lt1","night":["toilet","confused"],"nights":"6","ntimes":"2","nmins":"10_30","watch":"some"}),
-       ("finish",{"aids":["Walking frame","Shower seat"],"people":["GP","Family carer"],"words":"Mum gets very muddled in the evenings."})],
+       ("finish",{"aids":["Walking frame","Shower seat"],"people":["GP","Family carer"],"words":"Mum gets very muddled in the evenings.","aids_xon":"1","aids_x":"Bath lift"})],
  "dla":[("about",{"rel":"Mum","name":"Leo","age":"5to15"}),("conds",{"cond_0":"1","cond_0_since":"2021","cond_1":"1","cond_1_since":"ns"}),
        ("daily",{"bad":"4","r_toilet_help":"1","r_toilet_c":["pads"],"r_dress_help":"1","r_dress_c":["sens"],"r_dress_time":"30_60","r_superv_hard":"1","r_superv_c":["danger","imp","over"],"r_superv_freq":"every","r_speak_hard":"1"}),
        ("safety",{"fits":"no","varies":"varies","nn":["night_settle","night_toilet"],"nn_night_settle_n":"5","nn_night_settle_t":"2","nn_night_settle_m":"30","nn_night_toilet_n":"3","r_out_hard":"1","r_out_c":["road","anx"]}),
@@ -79,7 +93,7 @@ for form in I.FORMS_V3:
         req(f"/intake/{tok}",{"sec":"finish","nav":"next",**secs[-1][1]})
         pv=body(f"/preview/{tok}")
         assert "Pay £" in pv and "preview-placeholder.svg" in pv and "Never a percentage" in pv and "approve everything" in pv and "sections of the form" in pv
-        for leak in ("Margaret finds","getting out of bed","muddled","Leo finds","no sense of danger","In my own words"): assert leak.lower() not in pv.lower(), leak
+        for leak in ("Grips the bed rail","Bath lift","Margaret finds","getting out of bed","muddled","Leo finds","no sense of danger","In my own words"): assert leak.lower() not in pv.lower(), leak
         assert "stripe" not in pv.lower() and " ai " not in pv.lower()
         for p_ in ("/approve/","/check/","/deadline/","/details/","/ticks/","/documents/","/prepare/","/uploads/"): assert req(p_+tok).status==402, p_
         assert req(f"/download/{tok}/answers.html").status==402
@@ -93,17 +107,20 @@ for form in I.FORMS_V3:
         assert loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"
         assert loc(req(f"/intake/{tok}"))==f"/start/{tok}" and loc(req(f"/start/{tok}"))==f"/deadline/{tok}"   # locked once drafted, no redirect loop
         ap=body(f"/approve/{tok}"); assert "What you told us" in ap
+        if form=="aa": assert "Grips the bed rail for ages" in ap and "Other aids used: Bath lift." in ap   # 'Something else' reaches what-you-told-us (and so drafting + grounding)
         assert ("Margaret finds this hard" in ap) if form=="aa" else ("Leo" in ap and "night" in ap.lower()) if form=="dla" else ("I find this hard" in ap), form
         ok={f"ok_{x}":"on" for x,_,_ in FORMS[form]["topics"]}
         for i_,rn in enumerate(sorted(set(re.findall(r'name="(res_[^"]+)"',ap)))): ok[rn]="keep"
         r=req(f"/approve/{tok}",ok)
-        if form in ("aa","dla") and tier=="79":
+        if form in ("aa","dla") and tier=="99":
             assert loc(r)==f"/ticks/{tok}"
             th=body(f"/ticks/{tok}"); m=re.search(r"We have already set (\d+) tick boxes",th); assert m and int(m.group(1))>=5, th[:400]
             chk=dict(re.findall(r'name="(t_[^"]+)" value="([^"]*)" checked',th))
             want={"aa":{"t_x29":"/Yes","t_x29-2":"/Yes","t_x29-4":"/Yes","t_x34":"/Fall","t_x34-3":"/Yes","t_x40-8":"/Yes","t_302":"/Yes"},"dla":{"t_55":"/Yes","t_66":"/Yes","t_66_1":"/No","t_70":"/Yes","t_68":"/Yes","t_49_3":"/No"}}[form]
             for k,v in want.items(): assert chk.get(k)==v, (k,chk.get(k))
             chk["confirm"]="on"; assert loc(req(f"/ticks/{tok}",chk))==f"/details/{tok}"
+        elif "/ticks/" in loc(r):
+            th=body(loc(r)); chk=dict(re.findall(r'name="(t_[^"]+)" value="([^"]*)" checked',th)); chk["confirm"]="on"; assert loc(req(loc(r),chk))==f"/details/{tok}"
         else: assert loc(r)==f"/details/{tok}", loc(r)
         dh=body(f"/details/{tok}")
         if form!="pip": assert 'value="'+("Leo" if form=="dla" else "Margaret")+'"' in dh       # name not asked twice
@@ -116,7 +133,7 @@ for form in I.FORMS_V3:
         ans=req(f"/download/{tok}/answers.html").read().decode()
         assert "Documents you uploaded" in ans and "meds.pdf" in ans
         if form=="aa": assert "Power of Attorney" in ans
-        if tier=="79" and form in("aa","dla"):
+        if tier=="99" and form in("aa","dla"):
             pf=PdfReader(io.BytesIO(req(f"/download/{tok}/{FORMS[form]['pdf_out']}").read())).get_fields()
             v=lambda k:str((pf.get(k) or {}).get("/V",""))
             if form=="aa": assert v("x29")=="/Yes" and v("x34")=="/Fall" and v("38")=="7" and v("43")=="6" and v("34-8")=="3 to 5", (v("x29"),v("38"),v("43"),v("34-8"))

@@ -86,7 +86,14 @@ def is_me(d,form): return form!="dla" and d.get("who","me") in ("me","")
 def _chk(n,v,txt,on,cls=""): return f'<label class="chip{cls}"><input type=checkbox name="{n}" value="{esc(v)}" {"checked" if on else ""}><span>{esc(txt)}</span></label>'
 def _rad(n,v,txt,cur): return f'<label class=chip><input type=radio name="{n}" value="{esc(v)}" {"checked" if cur==v else ""}><span>{esc(txt)}</span></label>'
 def _radios(n,opts,cur): return "<div class=chips>"+"".join(_rad(n,v,t,cur) for v,t in opts)+"</div>"
-def _checks(n,opts,cur): cur=cur or []; return "<div class=chips>"+"".join(_chk(n,v,t,v in cur) for v,t in opts)+"</div>"
+def _else(n,txt):
+    """'Something else' chip that reveals a short text box for this question (stored per question)."""
+    return f'<span class=else><label class=chip><input type=checkbox name="{n}_xon" value=1 {"checked" if txt else ""}><span>Something else</span></label><input class=elsebox name="{n}_x" value="{esc(txt or "")}" maxlength=200 placeholder="Tell us briefly" aria-label="Something else: tell us briefly"></span>'
+def _checks(n,opts,cur,x=None): cur=cur or []; return "<div class=chips>"+"".join(_chk(n,v,t,v in cur) for v,t in opts)+(_else(n,x) if x is not None else "")+"</div>"
+def other_txt(fm,n):
+    """The 'Something else' text for question n, only if its chip is on."""
+    return re.sub(r"\s+"," ",str(fm.get(f"{n}_x") or "")).strip()[:200] if fm.get(f"{n}_xon") else ""
+def X(d,k): return (d.get("else") or {}).get(k,"")
 def _q(label,inner,hint=""): return f'<fieldset class=iq><legend>{esc(label)}</legend>{f"<p class=hint>{esc(hint)}</p>" if hint else ""}{inner}</fieldset>'
 def NUM(a,b): return [(str(i),str(i)) for i in range(a,b+1)]+[("ns","Not sure")]
 def row_card(form,r,d):
@@ -94,7 +101,8 @@ def row_card(form,r,d):
     hard="I find this hard" if me else f"Hard for {name(d,form)}"
     helpt="I need help or reminding" if me else "Needs help or reminding"
     more=""
-    if chips: more+='<p class=sub>What happens? <span class=hint>(tap any)</span></p>'+_checks(f"r_{rid}_c",[(c[0],c[1]) for c in chips],cur.get("c"))
+    if not chips: more+='<p class=sub>What happens? <span class=hint>(optional)</span></p>'+_checks(f"r_{rid}_c",[],[],cur.get("x",""))
+    if chips: more+='<p class=sub>What happens? <span class=hint>(tap any)</span></p>'+_checks(f"r_{rid}_c",[(c[0],c[1]) for c in chips],cur.get("c"),cur.get("x",""))
     if form=="pip": more+='<p class=sub>Can it be done… <span class=hint>(tap any that are true)</span></p>'+_checks(f"r_{rid}_std",PIP_STD,cur.get("std"))
     more+='<p class=sub>How often is it like this?</p>'+_radios(f"r_{rid}_freq",FREQ,cur.get("freq"))
     more+='<p class=sub>How long does it take each time?</p>'+_radios(f"r_{rid}_time",TIME,cur.get("time"))
@@ -117,10 +125,10 @@ def section_body(form,sec,d):
         def sel(n,cur): return f'<select name="{n}" aria-label="When did it start">'+"".join(f'<option value="{v}" {"selected" if cur==v else ""}>{t}</option>' for v,t in yrs)+"</select>"
         lst=""
         for i,cn in enumerate(CONDS[form]):
-            c=have.get(cn,{}); lst+=f'<div class=cond>{_chk(f"cond_{i}","1",cn,bool(c),cls=" k")}<div class=more>{sel(f"cond_{i}_since",c.get("since",""))}{_checks(f"cond_{i}_t",TREAT,c.get("treat"))}</div></div>'
+            c=have.get(cn,{}); lst+=f'<div class=cond>{_chk(f"cond_{i}","1",cn,bool(c),cls=" k")}<div class=more>{sel(f"cond_{i}_since",c.get("since",""))}{_checks(f"cond_{i}_t",TREAT,c.get("treat"),c.get("tx",""))}</div></div>'
         others=[c for c in d.get("conds") or [] if c.get("name") not in CONDS[form]]+[{},{},{}]
         for j,c in enumerate(others[:3]):
-            lst+=f'<div class="cond other"><input name="oc_{j}" value="{esc(c.get("name",""))}" placeholder="Another condition (type it)" maxlength=80 aria-label="Another condition">{sel(f"oc_{j}_since",c.get("since",""))}{_checks(f"oc_{j}_t",TREAT,c.get("treat"))}</div>'
+            lst+=f'<div class="cond other"><input name="oc_{j}" value="{esc(c.get("name",""))}" placeholder="Another condition (type it)" maxlength=80 aria-label="Another condition">{sel(f"oc_{j}_since",c.get("since",""))}{_checks(f"oc_{j}_t",TREAT,c.get("treat"),c.get("tx",""))}</div>'
         h+=_q("Which health conditions or disabilities "+("do you have?" if me else f"does {nm} have?"),lst,"Tap each one that applies, then roughly when it started. No diagnosis needed.")
     elif sec in ("daily","out"):
         if sec=="daily":
@@ -131,10 +139,10 @@ def section_body(form,sec,d):
         if form=="aa":
             h+=_q("Falls in the last year",_radios("falls",[("0","None"),("1-2","1–2"),("3-5","3–5"),("6+","6 or more"),("ns","Not sure")],d.get("falls")))
             h+=_q("When was the last fall?",_radios("lastfall",[("week","This week"),("month","This month"),("months","1–6 months ago"),("year","Over 6 months ago"),("ns","Not sure")],d.get("lastfall")),"Skip if no falls.")
-            h+=_q("After a fall",_checks("fallx",[("getup","Can't get up without help"),("clinic","Referred to a falls clinic"),("alarm","Has a pendant alarm")],d.get("fallx")))
-            h+=_q(f"Does someone need to keep an eye on {you} in the day?",_checks("eye",[("danger","Not aware of dangers"),("wander","May wander"),("fits","Dizzy spells, fits or blackouts"),("confused","Gets confused")],d.get("eye")))
+            h+=_q("After a fall",_checks("fallx",[("getup","Can't get up without help"),("clinic","Referred to a falls clinic"),("alarm","Has a pendant alarm")],d.get("fallx"),X(d,"fallx")))
+            h+=_q(f"Does someone need to keep an eye on {you} in the day?",_checks("eye",[("danger","Not aware of dangers"),("wander","May wander"),("fits","Dizzy spells, fits or blackouts"),("confused","Gets confused")],d.get("eye"),X(d,"eye")))
             h+=_q(f"How long can {you} safely be left alone?",_radios("alone",[("always","As long as needed"),("hours","A few hours"),("lt1","Under an hour"),("never","Not at all"),("ns","Not sure")],d.get("alone")))
-            h+=_q("Help during the night (after everyone has gone to bed)",_checks("night",[("toilet","Toilet"),("turn","Turning over or settling"),("pain","Pain or breathing"),("meds","Medicines"),("confused","Confused or distressed")],d.get("night")),"Skip if none.")
+            h+=_q("Help during the night (after everyone has gone to bed)",_checks("night",[("toilet","Toilet"),("turn","Turning over or settling"),("pain","Pain or breathing"),("meds","Medicines"),("confused","Confused or distressed")],d.get("night"),X(d,"night")),"Skip if none.")
             h+=_q("Nights a week",_radios("nights",NUM(0,7),d.get("nights")))+_q("Times a night",_radios("ntimes",[("1","1"),("2","2"),("3","3"),("4+","4 or more"),("ns","Not sure")],d.get("ntimes")))+_q("Minutes each time",_radios("nmins",TIME,d.get("nmins")))
             h+=_q(f"Does someone need to stay awake to watch over {you} at night?",_radios("watch",[("no","No"),("some","Some nights"),("most","Most nights"),("ns","Not sure")],d.get("watch")))
         else:
@@ -142,12 +150,13 @@ def section_body(form,sec,d):
             h+=_q("Do their needs change from day to day?",_radios("varies",[("same","Mostly the same"),("varies","They change a lot"),("ns","Not sure")],d.get("varies")))
             nn=d.get("nn") or []; q=d.get("nnum") or {}
             inner="".join(f'<div class=cond>{_chk("nn",k,t,k in nn,cls=" k")}<div class=more>{_radios(f"nn_{k}_n",[(str(i),f"{i} nights") for i in range(1,8)]+[("ns","Not sure")],q.get(k,{}).get("n"))}{_radios(f"nn_{k}_t",[(str(i),f"{i}× a night") for i in range(1,5)]+[("ns","Not sure")],q.get(k,{}).get("t"))}{_radios(f"nn_{k}_m",[("10","10 min"),("20","20 min"),("30","30 min"),("45","45 min"),("60","1 hour+"),("ns","Not sure")],q.get(k,{}).get("m"))}</div></div>' for k,t in NIGHT_DLA)
+            inner+=f'<div class=chips>{_else("nn",X(d,"nn"))}</div>'
             h+=_q(f"Help {nm} needs at night (after everyone is in bed)",inner,"Tap a reason, then nights a week, times a night and minutes. Skip if none.")
             if d.get("age")!="u3": h+='<p class=lede2>Getting out and about</p>'+"".join(row_card(form,r,d) for r in rows(form,"safety",d))
     elif sec=="finish":
-        h+=_q("Aids or equipment used",_checks("aids",[(a,a) for a in AIDS[form]],d.get("aids")))
-        if form=="dla": h+=_q("School or nursery",_checks("school",SCHOOL,d.get("school")))
-        h+=_q(f"Who knows {you} well?",_checks("people",[(p,p) for p in PEOPLE[form]],d.get("people")),"We'll list who could support the claim.")
+        h+=_q("Aids or equipment used",_checks("aids",[(a,a) for a in AIDS[form]],d.get("aids"),X(d,"aids")))
+        if form=="dla": h+=_q("School or nursery",_checks("school",SCHOOL,d.get("school"),X(d,"school")))
+        h+=_q(f"Who knows {you} well?",_checks("people",[(p,p) for p in PEOPLE[form]],d.get("people"),X(d,"people")),"We'll list who could support the claim.")
         h+=_q("Anything else, in your own words (optional)",f'<textarea name=words rows=4 maxlength=3000 placeholder="For example: what a bad day looks like.">{esc(d.get("words",""))}</textarea>',"Skip this if you like. You only tap, we do the writing.")
     return h
 # ---------- saving ----------
@@ -161,24 +170,24 @@ def save(form,sec,d,fm):
     elif sec=="conds":
         cs=[]
         for i,cn in enumerate(CONDS[form]):
-            if fm.get(f"cond_{i}"): cs.append({"name":cn,"since":g(f"cond_{i}_since"),"treat":gl(f"cond_{i}_t")})
+            if fm.get(f"cond_{i}"): cs.append({"name":cn,"since":g(f"cond_{i}_since"),"treat":gl(f"cond_{i}_t"),"tx":other_txt(fm,f"cond_{i}_t")})
         for j in range(3):
             n=g(f"oc_{j}")[:80]
-            if n: cs.append({"name":n,"since":g(f"oc_{j}_since"),"treat":gl(f"oc_{j}_t")})
+            if n: cs.append({"name":n,"since":g(f"oc_{j}_since"),"treat":gl(f"oc_{j}_t"),"tx":other_txt(fm,f"oc_{j}_t")})
         d["conds"]=cs
     elif sec in ("daily","out","safety"):
         R=d.setdefault("rows",{})
         for r in rows(form,sec,d):
-            rid=r[0]; v={"hard":bool(fm.get(f"r_{rid}_hard")),"help":bool(fm.get(f"r_{rid}_help")),"c":gl(f"r_{rid}_c"),"std":gl(f"r_{rid}_std"),"freq":g(f"r_{rid}_freq"),"time":g(f"r_{rid}_time")}
-            if v["hard"] or v["help"] or v["c"] or v["std"]: R[rid]=v
+            rid=r[0]; v={"hard":bool(fm.get(f"r_{rid}_hard")),"help":bool(fm.get(f"r_{rid}_help")),"c":gl(f"r_{rid}_c"),"std":gl(f"r_{rid}_std"),"freq":g(f"r_{rid}_freq"),"time":g(f"r_{rid}_time"),"x":other_txt(fm,f"r_{rid}_c")}
+            if v["hard"] or v["help"] or v["c"] or v["std"] or v["x"]: R[rid]=v
             else: R.pop(rid,None)
         keys={"daily":("bad","days_help"),"out":(),"safety":("falls","lastfall","alone","nights","ntimes","nmins","watch","fits","varies")}[sec]
         for k in keys: d[k]=g(k)
         if sec=="safety":
-            for k in ("fallx","eye","night","nn"): d[k]=gl(k)
+            for k in ("fallx","eye","night","nn"): d[k]=gl(k); d.setdefault("else",{})[k]=other_txt(fm,k)
             d["nnum"]={k:{x:g(f"nn_{k}_{x}") for x in "ntm"} for k in d["nn"]}
     elif sec=="finish":
-        for k in ("aids","school","people"): d[k]=gl(k)
+        for k in ("aids","school","people"): d[k]=gl(k); d.setdefault("else",{})[k]=other_txt(fm,k)
         d["words"]=str(fm.get("words") or "").strip()[:3000]
     return d
 # ---------- turning taps into the customer's own answers ----------
@@ -189,6 +198,7 @@ def _rowtext(form,r,v,d):
     if v.get("help"): bits.append("I need help or reminding" if me else "needs help or reminding")
     cm={c[0]:c[1] for c in chips}; cs=[cm[x] for x in v.get("c",[]) if x in cm]
     if cs: bits.append("difficulty with: "+"; ".join(x[0].lower()+x[1:] for x in cs))
+    if v.get("x"): bits.append("also: "+v["x"].rstrip("."))
     sm=dict(PIP_STD); st=[sm[x].lower() for x in v.get("std",[]) if x in sm]
     if st: bits.append("it can be done "+", ".join(st))
     if _ok(v.get("freq")): bits.append("like this "+FREQ_T[v["freq"]].lower())
@@ -206,7 +216,7 @@ def topic_texts(form,d):
     cl=[]
     for c in d.get("conds") or []:
         tm=dict(TREAT); tr=[tm[x].lower() for x in c.get("treat",[]) if x in tm and x!="ns"]
-        cl.append(c["name"]+(f" since {c['since']}" if _ok(c.get("since")) else "")+(f" (treatment: {', '.join(tr)})" if tr else ""))
+        cl.append(c["name"]+(f" since {c['since']}" if _ok(c.get("since")) else "")+(f" (treatment: {', '.join(tr+([c['tx']] if c.get('tx') else []))})" if tr or c.get("tx") else ""))
     if cl:
         s="Health conditions: "+"; ".join(cl)+"."
         if "conditions" in T: T["conditions"].append(s)
@@ -253,6 +263,19 @@ def topic_texts(form,d):
         if s: T["school"].append("School or nursery: "+"; ".join(s)+".")
         if d.get("people"): T["statement"].append("People who know the child well: "+", ".join(d["people"])+".")
     if form=="pip" and d.get("people"): T["other"].append("Professionals and people who know "+("me" if me else "them")+": "+", ".join(d["people"])+".")
+    E=lambda k: X(d,k).rstrip(".")
+    if form=="aa":
+        if E("fallx"): T["34"].append(f"After a fall, also: {E('fallx')}.")
+        if E("eye"): T["40"].append(f"Keeping an eye on them, also: {E('eye')}.")
+        if E("night"): T["42"].append(f"Help at night, also: {E('night')}.")
+        if E("people"): T["40"].append(f"Other people who know them well: {E('people')}.")
+        if d.get("people"): T["40"].append("People who know them well: "+", ".join(d["people"])+".")
+    if form=="dla":
+        if E("nn"): T["night"].append(f"Help at night, also: {E('nn')}.")
+        if E("school"): T["school"].append(f"School or nursery, also: {E('school')}.")
+        if E("people"): T["statement"].append(f"Other people who know the child well: {E('people')}.")
+    if form=="pip" and E("people"): T["other"].append(f"Other people who know {'me' if me else 'them'}: {E('people')}.")
+    if E("aids"): T[{"aa":"33","dla":"daycare","pip":"other"}[form]].append(f"Other aids used: {E('aids')}.")
     if d.get("aids"): T[{"aa":"33","dla":"daycare","pip":"other"}[form]].append("Aids used: "+", ".join(d["aids"])+".")
     if d.get("words"): T[{"aa":"40","dla":"42","pip":"other"}[form]].append("In my own words: "+d["words"])
     return " ".join(intro.split()),{k:" ".join(v) for k,v in T.items()}

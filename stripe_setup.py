@@ -7,10 +7,11 @@ from forms import FORMS
 KEY=os.environ.get("STRIPE_KEY") or os.environ.get("STRIPE_TEST_KEY") or sys.exit("set STRIPE_KEY")
 MODE="test" if "_test_" in KEY else "live"
 THANKS=os.getenv("THANKS_URL","https://formsorted.com/thanks.html")
-PLANS=[("aa","49","STRIPE_LINK_49"),("aa","79","STRIPE_LINK_79"),("dla","49","STRIPE_LINK_DLA_49"),("dla","79","STRIPE_LINK_DLA_79"),
-       ("pip","59","STRIPE_LINK_PIP_59"),("pip","79","STRIPE_LINK_PIP_79"),("atw","49","STRIPE_LINK_ATW_49"),("atw","79","STRIPE_LINK_ATW_79")]
+PLANS=[("aa","99","STRIPE_LINK_AA_99"),("dla","99","STRIPE_LINK_DLA_99"),("pip","99","STRIPE_LINK_PIP_99"),("pipr","99","STRIPE_LINK_PIPR_99"),
+       ("atw","49","STRIPE_LINK_ATW_49"),("atw","79","STRIPE_LINK_ATW_79")]   # add e.g. ("aa","199","STRIPE_LINK_AA_199") when a premium tier exists
 DESC={"49":"Your answers for every question on the form, drafted from what you tell us, for you to check and copy across.",
       "59":"Your answers for every question on the form, drafted from what you tell us, for you to check and copy across.",
+      "99":"Done for you: we prepare your answers from what you tell us and fill in the form where there is one, ready for you to check, sign and send.",
       "79":"Your answers drafted from what you tell us, plus a completed form ready to check, sign and send."}
 def api(method,path,data=None):
     body=urllib.parse.urlencode(data,doseq=True).encode() if data else None
