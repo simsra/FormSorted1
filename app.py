@@ -80,7 +80,16 @@ def order_summary(form,tier,pv=""):
 <form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={tier}><button class="btn btn-wide">Start my form</button></form>
 <p class=change><a href="{PRICING_URL}">Change form or pack</a></p></div>""",f"Your order: {n}",minimal=True)
 FREE_PER_IP_DAY=int(os.getenv("FREE_PER_IP_DAY","5")); MAX_TURNS=int(os.getenv("MAX_TURNS","40")); FREE_PER_DAY_TOTAL=int(os.getenv("FREE_PER_DAY_TOTAL","500"))
-def client_ip(req): return (req.headers.get("x-forwarded-for","").split(",")[0].strip() or (req.client.host if req.client else ""))[:64]
+def client_ip(req):
+    """Real visitor IP. Render sits behind Cloudflare: True-Client-IP / CF-Connecting-IP are set by Cloudflare and can't be spoofed.
+    Render only appends to X-Forwarded-For (leftmost entries are client-controlled), so the fallback is the entry Cloudflare added
+    (second from the right, before the Cloudflare edge), then the socket address (local dev)."""
+    for h in ("true-client-ip","cf-connecting-ip"):
+        v=req.headers.get(h,"").strip()
+        if v: return v[:64]
+    xff=[x.strip() for x in req.headers.get("x-forwarded-for","").split(",") if x.strip()]
+    if len(xff)>=2: return xff[-2][:64]
+    return (xff[-1] if xff else (req.client.host if req.client else ""))[:64]
 @app.post("/checkout")
 def checkout(req:Request, tier:str=Form(...), form:str=Form("aa")):
     """Pick a pack -> free interview (pay at the end, on the preview page)."""

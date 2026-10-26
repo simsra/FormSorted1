@@ -252,7 +252,9 @@ assert db.execute("select count(*) from orders where token=?",(uo,)).fetchone()[
 cap_ip="203.0.113.77"
 for _ in range(int(os.getenv("FREE_PER_IP_DAY","500"))): db.execute("insert into orders(token,tier,status,created,form,ip) values(?,?,?,?,?,?)",(orders.new_token(),"79","free",now_,"aa",cap_ip))
 db.commit()
-r=op.open(urllib.request.Request(B+"/checkout",b"tier=79&form=aa",{"X-Forwarded-For":cap_ip})); assert "try tomorrow" in r.read().decode().lower()
+r=op.open(urllib.request.Request(B+"/checkout",b"tier=79&form=aa",{"True-Client-IP":cap_ip,"X-Forwarded-For":"1.2.3.4"})); assert "try tomorrow" in r.read().decode().lower()
+r=op.open(urllib.request.Request(B+"/checkout",b"tier=79&form=aa",{"X-Forwarded-For":"9.9.9.9, "+cap_ip+", 104.22.17.40"})); assert "try tomorrow" in r.read().decode().lower()   # spoofed leftmost XFF ignored
+r=req("/checkout",{"tier":"79","form":"aa"}); assert r.status==303   # other IPs unaffected
 db.execute("delete from orders where ip=?",(cap_ip,)); db.commit()
 print("unpaid 7-day purge + free cap ok")
 assert req("/cron/formwatch",{}).status==403   # weekly form-version check is protected

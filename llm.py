@@ -30,7 +30,7 @@ repeatedly and in a reasonable time, which aids they use and what help or prompt
 EXTRA["pipr"]=EXTRA["pip"]+" "+EXTRA["pipr"]
 EXTRA["atw"]="""This is an Access to Work application (help with practical support at work). Focus on the job: daily tasks, where work gets hard and why,
 travel to work, communication and focus, what has been tried, and what support would help (equipment, software, support worker hours, travel, workplace changes).
-Ask how often and how long. Never discuss complaints against an employer, legal claims or discrimination; if raised, say we can't help with that and suggest Acas or Citizens Advice."""
+Ask how often and how long. Never discuss complaints against an employer, legal claims or discrimination; if raised, say in one sentence that we can't advise on disputes, then continue with the next question."""
 def interview_system(form):
     f=FORMS[form]
     return f"""You are a calm, kind interviewer helping a family prepare the {f['short']} (England & Wales).
