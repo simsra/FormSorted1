@@ -38,7 +38,7 @@ def prefill(form,I):
     eff,aid,hid=set(),set(),set()
     if form=="pip":
         a12=c("a12"); d["dist"]="lt20" if "lt20" in a12 else "20_50" if "lt50" in a12 else ""
-        if "pain" in a12: eff.add("pain")   # only what the chip says; never breathless/tired
+        pass   # "Pain or exhaustion afterwards" is ambiguous: tick nothing, the customer chooses on the Blue Badge screen
         if "wheel" in a12: aid.add("wheelchair")
         a11=c("a11"); hid|={"panic"} if "panic" in a11 else set(); hid|={"lost"} if "lost" in a11 else set()
     if form=="dla":

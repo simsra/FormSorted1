@@ -5,8 +5,8 @@ import bluebadge as BB
 assert list(FORMS["bb"]["tiers"])==["29","15"] and tier_info("bb","29")[1]==2900 and tier_info("bb","15")[1]==1500 and default_tier("bb")=="29"
 # ---- prefill from each parent form's taps (unit)
 p=BB.prefill("pip",{"who":"me","rows":{"a12":{"c":["lt50","pain"]},"a11":{"c":["panic"]}},"aids":["Walking stick"],"people":["GP"],"conds":[{"name":"COPD"}]})
-assert p["dist"]=="20_50" and "pain" in p["eff"] and "panic" in p["hidden"] and p["aids"]==["stick"] and p["docs"]==["pip"] and "dist" in p["prefilled"]
-assert "breath" not in p["eff"] and "tired" not in p["eff"], p["eff"]   # grounding: "pain or exhaustion afterwards" never becomes breathless/tired
+assert p["dist"]=="20_50" and "panic" in p["hidden"] and p["aids"]==["stick"] and p["docs"]==["pip"] and "dist" in p["prefilled"]
+assert not ({"pain","breath","tired"} & set(p["eff"])), p["eff"]   # grounding: the ambiguous pain-or-exhaustion chip ticks nothing
 d=BB.prefill("dla",{"who":"child","name":"Sam","rows":{"walk":{"c":["pain","tired"]},"out":{"c":["danger","anx"]}}})
 assert d["who"]!="me" and "pain" in d["eff"] and d["hidden"] and d["docs"]==["dla"]
 a=BB.prefill("aa",{"who":"parent","name":"Margaret","falls":"3-5","conds":[{"name":"Arthritis"}]})
