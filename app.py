@@ -514,26 +514,48 @@ def datetime_fmt(s):
 def deadline_save(token:str, how:str=Form("phone"), requested:str=Form(""), received:str=Form("")):
     ready(token); c=db(); c.execute("update orders set deadline=? where token=?",(json.dumps({"how":how,"requested":requested,"received":received}),token)); c.commit()
     return RedirectResponse(f"/deadline/{token}#tracker",303)
+def _strength(o,d):
+    """('v4', gaps, intake) for tap forms; ('legacy', results, None) for chat forms."""
+    form=o["form"] or "aa"; I=json.loads(o["intake"] or "{}") if o["intake"] else {}
+    if I and form in INTAKE.FORMS_V3: return "v4",quality.gaps_v4(form,I),I
+    return "legacy",quality.check_legacy_v2(d["answers"],FORMS[form]["topics"],o["form"]),None
 @app.get("/check/{token}")
 def check_page(token:str):
     r,o,d=ordered(token)
     if r: return r
-    F=FORMS[o["form"] or "aa"]; res=quality.check(d["answers"],F["topics"],o["form"]); fl,tot=quality.score(res)
-    rows="".join(f"""<div class="sc {'ok' if not x['flags'] else 'weak'}"><h3>{'✓' if not x['flags'] else '!'} {esc(x['label'])}</h3>{f'<p class=ans>{esc(x["answer"])}</p>' if x['answer'] else ''}
-{''.join(f'<p class=flag>{esc(f)}</p>' for f in x['flags'])}{f'<label class=hint for="add_{x["id"]}">Add detail in your own words (optional)</label><textarea id="add_{x["id"]}" name="add_{x["id"]}" rows=2></textarea>' if x['flags'] else ''}</div>""" for x in res if x['flags'] or not x.get('blank'))
-    return page(prog(6)+f"""<h1>Strength check</h1><p class=lead>{fl} of {tot} answers could be clearer. Vague answers are a common reason claims are turned down. Add detail where you can. Only add what's true.</p>
-<div class=panel><p>We look for: how often, how long, what help is needed, safety, and what bad days are like.</p></div>
-<form method=post action=/check/{token}>{rows}<button class=btn>Save and continue to approve</button></form>""","Strength check")
+    mode,G,I=_strength(o,d); skip=f'<a class="btn btn-2" href="/approve/{token}">Skip, my form is ready</a>'
+    if not G:
+        return page(prog(6)+f"""<h1>Your answers look complete</h1><p class=lead>We've got what we need to fill in your form.</p><p><a class=btn href="/approve/{token}">Continue to check your form</a></p>""","Strength check")
+    if mode=="v4":
+        rows="".join(f"""<fieldset class="sc iq"><legend><strong>{esc(g['label'])}</strong>: {esc(g['q'])}</legend><div class="chips{' nums' if g['kind']=='days' else ''}">{''.join(f'<label class=chip><input type=radio name="g_{g["rid"]}_{g["kind"]}" value="{v}"><span>{esc(t)}</span></label>' for v,t in g['opts'])}</div>
+{'' if g.get('noelse') else f'<label class=hint for="g_{g["rid"]}_{g["kind"]}_x">Something else, or add a detail (optional)</label><input type=text id="g_{g["rid"]}_{g["kind"]}_x" name="g_{g["rid"]}_{g["kind"]}_x" maxlength=500>'}</fieldset>""" for g in G)
+    else:
+        rows="".join(f"""<div class="sc"><h3>{esc(x['label'])}</h3><p class=ans>{esc(x['answer'])}</p>{''.join(f'<p class=hint>{esc(f)}</p>' for f in x['flags'])}<label class=hint for="add_{x['id']}">Add detail in your own words (optional)</label><textarea id="add_{x['id']}" name="add_{x['id']}" rows=2></textarea></div>""" for x in G)
+    n=len(G); qs=f"{n} quick question{'s' if n>1 else ''}"
+    return page(prog(6)+f"""<h1>We can make these stronger</h1><p class=lead>{qs} to make your form stronger (optional). Only add what's true.</p>
+<form method=post action=/check/{token}>{rows}<p><button class=btn>Save and continue</button> {skip}</p></form>""","Strength check")
 @app.post("/check/{token}")
 async def check_save(token:str, req:Request):
     r,o,d=ordered(token)
     if r: return r
     fm=await req.form(); a=d["answers"]; extra=d.setdefault("user_added",{})
+    def add(tid,v):
+        a[tid]=((a.get(tid) or "")+" "+v).strip(); extra[tid]=(extra.get(tid,"")+" "+v).strip()
+    mode,G,I=_strength(o,d)
+    if mode=="v4":
+        form=o["form"]; changed=False
+        for g in G:
+            n=f"g_{g['rid']}_{g['kind']}"; val=str(fm.get(n) or ""); other=str(fm.get(n+"_x") or "").strip()
+            if val not in dict(g["opts"]): val=""
+            if not val and not other: continue
+            s=quality.gap_sentence(form,I,g,val,other)
+            if s: add(g["topic"],s)
+            quality.apply_gap(I,g,val); changed=True
+        if changed: c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
     for k,v in fm.items():
         if k.startswith("add_") and v.strip():
             tid=k[4:]; v=v.strip()[:2000]
-            if tid=="_bad": d.setdefault("answers",{})["other"]=((a.get("other") or "")+" "+v).strip(); extra["other"]=(extra.get("other","")+" "+v).strip()
-            else: a[tid]=((a.get(tid) or "")+" "+v).strip(); extra[tid]=(extra.get(tid,"")+" "+v).strip()
+            add("other" if tid=="_bad" else tid,v)
     c=db(); c.execute("update orders set draft=? where token=?",(json.dumps(d),token)); c.commit()
     return RedirectResponse(f"/approve/{token}",303)
 def BUSY(token):

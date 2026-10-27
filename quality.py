@@ -50,3 +50,62 @@ def check(answers, topics, form=None):
 def score(results):
     flagged=sum(1 for r in results if r["flags"] and not r.get("blank")); total=sum(1 for r in results if not r.get("blank"))
     return flagged,total
+
+# ---------- v2 (Oct 2026): "We can make these stronger" ----------
+# Only real gaps on tasks the customer said are hard, ranked by impact, at most 3, asked as taps.
+# Never flags "no difficulty", "none" or blank optional sections; v4 days-per-week, bad days and night counts count as frequency.
+NODIFF=r"(\bno difficulty\b|\bno problems?\b|\bnone\b|\bno falls\b|\bnot applicable\b|\bn/a\b|^no\.?$|\bdoesn't apply\b|\bdoes not apply\b|\bmanage(s)? fine\b)"
+MAX_GAPS=3
+SAFE_ROWS={"aa":("bed","toilet","wash","indoors","meds"),"dla":("wash","indoors","walk","out","eat"),"pip":("a1","a3","a4","a5","a11","a12")}
+NO_TIME_ROWS=("superv","comm","social","see","hear","speak","dev","out","a7","a8","a9","a10","a11")
+SAFE_DONE=("wrong","burn","std_safe","fell","safe","falls","choke","danger","road")
+Q_SAFE=[("fall","Fall"),("near","Near-miss"),("no","No")]
+Q_TIME=[("lt10","Under 10 min"),("10_30","10–30 min"),("30_60","30–60 min"),("60p","Over an hour")]
+Q_DAYS=[(str(i),str(i)) for i in range(1,8)]
+LVL_W={"cant":3,"help":2,"slow":1}
+def _lvl(v): return v.get("lvl") or ("cant" if v.get("hard") and v.get("help") else "help" if v.get("help") else "slow" if v.get("hard") else "")
+def gaps_v4(form,I):
+    """Ranked list of tap questions for hard tasks only. Each: {rid,topic,label,kind,q,opts,score}."""
+    import intake as INTAKE
+    R=I.get("rows") or {}; asked=I.get("gaps") or {}; out=[]; me=INTAKE.is_me(I,form)
+    for rid,topic,label,_,_ in INTAKE.rows(form,None,I):
+        v=R.get(rid) or {}; lv=_lvl(v)
+        if not lv or v.get("lvl")=="ok": continue
+        w=LVL_W[lv]; c=set(v.get("c") or []); done=asked.get(rid) or {}
+        if rid in SAFE_ROWS.get(form,()) and not (c & set(SAFE_DONE)) and "safe" not in done:
+            out.append({"rid":rid,"topic":topic,"label":label,"kind":"safe","q":"Has anything gone wrong doing this?","opts":Q_SAFE,"score":w*3})
+        if not INTAKE._ok(v.get("days")) and not INTAKE._ok(v.get("freq")) and "days" not in done:
+            out.append({"rid":rid,"topic":topic,"label":label,"kind":"days","q":"How many days a week is it like this?","opts":Q_DAYS,"score":w*2.5,"noelse":True})
+        if rid not in NO_TIME_ROWS and "long" not in c and not INTAKE._ok(v.get("time")) and "time" not in done:
+            out.append({"rid":rid,"topic":topic,"label":label,"kind":"time","q":("How long does it take you each time?" if me else "How long does it take each time?"),"opts":Q_TIME,"score":w*2})
+    out.sort(key=lambda g:-g["score"]); seen=set(); top=[]
+    for g in out:   # one question per task first, so 3 different tasks get a look-in
+        if g["rid"] in seen: continue
+        seen.add(g["rid"]); top.append(g)
+        if len(top)==MAX_GAPS: return top
+    for g in out:
+        if g not in top: top.append(g)
+        if len(top)==MAX_GAPS: break
+    return top
+def gap_sentence(form,I,g,val,other=""):
+    """The customer's own tapped answer as a plain sentence (used as their words for drafting and grounding)."""
+    import intake as INTAKE
+    me=INTAKE.is_me(I,form); who=INTAKE.name(I,form); L=g["label"]
+    if g["kind"]=="safe":
+        s={"fall":(f"I have had a fall doing this" if me else f"{who} has had a fall doing this"),"near":(f"I have had a near-miss doing this" if me else f"{who} has had a near-miss doing this"),"no":"Nothing has gone wrong doing this so far"}.get(val,"")
+    elif g["kind"]=="days": s=f"It is like this {val} days a week" if val in dict(Q_DAYS) else ""
+    else: s=f"Each time takes {INTAKE.TIME_T[val]}" if val in dict(Q_TIME) else ""
+    other=(other or "").strip()[:500]
+    if other: s=(s+". " if s else "")+other.rstrip(".")
+    return f"{L}: {s}." if s else ""
+def apply_gap(I,g,val):
+    """Record the tap so it is never asked again, and update the row facts it covers."""
+    r=(I.setdefault("rows",{})).setdefault(g["rid"],{}); I.setdefault("gaps",{}).setdefault(g["rid"],{})[g["kind"]]=val or "else"
+    if g["kind"]=="safe" and val in ("fall","near"): r["c"]=list(dict.fromkeys((r.get("c") or [])+["wrong"]))
+    if g["kind"]=="days" and val in dict(Q_DAYS): r["days"]=val
+    if g["kind"]=="time" and val in dict(Q_TIME): r["time"]=val
+def check_legacy_v2(answers,topics,form=None):
+    """Chat-based forms: the old rules, but never flag no-difficulty/none/blank, and only the top 3, 2 prompts each."""
+    res=[x for x in check(answers,topics,form) if x["flags"] and not x.get("blank") and x["id"]!="_bad" and not re.search(NODIFF,x["answer"].lower())]
+    for x in res: x["flags"]=[f for f in x["flags"] if not f.startswith("This is quite short")][:2] or x["flags"][:1]
+    res.sort(key=lambda x:-len(x["flags"])); return res[:MAX_GAPS]

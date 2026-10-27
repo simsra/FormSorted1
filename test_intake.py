@@ -114,6 +114,16 @@ for form in I.FORMS_V3:
         assert loc(req(f"/uploads/{tok}/done",{}))==f"/prepare/{tok}"
         assert loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"
         assert loc(req(f"/intake/{tok}"))==f"/start/{tok}" and loc(req(f"/start/{tok}"))==f"/deadline/{tok}"   # locked once drafted, no redirect loop
+        ck=body(f"/check/{tok}")   # strength check v2: friendly, optional, taps, max 3, never no-difficulty
+        assert "could be clearer" not in ck and "turned down" not in ck and "Nothing written yet" not in ck and "This is quite short" not in ck
+        if "We can make these stronger" in ck:
+            assert "Skip, my form is ready" in ck and "Only add what&#x27;s true" in ck.replace("&#39;","&#x27;") or "Only add what's true" in ck
+            gs=re.findall(r'name="(g_\w+_safe)" value="fall"',ck); assert len(set(re.findall(r'<fieldset class="sc iq">',ck)))<=1 and ck.count('<fieldset class="sc iq">')<=3
+            if gs:
+                assert loc(req(f"/check/{tok}",{gs[0]:"fall"}))==f"/approve/{tok}"
+                assert gs[0] not in body(f"/check/{tok}")                       # never re-asked
+                assert "I have had a fall doing this" in body(f"/approve/{tok}") or "has had a fall doing this" in body(f"/approve/{tok}")
+        else: assert "Your answers look complete" in ck
         ap=body(f"/approve/{tok}"); assert "What you told us" in ap
         if form=="aa": assert "Grips the bed rail for ages" in ap and "Other aids used: Bath lift." in ap   # 'Something else' reaches what-you-told-us (and so drafting + grounding)
         assert ("Margaret can&#x27;t do it" in ap.replace("&#39;","&#x27;") and "Margaret needs help" in ap) if form=="aa" else ("Leo" in ap and "night" in ap.lower()) if form=="dla" else ("I manage, but it is slow" in ap and "not safe doing it alone" in ap), form
