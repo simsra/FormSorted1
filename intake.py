@@ -85,7 +85,7 @@ def name(d,form):
 def is_me(d,form): return form!="dla" and d.get("who","me") in ("me","")
 def _chk(n,v,txt,on,cls=""): return f'<label class="chip{cls}"><input type=checkbox name="{n}" value="{esc(v)}" {"checked" if on else ""}><span>{esc(txt)}</span></label>'
 def _rad(n,v,txt,cur): return f'<label class=chip><input type=radio name="{n}" value="{esc(v)}" {"checked" if cur==v else ""}><span>{esc(txt)}</span></label>'
-def _radios(n,opts,cur): return "<div class=chips>"+"".join(_rad(n,v,t,cur) for v,t in opts)+"</div>"
+def _radios(n,opts,cur,cls=""): return f"<div class='chips{cls}'>"+"".join(_rad(n,v,t,cur) for v,t in opts)+"</div>"
 def _else(n,txt):
     """'Something else' chip that reveals a short text box for this question (stored per question)."""
     return f'<span class=else><label class=chip><input type=checkbox name="{n}_xon" value=1 {"checked" if txt else ""}><span>Something else</span></label><input class=elsebox name="{n}_x" value="{esc(txt or "")}" maxlength=200 placeholder="Tell us briefly" aria-label="Something else: tell us briefly"></span>'
@@ -97,17 +97,31 @@ def X(d,k): return (d.get("else") or {}).get(k,"")
 def _q(label,inner,hint=""): return f'<fieldset class=iq><legend>{esc(label)}</legend>{f"<p class=hint>{esc(hint)}</p>" if hint else ""}{inner}</fieldset>'
 def NUM(a,b): return [(str(i),str(i)) for i in range(a,b+1)]+[("ns","Not sure")]
 # v4: one tap per task ("On most days..."), then at most 2 follow-ups, shown only when it isn't fine (assessor-style prompts).
-LVL=[("ok","No difficulty"),("slow","Manages, but slow, painful or tiring"),("help","Needs help, prompting or watching"),("cant","Can't do it, or not safe to")]
-FX=[("every","Needs help every time"),("long","Takes twice as long or more"),("rest","Has to stop and rest"),("pain","Pain or exhaustion afterwards"),("wrong","Fall, burn or near-miss doing it"),("half","Result not good enough (half-done, not clean)"),("prompt","Needs reminding, encouraging or watching"),("aid","Uses an aid for it, even sometimes"),("nobody","Nobody there to help, so goes without")]
-PIP_FX=[("std_safe","Not safe doing it alone")]
+LVL=[("ok","No difficulty"),("slow","Slow, painful or tiring"),("help","Needs help or watching"),("cant","Can't do it or unsafe")]
+FX=[("every","Needs help every time"),("long","Takes twice as long or more"),("rest","Has to stop and rest"),("pain","Pain or exhaustion afterwards"),("wrong","Fall or near-miss"),("half","Result not good enough (half-done, not clean)"),("prompt","Needs reminding, encouraging or watching"),("aid","Uses an aid for it, even sometimes"),("nobody","Nobody there to help, so goes without")]
+PIP_FX=[("std_safe","Not safe doing it alone"),("burn","Burns, cuts or near-misses")]
 DAYS=[(str(i),str(i)) for i in range(1,8)]+[("ns","Not sure")]
-FX_T={"every":"needs help every time","long":"takes at least twice as long as normal","rest":"has to stop and rest","pain":"pain or exhaustion afterwards","wrong":"has had a fall, burn or near-miss doing it","half":"the result is not good enough (half-done or not clean)","prompt":"needs reminding, encouraging or watching","aid":"uses an aid for it, at least sometimes","nobody":"there is nobody there to help, so it goes without","std_safe":"not safe doing it alone"}
+FX_T={"every":"needs help every time","long":"takes at least twice as long as normal","rest":"has to stop and rest","pain":"pain or exhaustion afterwards","wrong":"has had a fall or near-miss doing it","half":"the result is not good enough (half-done or not clean)","prompt":"needs reminding, encouraging or watching","aid":"uses an aid for it, at least sometimes","nobody":"there is nobody there to help, so it goes without","std_safe":"not safe doing it alone","burn":"has had burns, cuts or near-misses doing it"}
+# 'What happens?' per card: 2-4 task options + the assessor probes that matter for that task, never more than 6.
+FX_ALL=dict(FX+PIP_FX)
+CARD={"aa":{"bed":("out in",["every","long","pain","wrong"]),"toilet":("onoff acc clean",["every","long","wrong"]),"wash":("in fell feet",["every","long","pain"]),
+ "dress":("fast feet choose",["every","long","pain"]),"indoors":("walk stairs chair",["every","pain","wrong"]),"eat":("cut forget swallow",["every","long","prompt"]),
+ "meds":("forget open mix",["prompt","wrong","every"]),"comm":("und mem phone read",["prompt","every"]),"social":("get with stopped",["prompt","pain","nobody"])},
+ "dla":{"superv":("danger imp over anx change harm",[]),"walk":("pain tired breath carry",["wrong","rest"]),"out":("road danger anx falls",["every","prompt"]),"_":(None,["every","long","prompt"])},
+ "pip":{"a1":("hob chop prompt",["std_safe","long","burn"]),"a9":("anx someone avoid",["prompt","every"]),"a10":("change bills",["prompt","every","wrong"]),
+ "a11":("unfam alone panic",["prompt","every"]),"a12":("lt20 lt50 pain",["std_safe","rest","wrong"]),"_":(None,["std_safe","long","pain"])}}
+def card_opts(form,rid,chips):
+    t,f=CARD[form].get(rid) or CARD[form].get("_") or (None,["every","long","pain"])
+    cm={c[0]:c[1] for c in chips}; ids=t.split() if t else [c[0] for c in chips[:3]]
+    tk=[(i,cm[i]) for i in ids if i in cm]; fx=[(x,FX_ALL[x]) for x in f][:6-len(tk)]
+    return tk,fx
 def row_card(form,r,d):
     rid,topic,label,gate,chips=r; cur=(d.get("rows") or {}).get(rid,{}); me=is_me(d,form)
     lvl=cur.get("lvl") or ("cant" if cur.get("hard") and cur.get("help") else "help" if cur.get("help") else "slow" if cur.get("hard") else "")
-    fx=FX+(PIP_FX if form=="pip" else [])
-    more='<p class=sub>What happens? <span class=hint>(tap any)</span></p>'+_checks(f"r_{rid}_c",[(c[0],c[1]) for c in chips]+fx,cur.get("c"),cur.get("x",""))
-    more+='<p class=sub>How many days a week is it like this?</p>'+_radios(f"r_{rid}_days",DAYS,cur.get("days"))
+    tk,fx=card_opts(form,rid,chips); cv=cur.get("c") or []
+    opts="".join(_chk(f"r_{rid}_c",v,t,v in cv,cls=f" fx-{v}") for v,t in tk+fx)
+    more='<p class=sub>What happens? <span class=hint>(tap any)</span></p><div class="chips two">'+opts+_else(f"r_{rid}_c",cur.get("x",""))+'</div>'
+    more+='<p class=sub>How many days a week is it like this?</p>'+_radios(f"r_{rid}_days",DAYS,cur.get("days")," nums")
     return f'<div class=card><h3>{esc(label)}</h3><div class="chips main lvl">{"".join(_rad(f"r_{rid}_lvl",v,t,lvl) for v,t in LVL)}</div><div class=more>{more}</div></div>'
 def section_body(form,sec,d):
     nm=name(d,form); me=is_me(d,form); you=("you" if me else nm); h=""
@@ -128,13 +142,13 @@ def section_body(form,sec,d):
         lst=""
         for i,cn in enumerate(CONDS[form]):
             c=have.get(cn,{}); lst+=f'<div class=cond>{_chk(f"cond_{i}","1",cn,bool(c),cls=" k")}<div class=more>{sel(f"cond_{i}_since",c.get("since",""))}{_checks(f"cond_{i}_t",TREAT,c.get("treat"),c.get("tx",""))}</div></div>'
-        others=[c for c in d.get("conds") or [] if c.get("name") not in CONDS[form]]+[{},{},{}]
+        others=[c for c in d.get("conds") or [] if c.get("name") not in CONDS[form]]+[{}]
         for j,c in enumerate(others[:3]):
             lst+=f'<div class="cond other"><input name="oc_{j}" value="{esc(c.get("name",""))}" placeholder="Another condition (type it)" maxlength=80 aria-label="Another condition">{sel(f"oc_{j}_since",c.get("since",""))}{_checks(f"oc_{j}_t",TREAT,c.get("treat"),c.get("tx",""))}</div>'
         h+=_q("Which health conditions or disabilities "+("do you have?" if me else f"does {nm} have?"),lst,"Tap each one that applies, then roughly when it started. No diagnosis needed.")
     elif sec in ("daily","out"):
         if sec=="daily":
-            h+=_q("How many bad days in a normal week?",_radios("bad",NUM(0,7),d.get("bad")),"A bad day is when things are harder than usual. We work out the rest.")
+            h+=_q("How many bad days in a normal week?",_radios("bad",NUM(0,7),d.get("bad")," nums"),"A bad day is when things are harder than usual. We work out the rest.")
             # v4: AA 'days a week needing help' is no longer asked; it comes from the per-task days answers (see save)
         h+='<p class=lede2>How is each of these? One tap each. We only ask more if it isn\'t fine.</p>'+"".join(row_card(form,r,d) for r in rows(form,sec,d))
     elif sec=="safety":
@@ -145,7 +159,7 @@ def section_body(form,sec,d):
             h+=_q(f"Does someone need to keep an eye on {you} in the day?",_checks("eye",[("danger","Not aware of dangers"),("wander","May wander"),("fits","Dizzy spells, fits or blackouts"),("confused","Gets confused")],d.get("eye"),X(d,"eye")))
             h+=_q(f"How long can {you} safely be left alone?",_radios("alone",[("always","As long as needed"),("hours","A few hours"),("lt1","Under an hour"),("never","Not at all"),("ns","Not sure")],d.get("alone")))
             h+='<div class=gq><div class=g>'+_q("Help during the night (after everyone has gone to bed)",_checks("night",[("toilet","Toilet"),("turn","Turning over or settling"),("pain","Pain or breathing"),("meds","Medicines"),("confused","Confused or distressed")],d.get("night"),X(d,"night")),"Skip if none.")+'</div><div class=dep>'
-            h+=_q("Nights a week",_radios("nights",NUM(0,7),d.get("nights")))+_q("Times a night",_radios("ntimes",[("1","1"),("2","2"),("3","3"),("4+","4 or more"),("ns","Not sure")],d.get("ntimes")))+_q("Minutes each time",_radios("nmins",TIME,d.get("nmins")))
+            h+=_q("Nights a week",_radios("nights",NUM(0,7),d.get("nights")," nums"))+_q("Times a night",_radios("ntimes",[("1","1"),("2","2"),("3","3"),("4+","4 or more"),("ns","Not sure")],d.get("ntimes")))+_q("Minutes each time",_radios("nmins",TIME,d.get("nmins")))
             h+=_q(f"Does someone need to stay awake to watch over {you} at night?",_radios("watch",[("no","No"),("some","Some nights"),("most","Most nights"),("ns","Not sure")],d.get("watch")))+'</div></div>'
         else:
             h+=_q("Fits, blackouts or seizures?",_radios("fits",[("no","No"),("month","Less than weekly"),("week","Weekly"),("day","Daily"),("ns","Not sure")],d.get("fits")))
@@ -182,6 +196,7 @@ def save(form,sec,d,fm):
         for r in rows(form,sec,d):
             rid=r[0]; lvl=g(f"r_{rid}_lvl")
             v={"hard":bool(fm.get(f"r_{rid}_hard")) or lvl in ("slow","cant"),"help":bool(fm.get(f"r_{rid}_help")) or lvl in ("help","cant"),"lvl":lvl if lvl in dict(LVL) else "","c":gl(f"r_{rid}_c"),"std":gl(f"r_{rid}_std"),"freq":g(f"r_{rid}_freq"),"time":g(f"r_{rid}_time"),"days":g(f"r_{rid}_days"),"x":other_txt(fm,f"r_{rid}_c")}
+            if lvl in ("cant","slow"): v["c"]=[x for x in v["c"] if x!="every"]
             if lvl=="ok": v={"lvl":"ok"}   # 'No difficulty': follow-ups ignored
             if v.get("hard") or v.get("help") or v.get("c") or v.get("std") or v.get("x") or lvl=="ok": R[rid]=v
             else: R.pop(rid,None)

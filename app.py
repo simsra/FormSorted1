@@ -145,9 +145,9 @@ def preview(token:str):
     if not o["interview_done_at"]: return RedirectResponse(chat_url(o),303)
     if o["form"]=="bb": return bb_preview(o)
     f=FORMS[o["form"] or "aa"]; n,p,_=tier_info(o["form"] or "aa",o["tier"]); got,total=INTAKE.coverage(o["form"],json.loads(o["intake"])) if o["intake"] else covered(o)
-    facts=[f"Your answers cover {got} of {total} sections of the form" if o["intake"] else f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa",o["tier"])]
-    return page(f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your form is ready to prepare</h1>
-<p class=lede><strong>We fill in the whole official form for you. You just check it, sign it and post it.</strong> Pay once and we write up your answers in your own words, check every one against what you told us, and you approve them before anything is final.</p>
+    facts=[f"Your details cover {got} of {total} sections of the form" if o["intake"] else f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa",o["tier"])]
+    return page(f"""<div class=summary><p class=caption>Details gathered</p><h1>We're ready to fill in your form</h1>
+<p class=lede><strong>We fill in the whole official form for you. You just check it, sign it and post it.</strong> Pay once and we write every section from what you tapped, check each one against what you told us, and you approve it before anything is final.</p>
 <figure class=lockprev><img src="/static/preview-placeholder.svg" alt="Example illustration of a filled-in form (not your answers)" width=520 height=360><figcaption>Illustration only. Your own answers appear after payment.</figcaption></figure>
 <ul class=ticks>{''.join(f'<li>{x}</li>' for x in facts)}</ul>
 <div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
@@ -410,8 +410,8 @@ def intake_page(token:str, s:str=""):
     left=max(1,round(10*(len(ids)-i)/len(ids)))
     bar="".join(f'<li class="{"done" if j<i else "now" if j==i else ""}">{esc(l)}</li>' for j,(k,l) in enumerate(secs))
     reassure="<p class=reassure>It's normal for this to feel hard. You only tap, we do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
-    return page(f"""<div class=intake><p class=progress>Building your form · Part {i+1} of {len(secs)}: {esc(secs[i][1])} · about {left} min left</p><div class=bar><span style='width:{(i)*100//len(secs)+8}%'></span></div><ol class=secs>{bar}</ol>
-{'<h1>Let\'s get your form done</h1><p class=lede>About 10 minutes. You only tap, we do the writing.</p>' if i==0 else f'<h1>{esc(secs[i][1])}</h1>'}<p class=donefor>Just tap what fits. We'll write this section of the official form for you.</p>{reassure}
+    return page(f"""<div class=intake><p class="progress ip"><span>Building your form · Part {i+1} of {len(secs)}</span><span class=left>~{left} min</span></p><div class="bar slim"><span style='width:{(i+1)*100//len(secs)}%'></span></div>
+{'<h1>We\'ll fill in your form for you</h1><p class=donefor>About 10 minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>' if i==0 else f'<h1>{esc(secs[i][1])}</h1><p class=donefor>Just tap what fits. We\'ll write this section of the official form for you.</p>'}
 <form method=post action=/intake/{token}><input type=hidden name=sec value={sec}>{INTAKE.section_body(form,sec,d)}
 <div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==len(ids)-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
 <button class="linkbtn" name=nav value=save>Save and finish later</button></form></div>""",secs[i][1],minimal=True)

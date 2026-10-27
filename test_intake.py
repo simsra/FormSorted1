@@ -46,10 +46,13 @@ for f in I.FORMS_V3:
     for sname,_ in I.SECTIONS[f]:
         if sname!="about": assert "Something else" in I.section_body(f,sname,{}), (f,sname)
 # v4: 'No difficulty' asks nothing more and ticks nothing; help answers get at most 2 follow-up groups
-dv=I.save("aa","daily",{},FM({"r_bed_lvl":"ok","r_bed_c":["out"],"r_wash_lvl":"help","r_wash_c":["in","pain","nobody"],"r_wash_days":"3"}))
+dv=I.save("aa","daily",{},FM({"r_bed_lvl":"ok","r_bed_c":["out"],"r_wash_lvl":"help","r_wash_c":["in","pain","every"],"r_wash_days":"3"}))
 assert dv["rows"]["bed"]=={"lvl":"ok"} and "x29" not in I.ticks("aa",dv) and I.ticks("aa",dv)["x31"]=="/Yes"
-_,T=I.topic_texts("aa",dv); assert "no difficulty" in T["29"] and "3 days a week" in T["31"] and "goes without" in T["31"] and "pain or exhaustion" in T["31"], T["31"]
+_,T=I.topic_texts("aa",dv); assert "no difficulty" in T["29"] and "3 days a week" in T["31"] and "every time" in T["31"] and "pain or exhaustion" in T["31"], T["31"]
 card=I.row_card("aa",I.AA_ROWS[0],{}); assert card.count("<p class=sub>")==2 and "Something else" in card and "No difficulty" in card
+for f in I.FORMS_V3:   # at most 6 'What happens?' options per card (+ Something else)
+    for r in I.rows(f,None,{}): c=I.row_card(f,r,{}); assert c.count('name="r_')-c.count("_lvl")-c.count("_days")-2<=6, (f,r[0])
+dc=I.save("aa","daily",{},FM({"r_bed_lvl":"cant","r_bed_c":["every","out"]})); assert dc["rows"]["bed"]["c"]==["out"]   # implied by 'can't do it'
 print("intake units ok")
 SAMPLE={
  "aa":[("about",{"who":"parent","name":"Margaret","signer":"poa"}),("conds",{"cond_0":"1","cond_0_since":"2015","cond_0_t":["tabs"],"cond_1":"1","cond_1_since":"2021","oc_0":"Macular degeneration","oc_0_since":"ns"}),
