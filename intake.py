@@ -108,7 +108,7 @@ CARD={"aa":{"bed":("out in",["every","long","pain","wrong"]),"toilet":("onoff ac
  "dress":("fast feet choose",["every","long","pain"]),"indoors":("walk stairs chair",["every","pain","wrong"]),"eat":("cut forget swallow",["every","long","prompt"]),
  "meds":("forget open mix",["prompt","wrong","every"]),"comm":("und mem phone read",["prompt","every"]),"social":("get with stopped",["prompt","pain","nobody"])},
  "dla":{"superv":("danger imp over anx change harm",[]),"walk":("pain tired breath carry",["wrong","rest"]),"out":("road danger anx falls",["every","prompt"]),"_":(None,["every","long","prompt"])},
- "pip":{"a1":("hob chop prompt",["std_safe","long","burn"]),"a9":("anx someone avoid",["prompt","every"]),"a10":("change bills",["prompt","every","wrong"]),
+ "pip":{"a1":("hob chop prompt",["std_safe","long","burn"]),"a9":("anx someone avoid",["prompt","every"]),"a10":("change bills",["prompt","every","nobody"]),
  "a11":("unfam alone panic lost",["prompt","every"]),"a12":("lt20 lt50 wheel",["pain","std_safe","rest"]),"_":(None,["std_safe","long","pain"])}}
 def card_opts(form,rid,chips):
     t,f=CARD[form].get(rid) or CARD[form].get("_") or (None,["every","long","pain"])
