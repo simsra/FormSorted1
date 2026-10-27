@@ -45,19 +45,24 @@ assert "Other aids used: Bath lift." in T["33"] and "Dementia nurse" in T["40"] 
 for f in I.FORMS_V3:
     for sname,_ in I.SECTIONS[f]:
         if sname!="about": assert "Something else" in I.section_body(f,sname,{}), (f,sname)
+# v4: 'No difficulty' asks nothing more and ticks nothing; help answers get at most 2 follow-up groups
+dv=I.save("aa","daily",{},FM({"r_bed_lvl":"ok","r_bed_c":["out"],"r_wash_lvl":"help","r_wash_c":["in","pain","nobody"],"r_wash_days":"3"}))
+assert dv["rows"]["bed"]=={"lvl":"ok"} and "x29" not in I.ticks("aa",dv) and I.ticks("aa",dv)["x31"]=="/Yes"
+_,T=I.topic_texts("aa",dv); assert "no difficulty" in T["29"] and "3 days a week" in T["31"] and "goes without" in T["31"] and "pain or exhaustion" in T["31"], T["31"]
+card=I.row_card("aa",I.AA_ROWS[0],{}); assert card.count("<p class=sub>")==2 and "Something else" in card and "No difficulty" in card
 print("intake units ok")
 SAMPLE={
  "aa":[("about",{"who":"parent","name":"Margaret","signer":"poa"}),("conds",{"cond_0":"1","cond_0_since":"2015","cond_0_t":["tabs"],"cond_1":"1","cond_1_since":"2021","oc_0":"Macular degeneration","oc_0_since":"ns"}),
-       ("daily",{"bad":"3","days_help":"7","r_bed_hard":"1","r_bed_help":"1","r_bed_c":["out","in"],"r_bed_freq":"every","r_bed_c_xon":"1","r_bed_c_x":"Grips the bed rail for ages","r_bed_time":"10_30","r_wash_help":"1","r_wash_c":["in","fell"],"r_wash_freq":"most","r_indoors_hard":"1","r_indoors_c":["stairs","chair"],"r_meds_help":"1","r_meds_c":["forget"],"r_comm_hard":"1","r_comm_c":["mem","phone"]}),
+       ("daily",{"bad":"3","r_bed_lvl":"cant","r_bed_c":["out","in"],"r_bed_c_xon":"1","r_bed_c_x":"Grips the bed rail for ages","r_bed_days":"7","r_wash_lvl":"help","r_wash_c":["in","fell"],"r_wash_days":"5","r_indoors_lvl":"slow","r_indoors_c":["stairs","chair"],"r_meds_lvl":"help","r_meds_c":["forget"],"r_meds_days":"7","r_comm_lvl":"slow","r_comm_c":["mem","phone"]}),
        ("safety",{"falls":"3-5","lastfall":"month","fallx":["getup","alarm"],"eye":["confused","wander"],"alone":"lt1","night":["toilet","confused"],"nights":"6","ntimes":"2","nmins":"10_30","watch":"some"}),
        ("finish",{"aids":["Walking frame","Shower seat"],"people":["GP","Family carer"],"words":"Mum gets very muddled in the evenings.","aids_xon":"1","aids_x":"Bath lift"})],
  "dla":[("about",{"rel":"Mum","name":"Leo","age":"5to15"}),("conds",{"cond_0":"1","cond_0_since":"2021","cond_1":"1","cond_1_since":"ns"}),
-       ("daily",{"bad":"4","r_toilet_help":"1","r_toilet_c":["pads"],"r_dress_help":"1","r_dress_c":["sens"],"r_dress_time":"30_60","r_superv_hard":"1","r_superv_c":["danger","imp","over"],"r_superv_freq":"every","r_speak_hard":"1"}),
-       ("safety",{"fits":"no","varies":"varies","nn":["night_settle","night_toilet"],"nn_night_settle_n":"5","nn_night_settle_t":"2","nn_night_settle_m":"30","nn_night_toilet_n":"3","r_out_hard":"1","r_out_c":["road","anx"]}),
+       ("daily",{"bad":"4","r_toilet_lvl":"help","r_toilet_c":["pads"],"r_dress_lvl":"help","r_dress_c":["sens","long"],"r_superv_lvl":"cant","r_superv_c":["danger","imp","over"],"r_speak_lvl":"slow"}),
+       ("safety",{"fits":"no","varies":"varies","nn":["night_settle","night_toilet"],"nn_night_settle_n":"5","nn_night_settle_t":"2","nn_night_settle_m":"30","nn_night_toilet_n":"3","r_out_lvl":"cant","r_out_c":["road","anx"]}),
        ("finish",{"school":["ehcp","one"],"aids":["Ear defenders"],"people":["Paediatrician","Teacher or SENCo"]})],
  "pip":[("about",{"who":"me"}),("conds",{"cond_0":"1","cond_0_since":"2018","cond_0_t":["talk"],"cond_2":"1","cond_2_since":"2019"}),
-       ("daily",{"bad":"4","r_a1_hard":"1","r_a1_c":["hob","prompt"],"r_a1_std":["safe"],"r_a1_freq":"most","r_a4_help":"1","r_a4_c":["in"],"r_a4_time":"30_60"}),
-       ("out",{"r_a9_hard":"1","r_a9_c":["anx","someone"],"r_a11_hard":"1","r_a11_c":["alone","panic"],"r_a11_freq":"every","r_a12_hard":"1","r_a12_c":["lt50","pain"]}),
+       ("daily",{"bad":"4","r_a1_lvl":"slow","r_a1_c":["hob","prompt","std_safe"],"r_a4_lvl":"help","r_a4_c":["in"],"r_a4_days":"4"}),
+       ("out",{"r_a9_lvl":"help","r_a9_c":["anx","someone"],"r_a11_lvl":"cant","r_a11_c":["alone","panic"],"r_a12_lvl":"cant","r_a12_c":["lt50","pain"]}),
        ("finish",{"aids":["Walking stick"],"people":["GP","Mental health team"]})]}
 def multipart(files):
     b=uuid.uuid4().hex; out=b""
@@ -89,11 +94,11 @@ for form in I.FORMS_V3:
                 pg=body(loc(r)); assert f"Part {i+2} of 5" in pg
                 if i==0 and form!="pip": assert ("Leo" if form=="dla" else "Margaret") in pg      # their name used in the questions
         assert loc(r)==f"/preview/{tok}", loc(r)
-        back=body(f"/intake/{tok}?s=daily"); assert re.search(r'name="r_\w+_(hard|help)" value="1" checked',back)   # answers kept, not asked again
+        back=body(f"/intake/{tok}?s=daily"); assert re.search(r'name="r_\w+_lvl" value="\w+" checked',back)   # answers kept, not asked again
         req(f"/intake/{tok}",{"sec":"finish","nav":"next",**secs[-1][1]})
         pv=body(f"/preview/{tok}")
         assert "Pay £" in pv and "preview-placeholder.svg" in pv and "Never a percentage" in pv and "approve everything" in pv and "sections of the form" in pv
-        for leak in ("Grips the bed rail","Bath lift","Margaret finds","getting out of bed","muddled","Leo finds","no sense of danger","In my own words"): assert leak.lower() not in pv.lower(), leak
+        for leak in ("Grips the bed rail","Bath lift","Margaret finds","Margaret needs help","getting out of bed","muddled","Leo finds","no sense of danger","In my own words"): assert leak.lower() not in pv.lower(), leak
         assert "stripe" not in pv.lower() and " ai " not in pv.lower()
         for p_ in ("/approve/","/check/","/deadline/","/details/","/ticks/","/documents/","/prepare/","/uploads/"): assert req(p_+tok).status==402, p_
         assert req(f"/download/{tok}/answers.html").status==402
@@ -108,7 +113,7 @@ for form in I.FORMS_V3:
         assert loc(req(f"/intake/{tok}"))==f"/start/{tok}" and loc(req(f"/start/{tok}"))==f"/deadline/{tok}"   # locked once drafted, no redirect loop
         ap=body(f"/approve/{tok}"); assert "What you told us" in ap
         if form=="aa": assert "Grips the bed rail for ages" in ap and "Other aids used: Bath lift." in ap   # 'Something else' reaches what-you-told-us (and so drafting + grounding)
-        assert ("Margaret finds this hard" in ap) if form=="aa" else ("Leo" in ap and "night" in ap.lower()) if form=="dla" else ("I find this hard" in ap), form
+        assert ("Margaret can&#x27;t do it" in ap.replace("&#39;","&#x27;") and "Margaret needs help" in ap) if form=="aa" else ("Leo" in ap and "night" in ap.lower()) if form=="dla" else ("I manage, but it is slow" in ap and "not safe doing it alone" in ap), form
         ok={f"ok_{x}":"on" for x,_,_ in FORMS[form]["topics"]}
         for i_,rn in enumerate(sorted(set(re.findall(r'name="(res_[^"]+)"',ap)))): ok[rn]="keep"
         r=req(f"/approve/{tok}",ok)
