@@ -11,10 +11,10 @@ PROVIDERS={"openai":(os.getenv("OPENAI_BASE_URL","https://api.openai.com/v1"),os
  "anthropic":(os.getenv("ANTHROPIC_BASE_URL","https://api.anthropic.com/v1"),os.getenv("ANTHROPIC_API_KEY","")),
  "custom":(os.getenv("LLM_BASE_URL",""),os.getenv("LLM_API_KEY",""))}
 def _chain(s): return [tuple(x.strip().split(":",1)) for x in s.split(",") if ":" in x]
-_dp=os.getenv("LLM_PROVIDER") or ("custom" if os.getenv("LLM_BASE_URL") and os.getenv("LLM_API_KEY") else "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "openai" if os.getenv("OPENAI_API_KEY") else "gemini")
+_dp=os.getenv("LLM_PROVIDER") or ("custom" if os.getenv("LLM_BASE_URL") and os.getenv("LLM_API_KEY") else "openai" if os.getenv("OPENAI_API_KEY") else "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "gemini")
 MODEL=os.getenv("LLM_MODEL") or {"anthropic":"claude-opus-5-5","openai":"gpt-5.5","gemini":"gemini-3.8-flash"}.get(_dp,"")
-DRAFT_CHAIN=[(_dp,MODEL)]+_chain(os.getenv("LLM_FALLBACKS","anthropic:claude-sonnet-5-5,gemini:gemini-3.8-flash,openai:gpt-5.5,openai:gpt-5.4"))
-GROUND_CHAIN=[(os.getenv("GROUNDING_PROVIDER","openai"),os.getenv("GROUNDING_MODEL","gpt-5.4-mini"))]+_chain(os.getenv("GROUNDING_FALLBACKS","openai:gpt-5.4,gemini:gemini-3.8-flash,anthropic:claude-haiku-5-5,anthropic:claude-opus-5-5"))
+DRAFT_CHAIN=[(_dp,MODEL)]+_chain(os.getenv("LLM_FALLBACKS","openai:gpt-5.4,gemini:gemini-3.8-flash,anthropic:claude-sonnet-5-5"))
+GROUND_CHAIN=[(os.getenv("GROUNDING_PROVIDER","openai"),os.getenv("GROUNDING_MODEL","gpt-5.4-mini"))]+_chain(os.getenv("GROUNDING_FALLBACKS","openai:gpt-5.5,gemini:gemini-3.8-flash,anthropic:claude-haiku-5-5"))
 # grounding: prefer a different model family than the drafter; same family only as last resort
 GROUND_CHAIN=[x for x in GROUND_CHAIN if x[0]!=_dp]+[x for x in GROUND_CHAIN if x[0]==_dp]
 def _avail(ch): 
@@ -82,7 +82,9 @@ def _strip_fence(t):
     t=t.strip()
     if t.startswith("```"): t=t.split("\n",1)[1] if "\n" in t else t[3:]; t=t.rsplit("```",1)[0]
     return t.strip()
-def _call_one(provider, model, messages, json_mode=False, retries=4):
+TIMEOUT=int(os.getenv("LLM_TIMEOUT","90")); RETRIES=int(os.getenv("LLM_RETRIES","1"))   # fail fast so a dead provider hands over quickly
+def _call_one(provider, model, messages, json_mode=False, retries=None):
+    retries=RETRIES if retries is None else retries
     import time
     base,key=PROVIDERS[provider]
     if provider=="anthropic":
@@ -94,14 +96,14 @@ def _call_one(provider, model, messages, json_mode=False, retries=4):
         if json_mode: body["response_format"]={"type":"json_object"}
         req=urllib.request.Request(base+"/chat/completions",json.dumps(body).encode(),{"Authorization":"Bearer "+key,"Content-Type":"application/json"})
     for attempt in range(retries+1):  # retry transient overload / rate limits / timeouts
-        try: r=json.load(urllib.request.urlopen(req,timeout=180)); break
+        try: r=json.load(urllib.request.urlopen(req,timeout=TIMEOUT)); break
         except urllib.error.HTTPError as e:
             msg=e.read()[:600]; low=msg.lower()
-            if e.code==429 and (b"per day" in low or b"insufficient_quota" in low or b"credit" in low): raise LLMUnavailable(f"{provider}:{model} quota/credits exhausted: {msg[:200]!r}") from None
-            if e.code in (429,500,502,503,504,529) and attempt<retries: time.sleep(2*2**attempt); continue
+            if (e.code==429 and (b"per day" in low or b"insufficient_quota" in low or b"credit" in low)) or (e.code==400 and b"credit balance" in low): raise LLMUnavailable(f"{provider}:{model} quota/credits exhausted: {msg[:200]!r}") from None
+            if e.code in (429,500,502,503,504,529) and attempt<retries: time.sleep(min(2*2**attempt,4)); continue
             raise LLMUnavailable(f"{provider}:{model} HTTP {e.code}: {msg[:200]!r}") from None
         except (urllib.error.URLError, TimeoutError) as e:
-            if attempt<retries: time.sleep(2*2**attempt); continue
+            if attempt<retries: time.sleep(min(2*2**attempt,4)); continue
             raise LLMUnavailable(f"{provider}:{model} network: {e}") from None
     u=r.get("usage") or {}; k=f"{provider}:{model}"
     m=USAGE["by_model"].setdefault(k,{"calls":0,"in":0,"cached_in":0,"cache_write":0,"out":0})

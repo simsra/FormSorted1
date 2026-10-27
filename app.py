@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSON
 import orders, mailer, asyncio, hmac, store
 from fastapi.responses import Response, PlainTextResponse
 import intake as INTAKE
+from starlette.concurrency import run_in_threadpool
 import llm, fill_pdf, documents, quality, deadlines, letters, grounding, facts, ticks as TICKS, contsheet, formwatch
 from html import escape as esc
 from forms import FORMS, is_full, tier_info, default_tier, is_premium
@@ -264,7 +265,7 @@ async def message(token:str, req:Request):
     if sum(1 for m in h if m["role"]=="user")>MAX_TURNS:
         c=db(); c.execute("update orders set history=? where token=?",(json.dumps(h),token)); c.commit()
         return {"reply":"[[DONE]]","done":True,"topic":total,"total":total}
-    q=llm.next_question(h,o["form"] or "aa"); h.append({"role":"assistant","content":q})
+    q=await run_in_threadpool(llm.next_question,h,o["form"] or "aa"); h.append({"role":"assistant","content":q})
     c=db(); c.execute("update orders set history=? where token=?",(json.dumps(h),token)); c.commit()
     answered=sum(1 for m in h if m["role"]=="user" and m["content"].strip())
     return {"reply":q,"done":"[[DONE]]" in q,"topic":min(answered+1,total),"total":total}
@@ -389,7 +390,7 @@ async def details_save(token:str, req:Request):
             p["ni"]=p["ni"].replace(" ","").upper()
             if not NI_RE.match(p["ni"]): return back("That National Insurance number doesn't look right. It's 2 letters, 6 numbers, then A, B, C or D.")
     c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),1 if (fm.get("post_pack") and is_premium(o["tier"]) and printmail.ENABLED and not fm.get("skip")) else 0,token)); c.commit()
-    o=get(token); files=build_files(token,o,json.loads(o["draft"]))
+    o=get(token); files=await run_in_threadpool(build_files,token,o,json.loads(o["draft"]))
     if o["post_pack"]: printmail.queue(c,token,{k:p.get(k,"") for k in ("title","other_names","surname","addr1","addr2","addr3","postcode")},files)
     return RedirectResponse(f"/documents/{token}",303)
 
@@ -565,6 +566,7 @@ def source_text(o,d):
     parts+=list((d.get("user_added") or {}).values())+[v for v in (d.get("said") or {}).values()]
     return "\n".join(parts)
 def ground(o,d):
+    if os.getenv("MOCK_GROUND_SLOW"): time.sleep(float(os.getenv("MOCK_GROUND_SLOW")))   # test hook: simulate a slow AI provider
     F=FORMS[o["form"] or "aa"]
     return grounding.check({t:d["answers"].get(t,"") for t,_,_ in F["topics"]},source_text(o,d))
 def _ghash(o,d):
@@ -632,7 +634,7 @@ async def approve_save(token:str, req:Request):
     r,o,d=ordered(token)
     if r: return r
     fm=dict((await req.form()).items()); F=FORMS[o["form"] or "aa"]
-    try: G=ground_cached(o,d,token)
+    try: G=await run_in_threadpool(ground_cached,o,d,token)   # blocking AI call: never on the event loop (502 outage 27 Oct)
     except grounding.GroundingUnavailable as e: print("grounding unavailable",e); return BUSY(token)
     its=flag_items(o,d,G)
     if fm.get("keepall"):
@@ -650,7 +652,7 @@ async def approve_save(token:str, req:Request):
         a=str(fm.get(f"ans_{t}",d["answers"].get(t,"")))[:4000]
         for snt in removed: a=grounding.remove_sentence(a,snt)
         d["answers"][t]=a
-    files=build_files(token,o,d); c=db(); code=o["save_code"]
+    files=await run_in_threadpool(build_files,token,o,d); c=db(); code=o["save_code"]
     if fm.get("save") or (is_premium(o["tier"]) and o["keep_until"]):
         code=code or secrets.token_urlsafe(9); sm=said_map(o)
         c.execute("insert into saved(code,form,answers,personal,created) values(?,?,?,?,?) on conflict(code) do update set form=excluded.form, answers=excluded.answers, personal=excluded.personal, created=excluded.created",(code,o["form"] or "aa",json.dumps({"answers":d["answers"],"said":{t:sm.get(t,"") for t,_,_ in F["topics"]}}),o["personal"],time.time()))
