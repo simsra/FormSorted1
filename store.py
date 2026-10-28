@@ -47,7 +47,16 @@ def _migrate(c):
         have=[r[1] for r in c.execute("pragma table_info(orders)")]
         for col,typ in COLS:
             if col not in have: c.execute(f"alter table orders add column {col} {typ}")
+    _wipe_ni(c)
     c.commit()
+def _wipe_ni(c):
+    """Oct 2026: NI numbers used to be kept in personal details. They now go into the PDF only (secure.py); remove stored ones."""
+    for tbl,key in (("orders","token"),("saved","code")):
+        for r in c.execute(f"select {key}, personal from {tbl} where personal like ?",('%"ni"%',)).fetchall():
+            try: p=json.loads(r[1] or "{}")
+            except ValueError: continue
+            if isinstance(p,dict) and "ni" in p:
+                p.pop("ni",None); c.execute(f"update {tbl} set personal=? where {key}=?",(json.dumps(p),r[0]))
 
 def connect():
     """One connection per thread (reconnects if dropped). Schema is created on first use."""

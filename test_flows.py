@@ -121,11 +121,10 @@ for form,f in FORMS.items():
             assert req(f"/ticks/{tok}",tf).headers["location"]==f"/details/{tok}"
         else: assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/details/{tok}"
         assert req(f"/documents/{tok}").headers["location"]==f"/details/{tok}" and req(f"/download/{tok}/answers.html").status==403  # details step first
-        h=body(f"/details/{tok}"); assert "Your details" in h and "bank details" in h
-        if form=="atw": dd_={"other_names":"Sam","surname":"Tester","ni":"AB 12 34 56 C"}
-        else: dd_={"title":"Mrs","other_names":"Sam","surname":"Tester","dob":"1940-01-02","addr1":"1 Test St","addr3":"Leeds","postcode":"LS1 1AA","ni":"AB123456C",**({"parent_other_names":"Pat","parent_surname":"Tester","relationship":"Mother"} if form=="dla" else {})}
-        assert "doesn" in req(f"/details/{tok}",{**dd_,"ni":"12345"}).headers["location"]  # bad NI rejected (encoded msg)
-        assert req(f"/details/{tok}",dd_).headers["location"]==f"/documents/{tok}"
+        h=body(f"/details/{tok}"); assert "Your details" in h and "National Insurance" not in h   # NI is never asked here or stored
+        if form=="atw": dd_={"other_names":"Sam","surname":"Tester"}
+        else: dd_={"title":"Mrs","other_names":"Sam","surname":"Tester","dob":"1940-01-02","addr1":"1 Test St","addr3":"Leeds","postcode":"LS1 1AA",**({"parent_other_names":"Pat","parent_surname":"Tester","relationship":"Mother"} if form=="dla" else {})}
+        assert req(f"/details/{tok}",{**dd_,"ni":"AB123456C"}).headers["location"]==f"/documents/{tok}"   # an NI number posted anyway is ignored
         h=body(f"/documents/{tok}"); code=re.search(r"<code>([^<]+)</code>",h).group(1); codes[form]=code
         files=re.findall(r'href="(/download/[^"]+)"',h)
         for u in files: dd=req(u).read(); assert len(dd)>2000,u
@@ -205,6 +204,7 @@ tick_form={n:v for n,v in re.findall(r'name="(t_[^"]+)" value="([^"]*)" checked'
 assert req(f"/ticks/{tok}",tick_form).headers["location"].startswith(f"/ticks/{tok}?err")   # must confirm
 tick_form["confirm"]="on"; assert req(f"/ticks/{tok}",tick_form).headers["location"]==f"/details/{tok}"
 import store; db=store.connect()  # Postgres if DATABASE_URL set, else SQLite
+assert not [r for r in db.execute("select personal from orders").fetchall() if "AB123456C" in (r[0] or "")], "NI number stored"
 assert db.execute("select personal from orders where token=?",(tok,)).fetchone()[0]=="{}"  # not stored until needed
 req(f"/details/{tok}",{"title":"Mr","other_names":"Webhook","surname":"Buyer","dob":"1941-03-04","addr1":"2 Hook Rd","addr3":"York","postcode":"YO1 1AA"})
 assert "Webhook" in db.execute("select personal from orders where token=?",(tok,)).fetchone()[0]

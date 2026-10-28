@@ -38,11 +38,12 @@ def purge(c, out_dir, days=None, now=None):
     now_=now or time.time()   # 'Done for you Plus' customers who opted in keep their answers until keep_until (3 years)
     keep="(keep_until is null or keep_until<?)"
     toks=[r[0] for r in c.execute(f"select token from orders where created<? and {keep}",(cut,now_))]
-    for t in toks: store.delete(t)   # local folder and Supabase Storage files
+    import secure
+    for t in toks: store.delete(t); secure.wipe(t,c)   # local folder and Supabase Storage files; private details
     n=c.execute(f"delete from orders where created<? and {keep}",(cut,now_)).rowcount
     ucut=(now or time.time())-86400*UNPAID_DAYS   # unpaid (free interview) orders: 7 days
     ut=[r[0] for r in c.execute("select token from orders where status in ('free','pending') and created<?",(ucut,))]
-    for t in ut: store.delete(t)
+    for t in ut: store.delete(t); secure.wipe(t,c)
     n+=c.execute("delete from orders where status in ('free','pending') and created<?",(ucut,)).rowcount
     s=c.execute("delete from saved where created<? and code not in (select save_code from orders where save_code is not null and keep_until>=?)",(cut,now_)).rowcount
     c.execute("delete from events where received<?",(cut,)); c.commit()
@@ -51,6 +52,7 @@ def erase(c, out_dir, token):
     """Deletion on request: removes every personal field and file but keeps a bare row so the link shows 'deleted'."""
     o=c.execute("select save_code from orders where token=?",(token,)).fetchone()
     store.delete(token)
+    import secure; secure.wipe(token,c)   # NI and bank details, if still held
     if o and o[0]: c.execute("delete from saved where code=?",(o[0],))
     c.execute("update orders set status='deleted', history='[]', intake=null, personal='{}', draft=null, email=null, deadline='{}', save_code=null, stripe_session=null, keep_until=null, appeal=null, stripe_customer=null, card_fp=null where token=?",(token,))
     c.commit()

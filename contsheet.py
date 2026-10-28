@@ -37,3 +37,14 @@ def pip_sheets(name, items, form_code="PIP2"):
     for h,t in items:
         p.add_page(); p.section(h,t or "Not discussed. If this applies, add it in your own words.")
     return bytes(p.output())
+def supporter_note(form, who, claimant, question, topics):
+    """A note for the person who fills in the supporter statement box (AA Q49 / DLA Q38). Prompts only: never wording."""
+    code={"aa":"AA1","dla":"DLA1A"}[form]
+    p=_Sheet(f"{code}: a note for {who}",claimant); p.add_page(); p.set_font("D","",11)
+    paras=[f"Thank you for helping. The {code} form has a box for someone who knows {claimant} well: {question}.",
+           "Please write it yourself, in your own words. We have left it blank on purpose: it must be what you know, not what we wrote.",
+           "It helps to say how you know them and for how long, how often you see them, and what you have seen yourself on a typical day and on a bad day."]
+    if topics: paras.append("Things you may have seen help with (only write about what you have seen): "+", ".join(topics)+".")
+    paras.append("Then add your name, address, phone number, profession or relationship, and sign and date it in the box on the form.")
+    for t in paras: p.multi_cell(0,6,t,new_x="LMARGIN",new_y="NEXT"); p.ln(3)
+    return bytes(p.output())

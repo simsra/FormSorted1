@@ -4,6 +4,7 @@ cd "$(dirname "$0")"; PY=${PY:-../../.venv/bin}
 unset GEMINI_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY LLM_API_KEY RESEND_API_KEY  # tests run in mock mode (no paid calls)
 export STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_test_local} CRON_SECRET=${CRON_SECRET:-cron_test_local} RETENTION_LOOP=0 FREE_PER_IP_DAY=${FREE_PER_IP_DAY:-500} FREE_PER_DAY_TOTAL=${FREE_PER_DAY_TOTAL:-5000}
 # the older tests make many orders for different people from one address: review holds are tested on their own server below
+export WHOLE_FORM=${WHOLE_FORM:-0}   # the older suites test the short flow; the whole-form flow has its own server below
 export FRAUD_MAX_NAMES=${FRAUD_MAX_NAMES:-100000} FRAUD_SIMILAR=${FRAUD_SIMILAR:-2} FRAUD_MAX_REFUSED=${FRAUD_MAX_REFUSED:-100000}
 $PY/uvicorn app:app --port ${PORT:-8019} >${LOGDIR:-/tmp}/aa-test-server.log 2>&1 & S=$!
 sleep 3; $PY/python test_flows.py http://localhost:${PORT:-8019}; R=$?
@@ -16,4 +17,7 @@ MOCK_DRAFT_SLOW=4 MOCK_GROUND_SLOW=3 $PY/uvicorn app:app --port ${PORT_PREP:-803
 EV=${LOGDIR:-/tmp}/ev-test; rm -rf $EV; mkdir -p $EV
 FRAUD_MAX_NAMES=2 FRAUD_SIMILAR=0.9 FRAUD_MAX_REFUSED=1 SQLITE_PATH=$EV/orders.db OUT_DIR=$EV/out MAIL_LOG=$EV/mail.log $PY/uvicorn app:app --port ${PORT_EV:-8035} >${LOGDIR:-/tmp}/aa-test-evidence.log 2>&1 & V=$!; sleep 3
 FRAUD_MAX_NAMES=2 FRAUD_SIMILAR=0.9 FRAUD_MAX_REFUSED=1 SQLITE_PATH=$EV/orders.db MAIL_LOG=$EV/mail.log $PY/python test_evidence.py http://localhost:${PORT_EV:-8035} || R=1; kill $V
+WF=${LOGDIR:-/tmp}/wf-test; rm -rf $WF; mkdir -p $WF   # whole-form flow: own SQLite + files, never a remote DB or bucket
+DATABASE_URL= SUPABASE_URL= WHOLE_FORM=1 WF_LOOKUPS=0 SQLITE_PATH=$WF/orders.db OUT_DIR=$WF/out MAIL_LOG=$WF/mail.log $PY/uvicorn app:app --port ${PORT_WF:-8036} >$WF/server.log 2>&1 & X=$!; sleep 3
+DATABASE_URL= SQLITE_PATH=$WF/orders.db OUT_DIR=$WF/out MAIL_LOG=$WF/mail.log WF_COVERAGE=$WF/coverage.json $PY/python test_wholeform.py http://localhost:${PORT_WF:-8036} $WF/orders.db $WF/server.log || R=1; kill $X
 $PY/python test_prefill.py || R=1; $PY/python test_strength.py || R=1; $PY/python test_fill_gaps.py || R=1; exit $R

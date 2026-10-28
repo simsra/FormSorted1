@@ -14,12 +14,17 @@ from forms import FORMS, is_full, tier_info, default_tier, is_premium
 import premium as PREMIUM
 import bluebadge as BB, printmail
 import evidence as EVID, honesty as HONEST, fraud as FRAUD
+import wholeform as WF, secure as SECURE
 BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STRIPE_SECRET_KEY_PLACEHOLDER")
 PUBLIC=os.getenv("PUBLIC_URL","http://localhost:8000"); DEV=STRIPE.endswith("PLACEHOLDER")
 HERE=os.path.dirname(os.path.abspath(__file__)); OUT=store.OUT; DB=store.SQLITE_PATH
 os.makedirs(OUT,exist_ok=True)
 CRON_SECRET=os.getenv("CRON_SECRET","")
-def db(): return store.connect()   # Postgres if DATABASE_URL is set, else SQLite (see store.py)
+def db(): return store.connect()
+def is_wf(o):
+    """Whole-form order: every box filled from the questions asked before payment (wholeform.py)."""
+    try: return (o["form"] or "aa") in ("aa","dla") and bool(json.loads(o["intake"] or "{}").get("wf_v"))
+    except (ValueError, TypeError, KeyError, IndexError): return False   # Postgres if DATABASE_URL is set, else SQLite (see store.py)
 def get(token):
     r=db().execute("select * from orders where token=?",(token,)).fetchone()
     if not r: raise HTTPException(404)
@@ -151,6 +156,7 @@ def preview(token:str):
     if o["status"]=="paid": return RedirectResponse(f"/start/{token}",303)
     if not o["interview_done_at"]: return RedirectResponse(chat_url(o),303)
     if o["form"]=="bb": return bb_preview(o)
+    if is_wf(o) and not json.loads(o["intake"]).get("uploads_done"): return RedirectResponse(f"/uploads/{token}",303)
     f=FORMS[o["form"] or "aa"]; n,p,_=tier_info(o["form"] or "aa",o["tier"]); got,total=INTAKE.coverage(o["form"],json.loads(o["intake"])) if o["intake"] else covered(o)
     facts=[f"Your details cover {got} of {total} sections of the form" if o["intake"] else f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa",o["tier"])]
     return page(f"""<div class=summary><p class=caption>Details gathered</p><h1>We're ready to fill in your form</h1>
@@ -240,7 +246,7 @@ def start(token:str):
             if o["intake"] and not json.loads(o["intake"]).get("uploads_done"): return RedirectResponse(f"/uploads/{token}",303)
             return RedirectResponse(f"/prepare/{token}",303)
         if o["status"]=="free" and o["interview_done_at"]: return RedirectResponse(f"/preview/{token}",303)
-        if o["draft"] and (o["form"] or "aa") in INTAKE.FORMS_V3: return RedirectResponse(f"/{'documents' if o['approved_at'] and o['details_at'] else 'details' if o['approved_at'] else 'deadline'}/{token}",303)
+        if o["draft"] and (o["form"] or "aa") in INTAKE.FORMS_V3: return RedirectResponse(f"/{'documents' if o['approved_at'] and o['details_at'] else 'details' if o['approved_at'] else 'approve' if is_wf(o) else 'deadline'}/{token}",303)
         return RedirectResponse(chat_url(o),303)
     lead="Payment received. Please confirm 2 things." if o["status"]=="paid" else "Answer the questions first. You only pay at the end, if you want your completed form. Please confirm 2 things."
     return page((bbprog(2) if o["form"]=="bb" else prog(3))+f"""<h1>Before we start</h1><p class=lead>{lead}</p><form method=post action=/consent/{token}>
@@ -365,7 +371,7 @@ def prepare(token:str):
             time.sleep(0.1)
         o=get(token)
         if j["stage"] in ("hold","confirm"): JOBS.pop(token,None); return RedirectResponse(f"/{j['stage']}/{token}",303)
-    if o["draft"]: return RedirectResponse(f"/deadline/{token}",303)
+    if o["draft"]: return RedirectResponse(f"/{'approve' if is_wf(o) else 'deadline'}/{token}",303)
     st=_stage(o)
     if st=="error": JOBS.pop(token,None)   # the next visit tries again
     items="".join(f'<li id="ps_{k}" class="{"pdone" if k=="read" else "pnow" if k=="draft" else ""}">{esc(t)}</li>' for k,t in PREP_STEPS)
@@ -379,7 +385,7 @@ if(j.stage=="error"){{document.getElementById("pmsg").innerHTML='This is taking 
 @app.get("/api/{token}/progress")
 def prepare_progress(token:str):
     o=ready(token)
-    if o["draft"]: return {"stage":"ready","next":f"/deadline/{token}"}
+    if o["draft"]: return {"stage":"ready","next":f"/{'approve' if is_wf(o) else 'deadline'}/{token}"}
     j=JOBS.get(token)
     if j and j["stage"] in ("hold","confirm"): JOBS.pop(token,None); return {"stage":"draft","next":f"/{j['stage']}/{token}"}
     if FRAUD.held(o): return {"stage":"draft","next":f"/hold/{token}"}
@@ -437,7 +443,11 @@ def _build_files(token,o,d):
         tp=tapped(o)
         if tp:   # 'no difficulty' questions stay No with an empty box; aids go in the form's aids table
             d=dict(d); d["no_difficulty"]=tp[2]; d["extra"]={**(d.get("extra") or {}),**({"aids":INTAKE.aids_list(tp[0])} if INTAKE.aids_list(tp[0]) else {})}
-        fill_pdf.fill_form(form,personal,d,os.path.join(od,F["pdf_out"]),ticks=d.get("ticks") if d.get("ticks_confirmed_at") else None); files.append(F["pdf_out"])
+        I_=json.loads(o["intake"] or "{}"); xt=WF.pdf_values(form,I_) if I_.get("wf_v") else None
+        if xt and not d.get("ticks_confirmed_at"): xt=(xt[0],{},xt[2])   # tick boxes only once the customer has confirmed them
+        fill_pdf.fill_form(form,personal,d,os.path.join(od,F["pdf_out"]),ticks=d.get("ticks") if d.get("ticks_confirmed_at") else None,extra=xt); files.append(F["pdf_out"])
+        if I_.get("wf_v") and (I_.get("wf") or {}).get("stmt") not in (None,"","noone"):
+            open(os.path.join(od,"Note-for-supporter.pdf"),"wb").write(contsheet.supporter_note(form,*WF.statement_note(form,I_,personal))); files.append("Note-for-supporter.pdf")
     if "PIP-extra-sheets.pdf" in pf:
         open(os.path.join(od,"PIP-extra-sheets.pdf"),"wb").write(pip_sheet_pdf(form,personal,d)); files.append("PIP-extra-sheets.pdf")
     if is_premium(o["tier"]):
@@ -459,7 +469,8 @@ def pack_files(o):
     form=o["form"] or "aa"; F=FORMS[form]
     if form=="atw": return ["answers.html","AccessToWork-answers.docx"]
     files=["answers.html"]
-    if is_full(o["tier"]) and F["pdf"] and not prefill_off(o): files.append(F["pdf_out"])
+    if (is_full(o["tier"]) or is_wf(o)) and F["pdf"] and not prefill_off(o): files.append(F["pdf_out"])
+    if is_wf(o) and ((json.loads(o["intake"] or "{}").get("wf") or {}).get("stmt") not in (None,"","noone")): files.append("Note-for-supporter.pdf")
     if form in ("pip","pipr"): files.append("PIP-extra-sheets.pdf")
     if is_premium(o["tier"]): files+=["assessment-briefing.html","supporting-letters.html"]+(["reconsideration-letter.txt"] if o["appeal"] else [])
     return files
@@ -477,7 +488,9 @@ def info(token:str):
     o=ready(token,paid=False); f=FORMS[o["form"] or "aa"]; return {"form":o["form"] or "aa","short":f["short"],"gov":f["gov"],"pdf":f.get("pdf_out")}
 @app.post("/api/{token}/personal")
 async def personal(token:str, req:Request):
-    ready(token); c=db(); c.execute("update orders set personal=? where token=?",(json.dumps(await req.json()),token)); c.commit(); return {"ok":True}
+    ready(token); p=await req.json()
+    p={k:v for k,v in (p if isinstance(p,dict) else {}).items() if k in PERSONAL_KEYS}   # never NI numbers or bank details
+    c=db(); c.execute("update orders set personal=? where token=?",(json.dumps(p),token)); c.commit(); return {"ok":True}
 @app.get("/download/{token}/{name}")
 def download(token:str,name:str):
     o=ready(token)
@@ -486,12 +499,20 @@ def download(token:str,name:str):
     if name not in pack_files(o): raise HTTPException(404)
     data=store.read(token,name)
     if data is None: raise HTTPException(404)
+    bg=None
+    if is_wf(o) and name==FORMS[o["form"]]["pdf_out"]:
+        sv=SECURE.get(token)
+        if sv:
+            data=fill_pdf.overlay(o["form"],data,*SECURE.fields(o["form"],sv))
+            if not o["post_pack"]:
+                from starlette.background import BackgroundTask
+                bg=BackgroundTask(SECURE.wipe,token)   # downloaded: delete them now
     ct={"html":"text/html; charset=utf-8","txt":"text/plain; charset=utf-8","pdf":"application/pdf","docx":"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}[name.rsplit(".",1)[1]]
     disp="inline" if name.endswith(".html") else f'attachment; filename="{name}"'
-    return Response(data,media_type=ct,headers={"Content-Disposition":disp,"Cache-Control":"private, no-store"})
+    return Response(data,media_type=ct,headers={"Content-Disposition":disp,"Cache-Control":"private, no-store"},background=bg)
 @app.post("/api/{token}/delete")
 def delete(token:str):
-    get(token); orders.erase(db(),OUT,token); return {"deleted":True}
+    get(token); orders.erase(db(),OUT,token); SECURE.wipe(token); return {"deleted":True}
 @app.get("/delete/{token}")
 def delete_page(token:str):
     o=get(token)
@@ -500,13 +521,13 @@ def delete_page(token:str):
 <div class=warning>Download your documents first if you want to keep them.</div><form method=post action=/delete/{token}><button class="btn btn-warn">Delete everything now</button></form><p><a href=/start/{token}>Go back</a></p>""","Delete my information")
 @app.post("/delete/{token}")
 def delete_post(token:str):
-    get(token); orders.erase(db(),OUT,token); return page(DELETED_PAGE,"Deleted")
+    get(token); orders.erase(db(),OUT,token); SECURE.wipe(token); return page(DELETED_PAGE,"Deleted")
 DETAIL_FIELDS=[("title","Title (optional)","",False),("other_names","First and middle names","",True),("surname","Surname","",True),("dob","Date of birth","date",True),
- ("addr1","Address line 1","",True),("addr2","Address line 2 (optional)","",False),("addr3","Town or city","",True),("postcode","Postcode","",True),("phone","Phone (optional)","tel",False),
- ("ni","National Insurance number (optional, for your reference only. We never print it on the form)","",False)]
+ ("addr1","Address line 1","",True),("addr2","Address line 2 (optional)","",False),("addr3","Town or city","",True),("postcode","Postcode","",True),("phone","Phone (optional)","tel",False)]
+PERSONAL_KEYS={"title","other_names","surname","dob","addr1","addr2","addr3","postcode","phone","email","parent_title","parent_other_names","parent_surname","parent_dob","relationship","gp_name","gp_addr1","gp_postcode","gp_phone"}
 DLA_EXTRA=[("parent_title","Your title (parent or guardian, optional)","",False),("parent_other_names","Your first names","",True),("parent_surname","Your surname","",True),("relationship","Your relationship to the child","",True)]
 def detail_fields(form):
-    if form=="atw": return [f for f in DETAIL_FIELDS if f[0] in("other_names","surname","ni")]
+    if form=="atw": return [f for f in DETAIL_FIELDS if f[0] in("other_names","surname")]
     return DETAIL_FIELDS+(DLA_EXTRA if form=="dla" else [])
 import re as _re
 NI_RE=_re.compile(r"^[A-CEGHJ-PR-TW-Z]{2}\d{6}[A-D]$")
@@ -517,6 +538,7 @@ def details_page(token:str, err:str=""):
     if FRAUD.held(o): return _held_redirect(o)
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
+    if is_wf(o): return private_page(o,err)
     p=json.loads(o["personal"] or "{}"); form=o["form"] or "aa"
     if o["intake"] and not o["details_at"]: p={**INTAKE.personal_prefill(form,json.loads(o["intake"])),**p}
     who="the child" if form=="dla" else "the person claiming"
@@ -524,7 +546,7 @@ def details_page(token:str, err:str=""):
     return page(prog(8)+f"""<h1>Your details</h1><p class=lead>We add these to your documents{'' if form=='atw' else f' for {who}'} so you have less to fill in by hand. We only ask now, at the end, so we don't keep them longer than needed.</p>
 {f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{POST_OPT if (is_premium(o["tier"]) and printmail.ENABLED) else ""}<button class=btn>Save and make my documents</button></form>
 <form method=post action=/details/{token}><input type=hidden name=skip value=1><button class="btn btn-2">Skip. I'll write my details in by hand</button></form>
-<p class=small>We never ask for bank details. We delete everything 90 days after your order, or now: <a href=/delete/{token}>delete my information</a>.</p>""","Your details")
+<p class=small>We delete everything 90 days after your order, or now: <a href=/delete/{token}>delete my information</a>.</p>""","Your details")
 @app.post("/details/{token}")
 async def details_save(token:str, req:Request):
     o=ready(token)
@@ -532,6 +554,7 @@ async def details_save(token:str, req:Request):
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     if FRAUD.held(o): return _held_redirect(o)
     fm=await req.form(); form=o["form"] or "aa"; p={}
+    if is_wf(o): return await private_save(o,fm)
     def back(msg):  # keep what they typed so a validation error doesn't wipe the form
         c=db(); c.execute("update orders set personal=? where token=?",(json.dumps(p),token)); c.commit()
         return RedirectResponse(f"/details/{token}?err="+urllib.parse.quote(msg),303)
@@ -542,9 +565,6 @@ async def details_save(token:str, req:Request):
             if need and not v: missing=True
             if v: p[k]=v
         if missing: return back("Please fill in every required box, or choose Skip.")
-        if p.get("ni"):
-            p["ni"]=p["ni"].replace(" ","").upper()
-            if not NI_RE.match(p["ni"]): return back("That National Insurance number doesn't look right. It's 2 letters, 6 numbers, then A, B, C or D.")
     c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),1 if (fm.get("post_pack") and is_premium(o["tier"]) and printmail.ENABLED and not fm.get("skip")) else 0,token)); c.commit()
     if p and await run_in_threadpool(check_hold,token,"details"):   # names known now: check again before documents are made
         c.execute("update orders set details_at=null where token=?",(token,)); c.commit(); return RedirectResponse(f"/hold/{token}",303)
@@ -552,6 +572,56 @@ async def details_save(token:str, req:Request):
     if o["post_pack"]: printmail.queue(c,token,{k:p.get(k,"") for k in ("title","other_names","surname","addr1","addr2","addr3","postcode")},files)
     return RedirectResponse(f"/documents/{token}",303)
 
+# ---------- Whole-form orders: NI numbers and bank details, for the PDF only ----------
+def _priv_fields(o):
+    """(name, label, hint, kind, required) for this order."""
+    form=o["form"]; I=json.loads(o["intake"] or "{}"); w=I.get("wf") or {}; me=INTAKE.is_me(I,form)
+    out=[]
+    if form=="aa":
+        out.append(("ni","Your National Insurance number" if me else "Their National Insurance number","It's on letters about tax, benefits or your pension. For example QQ 12 34 56 C.","ni",True))
+        if I.get("signer") in ("poa","appointee","deputy"): out.append(("h_ni","Your own National Insurance number (you're signing for them)","","ni",False))
+    else:
+        out.append(("child_ni","The child's National Insurance number (if they have one)","Most children under 16 don't. Leave it blank if not.","ni",False))
+        out.append(("ni","Your National Insurance number","","ni",True))
+        if w.get("p_his")=="yes": out.append(("his_ni",f"{w.get('p_his_name') or 'Their'}'s National Insurance number" if w.get("p_his_name") else "Their National Insurance number","","ni",False))
+    who="you" if (form=="dla" or me) else "them"
+    out+=[("holder","Name of the account holder","Exactly as it's shown on the bank statement.","text",True),("bank","Name of the bank or building society","","text",True),
+          ("sort","Sort code","6 numbers, for example 12-34-56.","sort",True),("acc","Account number","Usually 8 numbers.","acc",True),
+          ("roll","Building society roll or reference number (optional)","Only if your building society gave you one.","text",False)]
+    return out
+def private_page(o, err=""):
+    token=o["token"]; form=o["form"]
+    rows="".join(f"""<div class=field><label class=q for=p_{k}>{esc(l)}</label>{f'<p class=hint>{esc(h)}</p>' if h else ''}<input id=p_{k} name={k} {'required' if req else ''} autocomplete=off {'inputmode=numeric' if kind in ('sort','acc') else 'autocapitalize=characters' if kind=='ni' else ''} maxlength=60></div>""" for k,l,h,kind,req in _priv_fields(o))
+    other="<label class=cb><input type=checkbox name=other_ben value=1><span>Also pay any other benefits I get into this account (question 51 on the form).</span></label>" if form=="aa" else ""
+    again="<div class=panel><p>For your safety we deleted these details after your download. Type them again to download another filled-in copy.</p></div>" if o["details_at"] else ""
+    return page(prog(8,"Last details")+f"""<h1>Last details for the form</h1><p class=lead>The form asks for a National Insurance number and the account to pay into. We write them onto your form and nowhere else.</p>
+<div class=panel><p><strong>How we keep these safe:</strong> we never save them with your answers and never email them. They are held encrypted only until you download your form{', or until we post it' if o['post_pack'] else ''}, then deleted.</p></div>{again}
+{f'<div class=warning role=alert>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{other}<button class=btn>Make my form</button></form>
+<form method=post action=/details/{token}><input type=hidden name=skip value=1><button class="btn btn-2">Skip. I'll write these in by hand</button></form>
+<p class=small>We delete everything 90 days after your order, or now: <a href=/delete/{token}>delete my information</a>.</p>""","Last details",minimal=True)
+async def private_save(o, fm):
+    token=o["token"]; form=o["form"]; sv={}
+    if not fm.get("skip"):
+        for k,l,h,kind,req in _priv_fields(o):
+            raw=str(fm.get(k,"")).strip()[:60]
+            if not raw:
+                if req: return private_page(o,"Please fill in every box that isn't marked optional, or choose Skip.")
+                continue
+            v={"ni":SECURE.clean_ni,"sort":SECURE.clean_sort,"acc":SECURE.clean_acc}.get(kind,lambda x:_re.sub(r"[\x00-\x1f<>]"," ",x)[:60])(raw)
+            if not v: return private_page(o,{"ni":"That National Insurance number doesn't look right. It's 2 letters, 6 numbers, then A, B, C or D.","sort":"The sort code should be 6 numbers.","acc":"The account number should be 6 to 8 numbers."}[kind])
+            sv[k]=v
+        if fm.get("other_ben") and form=="aa": sv["other_ben"]=1
+        SECURE.put(token,sv,keep_days=14 if o["post_pack"] else None)
+    else: SECURE.wipe(token)
+    c=db(); c.execute("update orders set details_at=? where token=?",(time.time(),token)); c.commit()
+    if await run_in_threadpool(check_hold,token,"details"):
+        c.execute("update orders set details_at=null where token=?",(token,)); c.commit(); SECURE.wipe(token); return RedirectResponse(f"/hold/{token}",303)
+    o=get(token); await run_in_threadpool(build_files,token,o,json.loads(o["draft"]))
+    return RedirectResponse(f"/documents/{token}",303)
+@app.get("/api/lookup/postcode")
+def lookup_postcode(pc:str=""):
+    """Town for a UK postcode (postcodes.io: free, no sign-up). Typed address always works if this is down."""
+    r=WF.postcode(pc); return {"ok":bool(r),**(r or {})}
 # ---------- Intake v3: tap-first questions (AA1, DLA1A, PIP2) ----------
 def _intake_order(token):
     o=ready(token,paid=False)
@@ -566,14 +636,16 @@ REFUSED_BOX=f"<div class=warning role=alert>{esc(HONEST.REFUSE_MSG)}</div>"
 def intake_page(token:str, s:str="", r:str=""):
     o=_intake_order(token)
     if _intake_closed(o): return RedirectResponse(f"/start/{token}",303)
-    form=o["form"]; secs=INTAKE.SECTIONS[form]; ids=[k for k,_ in secs]; d=json.loads(o["intake"] or "{}")
+    form=o["form"]; d=json.loads(o["intake"] or "{}")
+    if form in ("aa","dla") and WF.on() and "wf_v" not in d and not d.get("rows"): d["wf_v"]=1   # new orders: whole form
+    secs=INTAKE.sections(form,d); ids=[k for k,_ in secs]
     sec=s if s in ids else (d.get("at") if d.get("at") in ids else ids[0]); i=ids.index(sec)
-    left=max(1,round(10*(len(ids)-i)/len(ids)))
+    left=WF.minutes_left(form,d,sec) if d.get("wf_v") else max(1,round(10*(len(ids)-i)/len(ids)))
     bar="".join(f'<li class="{"done" if j<i else "now" if j==i else ""}">{esc(l)}</li>' for j,(k,l) in enumerate(secs))
     refused=REFUSED_BOX if r else ""
     reassure="<p class=reassure>It's normal for this to feel hard. You only tap, we do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
-    return page(f"""<div class=intake><p class="progress ip"><span>Building your form · Part {i+1} of {len(secs)}</span><span class=left>~{left} min</span></p><div class="bar slim"><span style='width:{(i+1)*100//len(secs)}%'></span></div>
-{refused}{'<h1>We\'ll fill in your form for you</h1><p class=donefor>About 10 minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>'+HONEST_LINE if i==0 else f'<h1>{esc(secs[i][1])}</h1><p class=donefor>Just tap what fits. We\'ll write this section of the official form for you.</p>'}
+    return page(f"""<div class=intake><p class="progress ip"><span>Building your form · Part {i+1} of {len(secs)}</span><span class=left>About {left} minute{'s' if left!=1 else ''} left</span></p><div class="bar slim"><span style='width:{(i+1)*100//len(secs)}%'></span></div>
+{refused}{'<h1>We\'ll fill in your whole form for you</h1><p class=donefor>About 10 minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>'+HONEST_LINE if i==0 else f'<h1>{esc(secs[i][1])}</h1><p class=donefor>Just tap what fits. We\'ll write this section of the official form for you.</p>'}
 <form method=post action=/intake/{token}><input type=hidden name=sec value={sec}>{INTAKE.section_body(form,sec,d)}
 <div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==len(ids)-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
 <button class="linkbtn" name=nav value=save>Save and finish later</button></form></div>""",secs[i][1],minimal=True)
@@ -581,9 +653,13 @@ def intake_page(token:str, s:str="", r:str=""):
 async def intake_save(token:str, req:Request):
     o=_intake_order(token)
     if _intake_closed(o): return RedirectResponse(f"/start/{token}",303)
-    form=o["form"]; ids=[k for k,_ in INTAKE.SECTIONS[form]]; fm=await req.form(); sec=str(fm.get("sec",""))
+    form=o["form"]; fm=await req.form(); sec=str(fm.get("sec",""))
+    d0=json.loads(o["intake"] or "{}")
+    if form in ("aa","dla") and WF.on() and "wf_v" not in d0 and not d0.get("rows"): d0["wf_v"]=1
+    ids=[k for k,_ in INTAKE.sections(form,d0)]
     if sec not in ids: raise HTTPException(400)
-    d=INTAKE.save(form,sec,json.loads(o["intake"] or "{}"),fm); i=ids.index(sec); nav=fm.get("nav","next")
+    d=INTAKE.save(form,sec,d0,fm); ids=[k for k,_ in INTAKE.sections(form,d)]; i=ids.index(sec) if sec in ids else 0; nav=fm.get("nav","next")
+    if d.get("wf_v"): WF.minutes_left(form,d,ids[min(i+1,len(ids)-1)])
     if HONEST.scrub(d):   # asked us to exaggerate: not saved, same section again with a polite note
         d["at"]=sec; c=db(); c.execute("update orders set intake=?, interview_done_at=null where token=? and status in ('free','paid')",(json.dumps(d),token)); c.commit()
         return RedirectResponse(f"/intake/{token}?s={sec}&r=1",303)
@@ -591,6 +667,13 @@ async def intake_save(token:str, req:Request):
     d["at"]=nxt or sec; c=db()
     if nxt is None:   # finished: build the answers transcript the rest of the pipeline uses
         c.execute("update orders set intake=?, history=?, interview_done_at=? where token=?",(json.dumps(d),json.dumps(INTAKE.history(form,d)),time.time(),token)); c.commit()
+        if d.get("wf_v"):   # whole form: their details go on the form; evidence next, then pay
+            p={**json.loads(o["personal"] or "{}"),**WF.personal(form,d)}; p={k:v for k,v in p.items() if k in PERSONAL_KEYS}
+            c.execute("update orders set personal=? where token=?",(json.dumps(p),token))
+            asked=(d.get("wf") or {}).get("asked")
+            if asked and not json.loads(o["deadline"] or "{}").get("requested"): c.execute("update orders set deadline=? where token=?",(json.dumps({"how":"phone","requested":asked,"received":""}),token))
+            c.commit()
+            if not d.get("uploads_done"): return RedirectResponse(f"/uploads/{token}",303)
         return RedirectResponse(f"/start/{token}" if o["status"]=="paid" else f"/preview/{token}",303)
     c.execute("update orders set intake=?, interview_done_at=null where token=? and status in ('free','paid')",(json.dumps(d),token)); c.commit()
     if nav=="save":
@@ -599,14 +682,20 @@ async def intake_save(token:str, req:Request):
 <p><a href="/intake/{token}?s={nxt}">Carry on now</a></p>""","Saved",minimal=True)
     return RedirectResponse(f"/intake/{token}?s={nxt}",303)
 UP_MAX=10*1024*1024; UP_TYPES={"application/pdf":"pdf","image/jpeg":"jpg","image/png":"png","image/heic":"heic","image/webp":"webp"}
+def _up_order(token):
+    """Paid orders; whole-form orders also before payment (evidence is a question, nothing is produced until paid)."""
+    o=ready(token,paid=False)
+    if o["status"]!="paid" and not (is_wf(o) and o["interview_done_at"]): raise HTTPException(402)
+    return o
 @app.get("/uploads/{token}")
 def uploads_page(token:str, err:str=""):
-    o=ready(token)   # paid only
+    o=_up_order(token)
     if o["draft"]: return RedirectResponse(f"/start/{token}",303)
     I=json.loads(o["intake"] or "{}"); ups=I.get("uploads") or []; form=o["form"] or "aa"
     lst="".join(f"<li>{esc(u['name'])}</li>" for u in ups)
     chips=INTAKE._checks("evidence",EVID.options(form),I.get("evidence"),INTAKE.X(I,"evidence"))
-    return page(prog(4,"Your evidence")+f"""<h1>What do you have that shows this?</h1><p class=lead>Payment received, thank you. Evidence makes your form much stronger. Tap what you have, and add a photo if you can. We check it against your answers. You'll still check everything before it's final.</p>
+    paid_=o["status"]=="paid"
+    return page(prog(4,"Your evidence")+f"""<h1>What do you have that shows this?</h1><p class=lead>{'Payment received, thank you. ' if paid_ else 'Last step before you pay. '}Evidence makes your form much stronger. Tap what you have, and add a photo if you can. We check it against your answers. You'll still check everything before it's final.</p>
 {f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/uploads/{token}/done enctype=multipart/form-data>
 <fieldset class=iq><legend>Tap all you have</legend>{chips}</fieldset>
 {f'<h2 class=h3>Added</h2><ul class=ticks>{lst}</ul>' if ups else ''}<div class=field><label class=q for=up>{'Add more photos or PDFs' if ups else 'Add a photo or PDF'} (optional, up to 10MB each)</label><p class=hint>A photo of a letter or your repeat prescription list is fine.</p><input id=up type=file name=files multiple accept="image/*,application/pdf" capture=environment></div>
@@ -614,7 +703,7 @@ def uploads_page(token:str, err:str=""):
 <p class=small>Nothing yet? That's fine. Tap "Nothing yet" or just continue. We'll tell you what to ask your GP surgery for. Your documents are deleted with the rest of your order after 90 days, or sooner if you ask.</p>""","Your evidence",minimal=True)
 @app.post("/uploads/{token}")
 async def uploads_add(token:str, req:Request):
-    o=ready(token)
+    o=_up_order(token)
     if o["draft"]: return RedirectResponse(f"/start/{token}",303)
     fm=await req.form(); I=json.loads(o["intake"] or "{}"); err=await _take_files(token,I,fm)
     c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
@@ -637,7 +726,7 @@ async def _take_files(token,I,fm):
     return err
 @app.post("/uploads/{token}/done")
 async def uploads_done(token:str, req:Request):
-    o=ready(token)
+    o=_up_order(token)
     if o["draft"]: return RedirectResponse(f"/start/{token}",303)
     I=json.loads(o["intake"] or "{}"); form=o["form"] or "aa"
     try: fm=await req.form()
@@ -655,6 +744,7 @@ async def uploads_done(token:str, req:Request):
         return RedirectResponse(f"/uploads/{token}"+("?err="+urllib.parse.quote(err) if err else ""),303)
     I["uploads_done"]=True
     c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
+    if o["status"]!="paid": return RedirectResponse(f"/preview/{token}",303)
     if o["interview_done_at"] and not o["draft"]: start_prepare(token)
     return RedirectResponse(f"/prepare/{token}",303)
 
@@ -927,11 +1017,29 @@ def render_approve(token,o,d,G,fm=None,need_ok=(),need_res=(),need_honest=False)
         summary=f"""<div class=errsum role=alert tabindex=-1 id=errsum><h2>{n} answer{'s' if n!=1 else ''} still need{'' if n!=1 else 's'} a choice</h2><ul>{''.join(links)}</ul></div>"""
     pending=[i for i in its if not (fm and fm.get(f"res_{i['key']}") in ("keep","edit","remove"))]
     keepall=f"""<p><button class="btn btn-2" name=keepall value=1 formnovalidate>Keep all remaining ({len(pending)}) as true</button> <span class=hint>Only if every one of them is true.</span></p>""" if pending else ""
+    facts_=wf_facts(o) if is_wf(o) else ""
     return page(prog(7)+f"""{summary}<h1>Check and approve every answer</h1>{PROMISE}<p class=lead>Each answer is shown next to what you told us. Change anything that isn't right. Nothing is ready to download until you approve each answer.</p>
-<form method=post action=/approve/{token}>{rows}{keepall}
+<form method=post action=/approve/{token}>{facts_}{rows}{keepall}
 <label class=cb><input type=checkbox name=save {'checked' if fm and fm.get('save') else ''}><span>Save my answers for next time (for a review or renewal). We'll give you a save code. Saved answers are kept for 90 days unless you delete them.</span></label>
 {'<p class=err>Please tick to confirm everything is true</p>' if need_honest else ''}<label class="cb honest{' needs' if need_honest else ''}" id=honest><input type=checkbox name=honest required {'checked' if fm and fm.get('honest') else ''}><span>{esc(HONEST_TICK)}</span></label>
 <button class="btn btn-start">I approve. Make my documents</button></form>""","Approve your answers")
+_TU={}
+def _tooltips(form):
+    if form not in _TU:
+        from pypdf import PdfReader
+        r=PdfReader(os.path.join(HERE,{"aa":"aa1.pdf","dla":"dla1a.pdf"}[form])); t={}
+        for f,v in (r.get_fields() or {}).items(): t[f]=str(v.get("/TU") or f)
+        _TU[form]=t
+    return _TU[form]
+def wf_facts(o):
+    """Read-only list of the boxes filled straight from their answers (names, dates, doctors, times), to check before approving."""
+    form=o["form"]; I=json.loads(o["intake"] or "{}"); V,_,notes=WF.pdf_values(form,I); P=json.loads(o["personal"] or "{}")
+    tu=_tooltips(form); m=fill_pdf._personal(P,fill_pdf.PERSONAL_FIELDS if form=="aa" else fill_pdf.DLA_PERSONAL)
+    items=[(tu.get(f,f),v) for f,v in list(m.items())+[(k,v) for k,v in V.items() if not k.startswith("_")]]
+    lis="".join(f"<li><span class=hint>{esc(_short(l))}</span><br><strong>{esc(v)}</strong></li>" for l,v in items)
+    return f"""<details class="trace facts"><summary><strong>Facts we copied onto the form ({len(items)} boxes)</strong></summary><p class=hint>These come straight from your answers. If one is wrong, correct it on the printed form before you sign, or tell us at hello@formsorted.com.</p><ul class=factlist>{lis}</ul>{''.join(f'<p>{esc(n)}</p>' for n in notes)}</details>"""
+def _short(l):
+    l=_re.sub(r"^(Your care needs during the day|About you|About the child) - ","",l); return l[:140]
 @app.get("/approve/{token}")
 def approve_page(token:str):
     r,o,d=ordered(token)
@@ -1002,7 +1110,7 @@ def ticks_page(token:str, err:str=""):
         rows+=f"""<div class=trace><p><strong>{esc(x['question'].split(':',1)[1].strip())}</strong></p><p class=hint>{esc(x['why'])}</p><div class=resopts>{opts}</div></div>"""
     return page(prog(7)+f"""<h1>Check the tick boxes on your {esc(F['form'])}</h1>{PROMISE}<p class=lead>{f"We have already set {nset} tick boxes from your answers, so you don't need to answer anything again. Open the list if you want to check or change one." if it else "These are the tick boxes we will mark on the official form. We have suggested each one from the answers you approved. Change anything that isn't right. We only tick what you confirm here."}</p>
 {f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/ticks/{token}>{f'<details class=tickall><summary>See or change the tick boxes</summary>{rows}</details>' if it else rows}
-<p class=small>We never tick the consent, declaration, bank or "signing for someone else" boxes. You do those yourself.</p>
+<p class=small>{'We never tick the consent or declaration boxes, and never sign anything. You do those yourself.' if is_wf(o) else 'We never tick the consent, declaration, bank or "signing for someone else" boxes. You do those yourself.'}</p>
 <label class=cb><input type=checkbox name=confirm required><span>I have checked every tick box above. They are true.</span></label>
 <button class="btn btn-start">Confirm tick boxes</button></form>""","Check the tick boxes")
 @app.post("/ticks/{token}")
@@ -1024,15 +1132,17 @@ def documents_page(token:str):
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     if not o["details_at"]: return RedirectResponse(f"/details/{token}",303)
-    F=FORMS[o["form"] or "aa"]; lab={'assessment-briefing.html':'Assessment and phone-call briefing','supporting-letters.html':'Supporting letters for others to sign','reconsideration-letter.txt':'Your reconsideration letter, ready to sign and send','PIP-extra-sheets.pdf':'Printable extra sheets, one per question (PDF), to send with your form','answers.html':'Your approved answers, checklist and letters','AA1-filled.pdf':'Official AA1 form, filled in (PDF)','DLA1A-filled.pdf':'Official DLA1A form, filled in (PDF)','AccessToWork-answers.docx':'Your answers as a Word document (DOCX), in application order'}
+    F=FORMS[o["form"] or "aa"]; lab={'assessment-briefing.html':'Assessment and phone-call briefing','supporting-letters.html':'Supporting letters for others to sign','reconsideration-letter.txt':'Your reconsideration letter, ready to sign and send','PIP-extra-sheets.pdf':'Printable extra sheets, one per question (PDF), to send with your form','answers.html':'Your approved answers, checklist and letters','AA1-filled.pdf':'Official AA1 form, filled in (PDF)','DLA1A-filled.pdf':'Official DLA1A form, filled in (PDF)','AccessToWork-answers.docx':'Your answers as a Word document (DOCX), in application order','Note-for-supporter.pdf':'A note for the person who writes the statement box (we leave that box for them)'}
     files=pack_files(o)
+    if is_wf(o): files=[f for f in files if f!="answers.html"]+["answers.html"]
+    gone=f"<div class=panel><p>Your National Insurance number and bank details have been deleted from our system for safety. Need another copy with them filled in? <a href=/details/{token}>Type them again</a>.</p></div>" if is_wf(o) and not SECURE.has(token) else ""
     dl=json.loads(o["deadline"] or "{}"); res=deadlines.compute(o["form"] or "aa",dl.get("how","phone"),dl.get("requested"),dl.get("received")) if dl.get("requested") else None
     saved=f"<div class=panel><p><strong>Your save code: <code>{o['save_code']}</code></strong><br>Keep it safe. {'Keep a copy of your answers too. They will help when your grant is due for renewal (you can apply to renew 12 weeks before it ends).' if o['form']=='atw' else "Use it at <a href=/review>/review</a> when your review form arrives, and we'll only ask what has changed."}</p></div>" if o["save_code"] else ""
     if is_premium(o["tier"]) and o["save_code"]:
         saved+=f"""<div class=panel><h2 class=h3>Included with Done for you Plus</h2><p><strong>Turned down?</strong> You usually have 1 month from the date on the decision letter to ask DWP to look again. <a href="/appeal/{o['save_code']}">Send us the decision letter</a> and we prepare your reconsideration letter and revised answers at no extra charge.</p>
 <p><strong>Review form arrived?</strong> <a href="/review/{o['save_code']}">Start your renewal</a>. We fill it in from your saved answers at no extra charge.</p>{'<p>We will print and post your pack to you.</p>' if o['post_pack'] else ''}</div>"""
     return page(prog(8)+f"""<div class=done><h1>{"Your answers are ready" if o["form"]=="atw" else "Your form is done"}</h1><p>You approved every answer. Your documents are ready.</p></div>
-{''.join(f'<div class=dl><span><strong>{lab.get(f,f)}</strong></span><a class=btn href="/download/{token}/{f}" download>Download</a></div>' for f in files)}
+{''.join(f'<div class=dl><span><strong>{lab.get(f,f)}</strong></span><a class=btn href="/download/{token}/{f}" download>Download</a></div>' for f in files)}{gone}
 {f"<div class=tracker><p class=big>Send it back by <strong>{datetime_fmt(res['deadline'])}</strong></p></div>" if res and res.get('deadline') else ''}{saved}
 {bb_addon_box(o)}{ATW_NEXT if o['form']=='atw' else ''}<h2{' hidden' if o['form']=='atw' else ''}>What to do next</h2><ol class=steps{' hidden' if o['form']=='atw' else ''}><li><strong>Read it once more</strong> before you send it.</li><li><strong>Copy the answers into your claim</strong>, or print, sign and post the filled-in form.</li><li><strong>Turned down?</strong> You can ask DWP to look again (mandatory reconsideration), usually within one month of the decision letter. <a href=/letter>Draft a letter</a>.</li></ol>
 <p class=small>We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>.</p>""","Your documents")
@@ -1147,7 +1257,7 @@ def healthz(): return {"ok":True}
 def cron_retention(req:Request):
     got=req.headers.get("x-cron-secret","")
     if not CRON_SECRET or not hmac.compare_digest(got,CRON_SECRET): raise HTTPException(403)
-    return {"ok":True,"purged":orders.purge(db(),OUT)}
+    return {"ok":True,"purged":orders.purge(db(),OUT),"private":SECURE.purge()}
 @app.post("/cron/formwatch")
 def cron_formwatch(req:Request):
     """Weekly: compare GOV.UK's current AA1/DLA1A with the bundled copies; switches pre-fill off if a new version appears."""
@@ -1159,7 +1269,7 @@ async def _retention_loop():
     if os.getenv("RETENTION_LOOP","1")!="1": return   # set RETENTION_LOOP=0 on Render (cron endpoint does the work)
     async def loop():
         while True:
-            try: print("retention purge",orders.purge(db(),OUT))
+            try: print("retention purge",orders.purge(db(),OUT),SECURE.purge())
             except Exception as e: print("retention error",e)
             await asyncio.sleep(86400)
     asyncio.create_task(loop())

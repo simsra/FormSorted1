@@ -123,7 +123,12 @@ def row_card(form,r,d):
     more='<p class=sub>What happens? <span class=hint>(tap any)</span></p><div class="chips two">'+opts+_else(f"r_{rid}_c",cur.get("x",""))+'</div>'
     more+='<p class=sub>How many days a week is it like this?</p>'+_radios(f"r_{rid}_days",DAYS,cur.get("days")," nums")
     return f'<div class=card><h3>{esc(label)}</h3><div class="chips main lvl">{"".join(_rad(f"r_{rid}_lvl",v,t,lvl) for v,t in LVL)}</div><div class=more>{more}</div></div>'
+def sections(form,d):
+    """Sections for this order: whole-form orders (wf_v) get the extra ones from wholeform.py."""
+    import wholeform; return wholeform.sections(form,d or {})
 def section_body(form,sec,d):
+    import wholeform
+    if wholeform.is_wf_section(sec): return wholeform.section_body(form,sec,d)
     nm=name(d,form); me=is_me(d,form); you=("you" if me else nm); h=""
     if sec=="about":
         if form=="dla":
@@ -134,7 +139,7 @@ def section_body(form,sec,d):
             opts=[("me","Me"),("parent","My mum or dad"),("partner","My partner"),("other","Someone else")] if form=="aa" else [("me","Me"),("other","Someone I help")]
             h+=_q("Who is this form for?",_radios("who",opts,d.get("who")))
             h+=_q("Their first name (if it's not you)",f'<input name=name value="{esc(d.get("name",""))}" autocomplete=off maxlength=40 placeholder="e.g. Mum or Margaret">',"We use it in the questions. Optional.")
-            h+=_q("If it's someone else: who will sign the form?",_radios("signer",[("them","They will sign it themselves"),("poa","I have Power of Attorney"),("appointee","I'm their appointee"),("ns","Not sure yet")],d.get("signer")),"Skip this if the form is for you.")
+            h+=_q("If it's someone else: who will sign the form?",_radios("signer",[("them","They will sign it themselves"),("poa","I have Power of Attorney"),("appointee","I'm their appointee"),("deputy","I'm their deputy (Court of Protection)"),("ns","Not sure yet")],d.get("signer")),"Skip this if the form is for you.")
     elif sec=="conds":
         have={c.get("name"):c for c in d.get("conds") or []}
         yrs=[("","When did it start?")]+[(str(y),str(y)) for y in range(2026,1939,-1)]+[("ns","Not sure")]
@@ -178,6 +183,9 @@ def section_body(form,sec,d):
 # ---------- saving ----------
 def save(form,sec,d,fm):
     """Merge one section's answers (starlette FormData) into d. Untouched rows/questions are simply skipped."""
+    import wholeform
+    if wholeform.is_wf_section(sec): return wholeform.save(form,sec,d,fm)
+    if form in ("aa","dla") and wholeform.on() and "wf_v" not in d and not d.get("rows"): d["wf_v"]=1
     g=lambda k:(str(fm.get(k) or "").strip())[:200]; gl=lambda k:[str(x)[:80] for x in fm.getlist(k)]
     if sec=="about":
         for k in ("who","name","signer","rel","age"): d[k]=g(k)

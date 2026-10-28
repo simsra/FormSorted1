@@ -25,22 +25,37 @@ def build_values(personal, draft):
     for c,fs in zip(draft.get("conditions",[]),CONDITION_FIELDS):
         for key,f in zip(("name","since","meds","dose"),fs):
             if c.get(key): v[f]=c[key]
-    if draft.get("carer_statement"): v["344"]=draft["carer_statement"]
+    # Q49 (box 344) is the supporter's own statement: never our words. It is left blank; a note goes with the pack.
     return v
 AA_LABELS={f:f"Question {q} ({t})" for q,t,_,f in CARE_QUESTIONS}
-def fill(personal, draft, out_path, ticks=None):
-    return _write("aa",build_values(personal,draft),personal,out_path,ticks)
+def fill(personal, draft, out_path, ticks=None, extra=None):
+    return _write("aa",build_values(personal,draft),personal,out_path,ticks,extra)
 VERSION={"aa":("AA1","11/25"),"dla":("DLA1A","10/25")}
 OVERFLOW={"aa":("354","Question 63"),"dla":("89","Question 89")}
-def _write(form, values, personal, out_path, ticks=None):
+def merge_extra(form, values, extra):
+    """Whole-form answers: (values, ticks, notes). Typed answers already drafted win; notes join the extra-information box."""
+    if not extra: return values, {}
+    xv,xt,notes=extra; values=dict(values)
+    ft=xv.pop("_fit_type",None) if isinstance(xv,dict) else None
+    for f,t in (xv or {}).items():
+        if t and not values.get(f): values[f]=t
+    if form=="aa" and values.get("01-01i") and not values.get("01-01i 2"): values["01-01i 2"]=values["01-01i"]   # surname repeated on page 3
+    if ft: values["65_1"]=f"Type of fits: {ft}"+("\n\n"+values["65_1"] if values.get("65_1") else "")
+    if notes:
+        ov=OVERFLOW[form][0]; values[ov]=((values.get(ov)+"\n\n") if values.get(ov) else "")+"\n".join(notes)
+    return values, dict(xt or {})
+def _write(form, values, personal, out_path, ticks=None, extra=None):
     import io, ticks as T, contsheet
     pdf={"aa":"aa1.pdf","dla":"dla1a.pdf"}[form]; ov,ovl=OVERFLOW[form]
+    values,xticks=merge_extra(form,values,extra)
     vals,spill=fit(values,pdf,ov,AA_LABELS if form=="aa" else DLA_LABELS,ovl)
     r=PdfReader(os.path.join(HERE,pdf))
     if r.is_encrypted: r.decrypt("")
     w=PdfWriter(); w.append(r)
     for p in w.pages: w.update_page_form_field_values(p,vals,auto_regenerate=False)
     if ticks: T.apply(w,T.validate(form,ticks))
+    if xticks:   # whole-form ticks: each state was read off the PDF itself, so check it is still offered there
+        opts=T.options(form); T.apply(w,{f:s for f,s in xticks.items() if f in opts and s in opts[f][1]})
     w.set_need_appearances_writer(True)
     if spill:
         name=" ".join(x for x in (personal.get("title"),personal.get("other_names"),personal.get("surname")) if x)
@@ -59,7 +74,7 @@ def dla_values(personal, draft):
     j=lambda *ks:"\n\n".join(a[k] for k in ks if a.get(k))
     m={"42":a.get("42",""),"walking":a.get("walking",""),"65":a.get("65",""),"school_learning":a.get("school",""),
        "mobility_other":j("outdoors"),"care_other":j("daycare","supervision_day","senses","development","night"),
-       "anything_else":a.get("other",""),"statement":draft.get("carer_statement","")}
+       "anything_else":a.get("other","")}   # Q38 statement box is left for the supporter
     for k,txt in m.items():
         if txt: v[DLA_FIELDS[k]]=txt
     for k,fs in DLA_NIGHT_FIELDS.items():
@@ -71,9 +86,18 @@ def dla_values(personal, draft):
             if c.get(key): v[f]=c[key]
     return v
 DLA_LABELS={"42_1":"Question 42","48_1":"Question 48","53":"Question 53","65_1":"Question 65","68_7":"Question 68","72":"Question 72","38_3":"Question 38"}
-def fill_form(form, personal, draft, out_path, ticks=None):
-    if form=="aa": return fill(personal,draft,out_path,ticks)
-    return _write("dla",dla_values(personal,draft),personal,out_path,ticks)
+def fill_form(form, personal, draft, out_path, ticks=None, extra=None):
+    if form=="aa": return fill(personal,draft,out_path,ticks,extra)
+    return _write("dla",dla_values(personal,draft),personal,out_path,ticks,extra)
+def overlay(form, pdf_bytes, fields, tick=None):
+    """Write private fields (NI number, bank details) into an already-built PDF, in memory only. Returns bytes."""
+    import io
+    r=PdfReader(io.BytesIO(pdf_bytes)); w=PdfWriter(); w.append(r)
+    vals={k:v for k,v in fields.items() if v}; tk={k:v for k,v in (tick or {}).items() if v}
+    for p in w.pages: w.update_page_form_field_values(p,vals,auto_regenerate=False)
+    if tk:
+        import ticks as T; opts=T.options(form); T.apply(w,{f:s for f,s in tk.items() if f in opts and s in opts[f][1]})
+    w.set_need_appearances_writer(True); b=io.BytesIO(); w.write(b); return b.getvalue()
 
 # ---- Fit long answers into boxes; overflow goes to the additional-information box ----
 import re as _re
