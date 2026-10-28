@@ -32,7 +32,7 @@ for s,d in [("about",{"who":"parent","name":"Margaret","signer":"poa"}),("conds"
 pv=body(f"/preview/{tok}"); assert "Keep my answers for 3 years" in pv and "Pay £199" in pv and pv.count(DWP)==1 and "Margaret finds" not in pv
 assert req(f"/appeal/nope").status==404
 assert loc(req(f"/pay/{tok}",{"waive":"on","keep":"1"}))==f"/start/{tok}"; req(f"/start/{tok}"); req(f"/uploads/{tok}/done",{}); req(f"/prepare/{tok}")
-ap=body(f"/approve/{tok}"); ok={f"ok_{t}":"on" for t,_,_ in FORMS["aa"]["topics"]}
+ap=body(f"/approve/{tok}"); ok={f"ok_{t}":"on" for t,_,_ in FORMS["aa"]["topics"]}; ok["honest"]="on"
 for rn in set(re.findall(r'name="(res_[^"]+)"',ap)): ok[rn]="keep"
 r=req(f"/approve/{tok}",ok); assert loc(r)==f"/ticks/{tok}"
 th=body(f"/ticks/{tok}"); tf=dict(re.findall(r'name="(t_[^"]+)" value="([^"]*)" checked',th)); tf["confirm"]="on"; req(f"/ticks/{tok}",tf)
@@ -55,7 +55,7 @@ ah=body(f"/appeal/{code}"); assert "1 month from the date on your decision lette
 b=uuid.uuid4().hex; raw=(f'--{b}\r\nContent-Disposition: form-data; name="decision_date"\r\n\r\n2026-10-20\r\n--{b}\r\nContent-Disposition: form-data; name="topics"\r\n\r\n29\r\n'
      f'--{b}\r\nContent-Disposition: form-data; name="files"; filename="decision.png"\r\nContent-Type: image/png\r\n\r\n').encode()+b"\x89PNG fake"+f"\r\n--{b}--\r\n".encode()
 r=req(f"/appeal/{code}",raw=raw,ct=f"multipart/form-data; boundary={b}"); at=loc(r).split("/")[-1]; assert loc(r)==f"/approve/{at}"
-ap=body(f"/approve/{at}"); ok={f"ok_{t}":"on" for t,_,_ in FORMS["aa"]["topics"]}
+ap=body(f"/approve/{at}"); ok={f"ok_{t}":"on" for t,_,_ in FORMS["aa"]["topics"]}; ok["honest"]="on"
 for rn in set(re.findall(r'name="(res_[^"]+)"',ap)): ok[rn]="keep"
 nx=loc(req(f"/approve/{at}",ok))
 if "/ticks/" in nx: th=body(nx); tf=dict(re.findall(r'name="(t_[^"]+)" value="([^"]*)" checked',th)); tf["confirm"]="on"; req(nx,tf)

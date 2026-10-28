@@ -107,7 +107,7 @@ for form,f in FORMS.items():
         h=body(f"/approve/{tok}"); assert "What you told us" in h and "Sample answer 2" in h and "Extra true detail from me" in h and "approve every word" in h
         part={f"ok_{x}":"on" for x,_,_ in f["topics"][:-1]}
         eh=req(f"/approve/{tok}",part).read().decode(); assert "1 answer still needs a choice" in eh or "answers still need a choice" in eh; assert "Please tick to approve this answer" in eh and 'href="#topic_' in eh and "Check and approve every answer" in eh and 'name="ok_'+f["topics"][0][0]+'" required checked' in eh
-        all_ok={f"ok_{x}":"on" for x,_,_ in f["topics"]}; all_ok["save"]="on"
+        all_ok={f"ok_{x}":"on" for x,_,_ in f["topics"]}; all_ok["save"]="on"; all_ok["honest"]="on"
         resn=sorted(set(re.findall(r'name="(res_[^"]+)"',h)))
         if resn:  # sample drafts don't match "Sample answer N", so grounding flags must be resolved
             assert "We couldn't find this in what you told us" in h
@@ -196,7 +196,7 @@ assert req(f"/details/{tok}").headers["location"]==f"/approve/{tok}"          # 
 j=json.load(req(f"/api/{tok}/message",js={"text":""})); n=0
 while not j["done"]: n+=1; j=json.load(req(f"/api/{tok}/message",js={"text":f"Sample answer {n}"}))
 nx=json.load(req(f"/api/{tok}/finish",{}))["next"]; assert nx==f"/prepare/{tok}"; req(nx); h=body(f"/approve/{tok}")
-all_ok={f"ok_{x}":"on" for x,_,_ in FORMS["aa"]["topics"]}
+all_ok={f"ok_{x}":"on" for x,_,_ in FORMS["aa"]["topics"]}; all_ok["honest"]="on"
 for i,rn in enumerate(sorted(set(re.findall(r'name="(res_[^"]+)"',h)))): all_ok[rn]="keep"
 assert req(f"/approve/{tok}",all_ok).headers["location"]==f"/ticks/{tok}"       # AA1 done-for-you: tick-box preview next
 assert req(f"/details/{tok}").headers["location"]==f"/ticks/{tok}"              # no details/documents before ticks confirmed

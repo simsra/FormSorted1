@@ -13,6 +13,7 @@ from html import escape as esc
 from forms import FORMS, is_full, tier_info, default_tier, is_premium
 import premium as PREMIUM
 import bluebadge as BB, printmail
+import evidence as EVID, honesty as HONEST, fraud as FRAUD
 BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STRIPE_SECRET_KEY_PLACEHOLDER")
 PUBLIC=os.getenv("PUBLIC_URL","http://localhost:8000"); DEV=STRIPE.endswith("PLACEHOLDER")
 HERE=os.path.dirname(os.path.abspath(__file__)); OUT=store.OUT; DB=store.SQLITE_PATH
@@ -26,7 +27,7 @@ def get(token):
 STEPS=["Choose","Pay","Agree","Questions","Deadline","Strength check","Approve","Your documents"]
 BB_STEPS=["Choose","Agree","Your answers","Check and pay","Your Blue Badge answers"]
 def bbprog(n): return f"<p class=progress>Step {n} of {len(BB_STEPS)}: {BB_STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(BB_STEPS)}%'></span></div>"
-def prog(n): return f"<p class=progress>Step {n} of {len(STEPS)}: {STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(STEPS)}%'></span></div>"
+def prog(n,label=None): return f"<p class=progress>Step {n} of {len(STEPS)}: {label or STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(STEPS)}%'></span></div>"
 def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
     if minimal:  # order summary: no outbound links except Terms/Privacy
         indep='<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not affiliated with DWP or GOV.UK.</div></div>'
@@ -180,11 +181,22 @@ def success(session_id:str=""):
     except Exception: s={}
     if s.get("payment_status")=="paid":
         c.execute("update orders set status='paid', email=coalesce(?,email) where stripe_session=?",((s.get("customer_details") or {}).get("email"),session_id)); c.commit()
+        save_pay_ids(c,session_id,s)
         return RedirectResponse(f"/start/{s.get('client_reference_id') or row['token']}",303)
     if row and row["status"]=="paid": return RedirectResponse(f"/start/{row['token']}",303)   # webhook already confirmed it
     if not s and session_id: return page("<h1>We're confirming your payment</h1><p>This can take a minute. <a href='/success?session_id="+urllib.parse.quote(session_id)+"'>Refresh this page</a>. If you were charged, email <a href=mailto:hello@formsorted.com>hello@formsorted.com</a>.</p>","Confirming payment")
     back=f"/preview/{row['token']}" if row else "/"
     return page(f"<h1>Payment not completed</h1><p>You have not been charged. <a href={back}>Go back and try again</a>.</p>","Payment not completed")
+def save_pay_ids(c,session_id,s):
+    """Payment customer + card fingerprint, kept only to spot many claims from one payer (see fraud.py). Never fatal."""
+    try:
+        cust=s.get("customer") if isinstance(s.get("customer"),str) else (s.get("customer") or {}).get("id")
+        fp=None; pi=s.get("payment_intent")
+        if pi and not DEV:
+            p=stripe("GET","/payment_intents/"+urllib.parse.quote(pi if isinstance(pi,str) else pi["id"])+"?expand[]=latest_charge")
+            fp=(((p.get("latest_charge") or {}).get("payment_method_details") or {}).get("card") or {}).get("fingerprint")
+        if cust or fp: c.execute("update orders set stripe_customer=coalesce(?,stripe_customer), card_fp=coalesce(?,card_fp) where stripe_session=?",(cust,fp,session_id)); c.commit()
+    except Exception as e: print("payment ids not saved",str(e)[:200])
 WHSEC=os.getenv("STRIPE_WEBHOOK_SECRET","")
 @app.post("/webhooks/payment")
 async def payment_webhook(req:Request):
@@ -207,16 +219,19 @@ async def payment_webhook(req:Request):
         token=orders.new_token()
         c.execute("insert into orders(token,tier,status,stripe_session,email,created,paid_at,form) values(?,?,?,?,?,?,?,?)",(token,tier,"paid",s["id"],email,time.time(),time.time(),form))
     c.commit()
+    await run_in_threadpool(save_pay_ids,c,s["id"],s)
     if email:
         subj,txt=orders.link_email(BRAND,FORMS[form]["short"],f"{PUBLIC}/start/{token}")
         try: await run_in_threadpool(mailer.send,email,subj,txt)   # 28 Oct: blocked the whole site for the email call, then 500'd on a mail error
         except Exception as e: print("link email failed",str(e)[:200])
     return {"ok":True}
+REFUNDED_PAGE="<h1>Your order has been cancelled</h1><p class=lead>We've cancelled this order and refunded your payment in full. Refunds usually reach your account in 5 to 10 working days. We have deleted your answers.</p>"
 DELETED_PAGE="<h1>Your information has been deleted</h1><p>Everything you told us for this order has been deleted. This link no longer works.</p>"
 @app.get("/start/{token}")
 def start(token:str):
     o=get(token)
     if o["status"]=="deleted": return page(DELETED_PAGE,"Deleted")
+    if o["status"]=="refunded": return page(REFUNDED_PAGE,"Order cancelled",minimal=True)
     if o["status"] not in ("paid","free"): raise HTTPException(402)
     if o["consent_at"] and o["form"]=="bb":
         return RedirectResponse(f"/bb/{token}/documents" if o["status"]=="paid" else f"/preview/{token}" if o["interview_done_at"] else f"/bb/{token}",303)
@@ -249,12 +264,15 @@ def _draft_now(token):
     o=get(token)
     if o["draft"]: return
     h=json.loads(o["history"]); I=json.loads(o["intake"] or "{}")
-    if I.get("doc_text"): h=h+[{"role":"assistant","content":"Documents you uploaded"},{"role":"user","content":I["doc_text"][:12000]}]
+    # Oct 2026: document text is NOT fed to the drafter. Only facts the customer confirmed on /confirm are in the history.
     t=time.time(); d=llm.draft(h,o["form"] or "aa"); d.setdefault("answers",{}); print(f"timing draft {o['form']} {time.time()-t:.1f}s",flush=True)
     if I: merge_intake(o["form"] or "aa",d,I)
     c=db(); c.execute("update orders set draft=?, approved_at=null where token=? and draft is null",(json.dumps(d),token)); c.commit()
 def _job(token):
     try:
+        JOBS[token]["stage"]="docs"
+        g=gate(token,run=True)
+        if g: JOBS[token]["stage"]=g; return
         JOBS[token]["stage"]="draft"; _draft_now(token)
         JOBS[token]["stage"]="check"
         try: ground_ahead(token)
@@ -266,9 +284,55 @@ def start_prepare(token):
     """Start drafting (and the answer check) in the background, once per order. Safe to call repeatedly."""
     with _JLOCK:
         j=JOBS.get(token)
-        if j and j["stage"] in ("queued","draft","check"): return j
+        if j and j["stage"] in ("queued","docs","draft","check"): return j
         j=JOBS[token]={"stage":"queued","t":time.time()}
     threading.Thread(target=_job,args=(token,),daemon=True).start(); return j
+# ---------- before drafting: review holds, document cross-check, contradictions ----------
+def _intake_of(o): return json.loads(o["intake"] or "{}") if o["intake"] else {}
+def needs_confirm(o):
+    I=_intake_of(o)
+    if not I or (o["form"] or "aa") not in INTAKE.FORMS_V3: return False
+    if I.get("uploads") and not I.get("docs_checked"): return False   # still being read
+    return bool(EVID.mismatches(I) or HONEST.contradictions(o["form"],I))
+def gate(token,run=False):
+    """'hold' | 'confirm' | None. run=True (background job) also does the slow parts: the review check and reading documents."""
+    o=get(token)
+    if o["draft"]: return None
+    if FRAUD.held(o): return "hold"
+    if run and not FRAUD.released(o) and check_hold(token,"before drafting"): return "hold"
+    I=_intake_of(o)
+    if run and I.get("uploads") and not I.get("docs_checked"): read_documents(token)
+    return "confirm" if needs_confirm(get(token)) else None
+def check_hold(token,stage):
+    """Assess the order; if it should be held, hold it (once) and tell the team. Returns True if held."""
+    c=db(); o=get(token)
+    if FRAUD.released(o): return False
+    if FRAUD.held(o): return True
+    reasons=FRAUD.assess(c,o)
+    if not reasons: return False
+    c.execute("update orders set hold=? where token=? and hold is null",(json.dumps({"reasons":reasons,"at":time.time(),"stage":stage}),token)); c.commit()
+    print("order held",token[:6],reasons,flush=True)
+    subj,txt=FRAUD.notify_text(PUBLIC,o,reasons)
+    def _send():
+        try: mailer.send(FRAUD.REVIEW_TO,subj,txt)   # mailer keeps the Resend User-Agent header
+        except Exception as e: print("hold email failed",str(e)[:200])
+    threading.Thread(target=_send,daemon=True).start()
+    return True
+def read_documents(token):
+    """Conditions and medicines written in the uploaded documents (word lists over PDF text, plus the reader for photos)."""
+    o=get(token); I=_intake_of(o); text=I.get("doc_text","")
+    f=EVID.read_text(text); imgs=[]
+    for u in I.get("uploads") or []:
+        if u.get("type") in llm.VISION_TYPES:
+            try:
+                p=os.path.join(OUT,token,"up",u["key"])   # uploads are stored under the order as their key (see uploads_add)
+                b=store.read(token,u["key"]) if store.REMOTE else (open(p,"rb").read() if os.path.exists(p) else None)
+                if b: imgs.append((u["type"],b))
+            except Exception as e: print("upload read failed",str(e)[:120])
+    try: f=EVID.merge_facts(f,llm.extract_evidence(imgs,text))
+    except Exception as e: print("document reading fell back to word lists",str(e)[:200])
+    I=_intake_of(get(token)); I["doc_facts"]=f; I["docs_checked"]=True
+    c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
 def ground_ahead(token):
     """Run the mandatory answer check now and store it, but only if the answers haven't changed meanwhile."""
     o=get(token); raw=o["draft"]
@@ -283,21 +347,24 @@ def ground_ahead(token):
         c=db(); c.execute("update orders set draft=? where token=? and draft=?",(json.dumps(d),token,raw)); c.commit()
     finally: ev.set(); _GRUN.pop((token,h),None)
 _GRUN={}
-PREP_STEPS=[("read","Reading your answers"),("draft","Filling in each section of your form"),("check","Checking every answer against what you told us"),("ready","Getting your form ready to check")]
+PREP_STEPS=[("read","Reading your answers and documents"),("draft","Filling in each section of your form"),("check","Checking every answer against what you told us"),("ready","Getting your form ready to check")]
 def _stage(o):
     j=JOBS.get(o["token"]) or {}
     if o["draft"]: return "ready" if j.get("stage")!="check" else "check"
-    return "error" if j.get("stage")=="error" else "draft"
+    return "error" if j.get("stage")=="error" else "read" if j.get("stage") in ("queued","docs") else "draft"
 @app.get("/prepare/{token}")
 def prepare(token:str):
     """After payment: draft from the interview (the only place drafting happens), then continue the paid flow."""
     o=ready(token)
     if not o["draft"]:
+        g=gate(token)
+        if g: return RedirectResponse(f"/{g}/{token}",303)
         j=start_prepare(token)
         for _ in range(8):   # quick drafts (and tests) go straight on, no waiting page
-            if j["stage"] in ("check","done","error"): break
+            if j["stage"] in ("check","done","error","hold","confirm"): break
             time.sleep(0.1)
         o=get(token)
+        if j["stage"] in ("hold","confirm"): JOBS.pop(token,None); return RedirectResponse(f"/{j['stage']}/{token}",303)
     if o["draft"]: return RedirectResponse(f"/deadline/{token}",303)
     st=_stage(o)
     if st=="error": JOBS.pop(token,None)   # the next visit tries again
@@ -314,6 +381,8 @@ def prepare_progress(token:str):
     o=ready(token)
     if o["draft"]: return {"stage":"ready","next":f"/deadline/{token}"}
     j=JOBS.get(token)
+    if j and j["stage"] in ("hold","confirm"): JOBS.pop(token,None); return {"stage":"draft","next":f"/{j['stage']}/{token}"}
+    if FRAUD.held(o): return {"stage":"draft","next":f"/hold/{token}"}
     if not j: start_prepare(token)   # e.g. the server restarted mid-way: pick it up again
     st=_stage(get(token))
     return {"stage":st}
@@ -323,6 +392,7 @@ def merge_intake(form,d,I):
     if I.get("conds"): d["conditions"]=INTAKE.conditions(I)
     d["notes_for_user"]=INTAKE.notes(form,I)+list(d.get("notes_for_user") or [])
     if I.get("uploads"): d.setdefault("checklist",[]).append("Documents you uploaded to us: "+", ".join(u["name"] for u in I["uploads"])+". Send copies (not originals) with your form.")
+    d.setdefault("checklist",[]).extend(EVID.checklist(form,I))   # what to send, or what to get if they have nothing yet
     d["intake_ticks"]=INTAKE.ticks(form,I)
 def ready(token,paid=True):
     """paid=True (default) for everything that exposes or produces answers; paid=False only for the free interview."""
@@ -411,6 +481,7 @@ async def personal(token:str, req:Request):
 @app.get("/download/{token}/{name}")
 def download(token:str,name:str):
     o=ready(token)
+    if FRAUD.held(o): raise HTTPException(403,"We're checking your order")
     if not o["approved_at"] or not o["details_at"]: raise HTTPException(403,"Approve your answers first")
     if name not in pack_files(o): raise HTTPException(404)
     data=store.read(token,name)
@@ -443,6 +514,7 @@ POST_OPT="<label class=cb><input type=checkbox name=post_pack value=1><span>Prin
 @app.get("/details/{token}")
 def details_page(token:str, err:str=""):
     o=ready(token)
+    if FRAUD.held(o): return _held_redirect(o)
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     p=json.loads(o["personal"] or "{}"); form=o["form"] or "aa"
@@ -458,6 +530,7 @@ async def details_save(token:str, req:Request):
     o=ready(token)
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
+    if FRAUD.held(o): return _held_redirect(o)
     fm=await req.form(); form=o["form"] or "aa"; p={}
     def back(msg):  # keep what they typed so a validation error doesn't wipe the form
         c=db(); c.execute("update orders set personal=? where token=?",(json.dumps(p),token)); c.commit()
@@ -473,6 +546,8 @@ async def details_save(token:str, req:Request):
             p["ni"]=p["ni"].replace(" ","").upper()
             if not NI_RE.match(p["ni"]): return back("That National Insurance number doesn't look right. It's 2 letters, 6 numbers, then A, B, C or D.")
     c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),1 if (fm.get("post_pack") and is_premium(o["tier"]) and printmail.ENABLED and not fm.get("skip")) else 0,token)); c.commit()
+    if p and await run_in_threadpool(check_hold,token,"details"):   # names known now: check again before documents are made
+        c.execute("update orders set details_at=null where token=?",(token,)); c.commit(); return RedirectResponse(f"/hold/{token}",303)
     o=get(token); files=await run_in_threadpool(build_files,token,o,json.loads(o["draft"]))
     if o["post_pack"]: printmail.queue(c,token,{k:p.get(k,"") for k in ("title","other_names","surname","addr1","addr2","addr3","postcode")},files)
     return RedirectResponse(f"/documents/{token}",303)
@@ -485,17 +560,20 @@ def _intake_order(token):
 def _intake_closed(o):
     """Paid orders that have been drafted can't change their answers here (they edit on the approve page)."""
     return o["status"]=="paid" and o["draft"]
+HONEST_LINE="<p class=honest><strong>We only write what you tell us, so please answer honestly about a typical day.</strong></p>"
+REFUSED_BOX=f"<div class=warning role=alert>{esc(HONEST.REFUSE_MSG)}</div>"
 @app.get("/intake/{token}")
-def intake_page(token:str, s:str=""):
+def intake_page(token:str, s:str="", r:str=""):
     o=_intake_order(token)
     if _intake_closed(o): return RedirectResponse(f"/start/{token}",303)
     form=o["form"]; secs=INTAKE.SECTIONS[form]; ids=[k for k,_ in secs]; d=json.loads(o["intake"] or "{}")
     sec=s if s in ids else (d.get("at") if d.get("at") in ids else ids[0]); i=ids.index(sec)
     left=max(1,round(10*(len(ids)-i)/len(ids)))
     bar="".join(f'<li class="{"done" if j<i else "now" if j==i else ""}">{esc(l)}</li>' for j,(k,l) in enumerate(secs))
+    refused=REFUSED_BOX if r else ""
     reassure="<p class=reassure>It's normal for this to feel hard. You only tap, we do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
     return page(f"""<div class=intake><p class="progress ip"><span>Building your form · Part {i+1} of {len(secs)}</span><span class=left>~{left} min</span></p><div class="bar slim"><span style='width:{(i+1)*100//len(secs)}%'></span></div>
-{'<h1>We\'ll fill in your form for you</h1><p class=donefor>About 10 minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>' if i==0 else f'<h1>{esc(secs[i][1])}</h1><p class=donefor>Just tap what fits. We\'ll write this section of the official form for you.</p>'}
+{refused}{'<h1>We\'ll fill in your form for you</h1><p class=donefor>About 10 minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>'+HONEST_LINE if i==0 else f'<h1>{esc(secs[i][1])}</h1><p class=donefor>Just tap what fits. We\'ll write this section of the official form for you.</p>'}
 <form method=post action=/intake/{token}><input type=hidden name=sec value={sec}>{INTAKE.section_body(form,sec,d)}
 <div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==len(ids)-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
 <button class="linkbtn" name=nav value=save>Save and finish later</button></form></div>""",secs[i][1],minimal=True)
@@ -506,6 +584,9 @@ async def intake_save(token:str, req:Request):
     form=o["form"]; ids=[k for k,_ in INTAKE.SECTIONS[form]]; fm=await req.form(); sec=str(fm.get("sec",""))
     if sec not in ids: raise HTTPException(400)
     d=INTAKE.save(form,sec,json.loads(o["intake"] or "{}"),fm); i=ids.index(sec); nav=fm.get("nav","next")
+    if HONEST.scrub(d):   # asked us to exaggerate: not saved, same section again with a polite note
+        d["at"]=sec; c=db(); c.execute("update orders set intake=?, interview_done_at=null where token=? and status in ('free','paid')",(json.dumps(d),token)); c.commit()
+        return RedirectResponse(f"/intake/{token}?s={sec}&r=1",303)
     nxt=ids[max(0,i-1)] if nav=="back" else ids[i] if nav=="save" else (ids[i+1] if i+1<len(ids) else None)
     d["at"]=nxt or sec; c=db()
     if nxt is None:   # finished: build the answers transcript the rest of the pipeline uses
@@ -522,18 +603,24 @@ UP_MAX=10*1024*1024; UP_TYPES={"application/pdf":"pdf","image/jpeg":"jpg","image
 def uploads_page(token:str, err:str=""):
     o=ready(token)   # paid only
     if o["draft"]: return RedirectResponse(f"/start/{token}",303)
-    I=json.loads(o["intake"] or "{}"); ups=I.get("uploads") or []
+    I=json.loads(o["intake"] or "{}"); ups=I.get("uploads") or []; form=o["form"] or "aa"
     lst="".join(f"<li>{esc(u['name'])}</li>" for u in ups)
-    return page(prog(4)+f"""<h1>Got any letters or lists? (optional)</h1><p class=lead>Payment received, thank you. If you have a photo or PDF of a medication list, hospital or clinic letter, care plan, EHCP or previous award letter, add it here. We use it to make your answers more complete. You'll still check everything before it's final.</p>
-{f'<div class=warning>{esc(err)}</div>' if err else ''}{f'<h2 class=h3>Added</h2><ul class=ticks>{lst}</ul>' if ups else ''}
-<form method=post action=/uploads/{token} enctype=multipart/form-data><div class=field><label class=q for=up>Add photos or PDFs (up to 10MB each)</label><input id=up type=file name=files multiple accept="image/*,application/pdf" capture=environment></div><button class="btn btn-2">Add</button></form>
-<form method=post action=/uploads/{token}/done><button class="btn btn-start">{'Continue' if ups else 'Skip. Prepare my form'}</button></form>
-<p class=small>Your documents are deleted with the rest of your order after 90 days, or sooner if you ask.</p>""","Add documents")
+    chips=INTAKE._checks("evidence",EVID.options(form),I.get("evidence"),INTAKE.X(I,"evidence"))
+    return page(prog(4,"Your evidence")+f"""<h1>What do you have that shows this?</h1><p class=lead>Payment received, thank you. Evidence makes your form much stronger. Tap what you have, and add a photo if you can. We check it against your answers. You'll still check everything before it's final.</p>
+{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/uploads/{token}/done enctype=multipart/form-data>
+<fieldset class=iq><legend>Tap all you have</legend>{chips}</fieldset>
+{f'<h2 class=h3>Added</h2><ul class=ticks>{lst}</ul>' if ups else ''}<div class=field><label class=q for=up>{'Add more photos or PDFs' if ups else 'Add a photo or PDF'} (optional, up to 10MB each)</label><p class=hint>A photo of a letter or your repeat prescription list is fine.</p><input id=up type=file name=files multiple accept="image/*,application/pdf" capture=environment></div>
+<div class=navrow><button class="btn btn-start" name=nav value=next>Continue</button></div><button class=linkbtn name=nav value=add>Add more files first</button></form>
+<p class=small>Nothing yet? That's fine. Tap "Nothing yet" or just continue. We'll tell you what to ask your GP surgery for. Your documents are deleted with the rest of your order after 90 days, or sooner if you ask.</p>""","Your evidence",minimal=True)
 @app.post("/uploads/{token}")
 async def uploads_add(token:str, req:Request):
     o=ready(token)
     if o["draft"]: return RedirectResponse(f"/start/{token}",303)
-    fm=await req.form(); I=json.loads(o["intake"] or "{}"); ups=I.setdefault("uploads",[]); err=""
+    fm=await req.form(); I=json.loads(o["intake"] or "{}"); err=await _take_files(token,I,fm)
+    c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
+    return RedirectResponse(f"/uploads/{token}"+("?err="+urllib.parse.quote(err) if err else ""),303)
+async def _take_files(token,I,fm):
+    ups=I.setdefault("uploads",[]); err=""
     from pypdf import PdfReader; import io
     for f in fm.getlist("files"):
         if not getattr(f,"filename",None): continue
@@ -545,19 +632,145 @@ async def uploads_add(token:str, req:Request):
         if ext=="pdf":
             try: I["doc_text"]=(I.get("doc_text","")+f"\n[{f.filename[:80]}]\n"+"\n".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(data)).pages[:15]))[:20000]
             except Exception as e: print("pdf text failed",e)
-    c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
-    return RedirectResponse(f"/uploads/{token}"+("?err="+urllib.parse.quote(err) if err else ""),303)
+        I["docs_checked"]=False   # new document: read it again before drafting
+    if not ups: I.pop("uploads",None)
+    return err
 @app.post("/uploads/{token}/done")
-def uploads_done(token:str):
-    o=ready(token); I=json.loads(o["intake"] or "{}"); I["uploads_done"]=True
+async def uploads_done(token:str, req:Request):
+    o=ready(token)
+    if o["draft"]: return RedirectResponse(f"/start/{token}",303)
+    I=json.loads(o["intake"] or "{}"); form=o["form"] or "aa"
+    try: fm=await req.form()
+    except Exception: fm=None
+    err=""
+    if fm is not None:
+        if fm.get("evidence_on") or fm.getlist("evidence") or fm.get("evidence_xon") or "nav" in fm:
+            ok=dict(EVID.options(form)); I["evidence"]=[x for x in fm.getlist("evidence") if x in ok]
+            x=INTAKE.other_txt(fm,"evidence")
+            if HONEST.refuse(x): x=""; I["refused"]=int(I.get("refused") or 0)+1; err=HONEST.REFUSE_MSG
+            I.setdefault("else",{})["evidence"]=x
+        e2=await _take_files(token,I,fm); err=err or e2
+    if err or (fm is not None and fm.get("nav")=="add"):
+        c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
+        return RedirectResponse(f"/uploads/{token}"+("?err="+urllib.parse.quote(err) if err else ""),303)
+    I["uploads_done"]=True
     c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
     if o["interview_done_at"] and not o["draft"]: start_prepare(token)
     return RedirectResponse(f"/prepare/{token}",303)
+
+# ---------- Before drafting: check documents and answers that don't match (max 3 tap questions) ----------
+def _confirm_items(o):
+    I=_intake_of(o); return I,EVID.mismatches(I),HONEST.contradictions(o["form"],I)
+@app.get("/confirm/{token}")
+def confirm_page(token:str, err:str=""):
+    o=ready(token)
+    if o["draft"] or FRAUD.held(o): return RedirectResponse(f"/start/{token}",303)
+    I,M,Q=_confirm_items(o)
+    if not (M or Q): return RedirectResponse(f"/prepare/{token}",303)
+    form=o["form"]; me=INTAKE.is_me(I,form); my="my" if me else ("my child's" if form=="dla" else "their")
+    body=""
+    dc=[m for m in M if m["kind"]=="doc_cond"]; dm=[m for m in M if m["kind"]=="doc_meds"]; sc=[m for m in M if m["kind"]=="said_cond"]
+    if dc: body+=INTAKE._q("Your documents also mention these. Tick any you want on the form:",'<div class=chips>'+"".join(INTAKE._chk("addc",m["id"],m["text"],False) for m in dc)+'</div>',"Only tick what's right. We leave the rest out.")
+    for m in dm: body+=INTAKE._q(f"Your documents list these medicines: {m['text']}. Add them to {my} form?",INTAKE._radios(m["id"],[("yes","Yes, add them"),("no","No, leave them out")],"")+INTAKE._else(m["id"],""))
+    if sc: body+=INTAKE._q("You told us about these, but we didn't see them in your documents. That's fine, most letters only cover one thing. Untick any that aren't right:",'<div class=chips>'+"".join(INTAKE._chk("keepc",m["id"],m["text"],True) for m in sc)+'</div>')
+    for q in Q:
+        body+=INTAKE._q(q["q"],INTAKE._radios("q_"+q["id"],q["opts"],"",' nums' if q.get("nums") else '')+INTAKE._else("q_"+q["id"],""),"Or tap Something else and tell us in your own words.")
+    n=len(Q)+len(dm)
+    return page(prog(4,"Quick check")+f"""<h1>Quick check before we write</h1><p class=lead>{'A few things' if n+bool(dc)+bool(sc)>1 else 'One thing'} didn't quite match. Tap what's right, so your form is accurate. We only write what you confirm.</p>
+{f'<div class=warning role=alert>{esc(err)}</div>' if err else ''}<form method=post action=/confirm/{token}>{body}<div class=navrow><button class="btn btn-start">Continue</button></div></form>""","Quick check",minimal=True)
+@app.post("/confirm/{token}")
+async def confirm_save(token:str, req:Request):
+    o=ready(token)
+    if o["draft"] or FRAUD.held(o): return RedirectResponse(f"/start/{token}",303)
+    fm=await req.form(); I,M,Q=_confirm_items(o); form=o["form"]
+    missing=[q for q in Q if str(fm.get("q_"+q["id"]) or "") not in dict(q["opts"]) and not INTAKE.other_txt(fm,"q_"+q["id"])]
+    if missing: return RedirectResponse(f"/confirm/{token}?err="+urllib.parse.quote("Please answer each question (or tap Something else)."),303)
+    res=I.setdefault("doc_resolved",{}); add=set(fm.getlist("addc")); keep=set(fm.getlist("keepc"))
+    for m in M:
+        if m["kind"]=="doc_cond":
+            if m["id"] in add: I.setdefault("conds",[]).append({"name":m["text"],"since":"","treat":[],"tx":"","from_doc":True})
+            res[m["id"]]="add" if m["id"] in add else "no"
+        elif m["kind"]=="doc_meds":
+            v=str(fm.get(m["id"]) or ""); x=INTAKE.other_txt(fm,m["id"])
+            if HONEST.refuse(x): x=""; I["refused"]=int(I.get("refused") or 0)+1
+            if v=="yes": I["meds_confirmed"]=list(dict.fromkeys((I.get("meds_confirmed") or [])+m["items"]))
+            if x: I["meds_confirmed"]=(I.get("meds_confirmed") or [])+[x]
+            res[m["id"]]=v or ("else" if x else "skip")
+        elif m["kind"]=="said_cond":
+            if m["id"] not in keep: I["conds"]=[c for c in I.get("conds") or [] if c.get("name")!=m["text"]]
+            res[m["id"]]="keep" if m["id"] in keep else "removed"
+    for q in Q: HONEST.apply(form,I,q,str(fm.get("q_"+q["id"]) or ""),INTAKE.other_txt(fm,"q_"+q["id"]))
+    c=db(); c.execute("update orders set intake=?, history=? where token=?",(json.dumps(I),json.dumps(INTAKE.history(form,I)),token)); c.commit()
+    return RedirectResponse(f"/prepare/{token}",303)
+HOLD_PAGE="""<div class=prep><h1>We're checking your order</h1><p class=lead>Thank you. We're checking a few details on your order before we fill in your form. We'll email you shortly.</p><p>You don't need to do anything now. Your answers are saved.</p></div>"""
+@app.get("/hold/{token}")
+def hold_page(token:str):
+    o=get(token)
+    if not FRAUD.held(o): return RedirectResponse(f"/start/{token}",303)
+    return page(HOLD_PAGE,"We're checking your order",minimal=True)
+def _held_redirect(o):
+    return RedirectResponse(f"/hold/{o['token']}",303) if FRAUD.held(o) else None
+# ---------- Admin: held orders (release or refund). Key: ADMIN_SECRET, or CRON_SECRET if that isn't set ----------
+ADMIN_SECRET=os.getenv("ADMIN_SECRET","") or CRON_SECRET
+def _admin_ok(key):
+    if not ADMIN_SECRET or not hmac.compare_digest(str(key or ""),ADMIN_SECRET): raise HTTPException(403)
+def admin_page(body):
+    return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=stylesheet href=/static/app.css><title>Held orders | Admin</title><meta name=robots content=noindex></head><body><main id=main><div class=wrap>{body}</div></main></body></html>""",headers={"Cache-Control":"no-store"})
+@app.get("/admin")
+def admin_home():
+    if not ADMIN_SECRET: raise HTTPException(404)
+    return admin_page("""<h1>Held orders</h1><form method=post action=/admin/held><div class=field><label class=q for=k>Admin key</label><input id=k type=password name=key autocomplete=off required></div><button class=btn>Show held orders</button></form>""")
+def _held_rows(c):
+    out=[]
+    for r in c.execute("select * from orders where hold is not null and status='paid' order by created desc limit 200").fetchall():
+        if FRAUD.held(r): out.append(r)
+    return out
+@app.post("/admin/held")
+def admin_held(key:str=Form("")):
+    _admin_ok(key); c=db(); rows=_held_rows(c); ke=esc(key)
+    def card(r):
+        h=FRAUD.hold_info(r); I=_intake_of(r); _,T=INTAKE.topic_texts(r["form"],I) if I and r["form"] in INTAKE.FORMS_V3 else ("",{})
+        said="".join(f"<li><strong>{esc(t)}</strong>: {esc(v[:300])}</li>" for t,v in T.items() if v)
+        return f"""<div class=trace><h3>{esc(r['token'][:8])} · {esc(r['form'])} · {esc(r['tier'])} · {time.strftime('%d %b %H:%M',time.localtime(r['created'] or 0))}</h3>
+<p><strong>Why held:</strong></p><ul>{''.join(f'<li>{esc(x)}</li>' for x in h.get('reasons',[]))}{"<li>asked us to exaggerate once (refused)</li>" if int(I.get('refused') or 0)==1 else ''}</ul>
+<p>Claimant: {esc(FRAUD.claimant(r) or 'not given yet')} · Email: {esc(r['email'] or '-')} · IP: {esc(r['ip'] or '-')}</p><details><summary>Their answers</summary><ul>{said}</ul></details>
+<form method=post action=/admin/release/{r['token']} style="display:inline"><input type=hidden name=key value="{ke}"><button class=btn>Release (carry on)</button></form>
+<form method=post action=/admin/refund/{r['token']} style="display:inline" onsubmit="return confirm('Refund in full and delete their answers?')"><input type=hidden name=key value="{ke}"><button class="btn btn-warn">Refund and delete</button></form></div>"""
+    return admin_page(f"<h1>Held orders ({len(rows)})</h1>"+("".join(card(r) for r in rows) or "<p>Nothing is held.</p>"))
+def _mail_customer(o,subj,txt):
+    if not o["email"]: return
+    def _s():
+        try: mailer.send(o["email"],subj,txt)
+        except Exception as e: print("customer email failed",str(e)[:200])
+    threading.Thread(target=_s,daemon=True).start()
+@app.post("/admin/release/{token}")
+def admin_release(token:str, key:str=Form("")):
+    _admin_ok(key); o=get(token)
+    if not FRAUD.held(o): raise HTTPException(409,"Not held")
+    h=FRAUD.hold_info(o); h["released_at"]=time.time()
+    c=db(); c.execute("update orders set hold=? where token=?",(json.dumps(h),token)); c.commit()
+    if o["interview_done_at"] and not o["draft"] and (_intake_of(o).get("uploads_done") or not o["intake"]): start_prepare(token)
+    _mail_customer(o,f"{BRAND}: your form is being prepared",f"Thank you for waiting. We've checked your order and you can carry on now.\n\nCarry on here: {PUBLIC}/start/{token}\n\nKeep this link private.\n\n{BRAND}")
+    return admin_page(f"<h1>Released</h1><p>Order {esc(token[:8])} is carrying on. The customer has been emailed.</p><form method=post action=/admin/held><input type=hidden name=key value='{esc(key)}'><button class=btn>Back to held orders</button></form>")
+@app.post("/admin/refund/{token}")
+def admin_refund(token:str, key:str=Form("")):
+    _admin_ok(key); o=get(token)
+    if o["status"]!="paid": raise HTTPException(409,"Not a paid order")
+    if not DEV:
+        s=stripe("GET","/checkout/sessions/"+urllib.parse.quote(o["stripe_session"])) if o["stripe_session"] else {}
+        pi=s.get("payment_intent")
+        if not pi: raise HTTPException(409,"No payment found to refund. Refund it in the payment dashboard instead.")
+        stripe("POST","/refunds",{"payment_intent":pi if isinstance(pi,str) else pi["id"],"reason":"requested_by_customer","metadata[token]":token})
+    email=o["email"]; orders.erase(db(),OUT,token)
+    c=db(); c.execute("update orders set status='refunded' where token=?",(token,)); c.commit()
+    if email: _mail_customer({"email":email},f"{BRAND}: your order has been cancelled and refunded",f"We've cancelled your order and refunded your payment in full. Refunds usually reach your account in 5 to 10 working days.\n\nWe have deleted the answers you gave us.\n\n{BRAND}")
+    return admin_page(f"<h1>Refunded</h1><p>Order {esc(token[:8])} was refunded and its answers deleted.</p><form method=post action=/admin/held><input type=hidden name=key value='{esc(key)}'><button class=btn>Back to held orders</button></form>")
 
 # ---------- Deadline tracker, strength check, approval, saved answers, review mode, MR letter ----------
 PROMISE="<div class=promise><strong>Your words only.</strong> We only use what you told us. You approve every word before you send.</div>"
 def ordered(token):
     o=ready(token)
+    if FRAUD.held(o): return _held_redirect(o),None,None
     if not o["draft"]: return RedirectResponse(chat_url(o),303),None,None
     return None,o,json.loads(o["draft"])
 def said_map(o):
@@ -605,7 +818,8 @@ def _strength(o,d):
     if I and form in INTAKE.FORMS_V3: return "v4",quality.gaps_v4(form,I),I
     return "legacy",quality.check_legacy_v2(d["answers"],FORMS[form]["topics"],o["form"]),None
 @app.get("/check/{token}")
-def check_page(token:str):
+def check_page(token:str, r:str=""):
+    refused=REFUSED_BOX if r else ""
     r,o,d=ordered(token)
     if r: return r
     mode,G,I=_strength(o,d); skip=f'<a class="btn btn-2" href="/approve/{token}">Skip, my form is ready</a>'
@@ -617,13 +831,19 @@ def check_page(token:str):
     else:
         rows="".join(f"""<div class="sc"><h3>{esc(x['label'])}</h3><p class=ans>{esc(x['answer'])}</p>{''.join(f'<p class=hint>{esc(f)}</p>' for f in x['flags'])}<label class=hint for="add_{x['id']}">Add detail in your own words (optional)</label><textarea id="add_{x['id']}" name="add_{x['id']}" rows=2></textarea></div>""" for x in G)
     n=len(G); qs=f"{n} quick question{'s' if n>1 else ''}"
-    return page(prog(6)+f"""<h1>We can make these stronger</h1><p class=lead>{qs} to make your form stronger (optional). Only add what's true.</p>
+    return page(prog(6)+refused+f"""<h1>We can make these stronger</h1><p class=lead>{qs} to make your form stronger (optional). Only add what's true.</p>
 <form method=post action=/check/{token}>{rows}<p><button class=btn>Save and continue</button> {skip}</p></form>""","Strength check")
 @app.post("/check/{token}")
 async def check_save(token:str, req:Request):
     r,o,d=ordered(token)
     if r: return r
     fm=await req.form(); a=d["answers"]; extra=d.setdefault("user_added",{})
+    if any(HONEST.refuse(str(v)) for k,v in fm.items() if k.endswith("_x") or k.startswith("add_")):
+        I0=_intake_of(o)
+        if I0:
+            I0["refused"]=int(I0.get("refused") or 0)+1; c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I0),token)); c.commit()
+            if check_hold(token,"check"): return RedirectResponse(f"/hold/{token}",303)
+        return RedirectResponse(f"/check/{token}?r=1",303)
     def add(tid,v):
         a[tid]=((a.get(tid) or "")+" "+v).strip(); extra[tid]=(extra.get(tid,"")+" "+v).strip()
     mode,G,I=_strength(o,d)
@@ -694,22 +914,24 @@ def flag_html(t,its,fm,need,labels):
         opts="".join(f'<label><input type=radio name="res_{i["key"]}" value={v} required {"checked" if ch==v else ""}> {l}</label>' for v,l in (("keep","Keep, it's true"),("edit","I've edited the answer"),("remove","Remove it")))
         return f"""<li id="res_{i['key']}" class="{'needs' if i['key'] in need else ''}">{'<p class=err>Please choose one</p>' if i['key'] in need else ''}<p><strong>"{esc(i['sentence'])}"</strong> <span class=hint>({esc(', '.join(i['kinds']))})</span></p>{f'<p class=hint>Also in: {esc(", ".join(also))}. Your choice applies to both.</p>' if also else ''}<div class=resopts>{opts}</div></li>"""
     return f"""<div class=ground><p class=flag>We couldn't find this in what you told us — keep, edit or remove</p><ul>{''.join(one(i) for i in its)}</ul></div>"""
-def render_approve(token,o,d,G,fm=None,need_ok=(),need_res=()):
+HONEST_TICK="I confirm everything is true. I understand giving false information to DWP is an offence, and I could be prosecuted or have to pay money back."
+def render_approve(token,o,d,G,fm=None,need_ok=(),need_res=(),need_honest=False):
     F=FORMS[o["form"] or "aa"]; sm=said_map(o); added=d.get("user_added",{}); labels={t:l for t,l,_ in F["topics"]}; its=flag_items(o,d,G)
     ans=lambda t: str(fm.get(f"ans_{t}")) if fm and fm.get(f"ans_{t}") is not None else d['answers'].get(t,'')
     rows="".join(f"""<div class="trace{' needs' if t in need_ok else ''}" id="topic_{t}"><h3>{esc(l)}</h3><div class=cols><div><p class=lbl>What you told us</p><p class=you>{esc(sm.get(t,'')) or '<em>Nothing for this topic</em>'}{f'<br><strong>You added:</strong> {esc(added[t])}' if t in added else ''}</p></div>
 <div><p class=lbl>What goes on the form (edit if needed)</p><textarea name="ans_{t}" rows=4>{esc(ans(t))}</textarea></div></div>
 {flag_html(t,its,fm,need_res,labels)}{'<p class=err>Please tick to approve this answer</p>' if t in need_ok else ''}<label class=cb><input type=checkbox id="ok_{t}" name="ok_{t}" required {'checked' if fm and fm.get(f'ok_{t}') else ''}><span>I approve this answer. It is true and in my words.</span></label></div>""" for t,l,_ in F["topics"])
-    n=len(need_ok)+len(need_res); summary=""
+    n=len(need_ok)+len(need_res)+bool(need_honest); summary=""
     if n:
-        links=[f'<li><a href="#topic_{t}">Approve: {esc(labels[t])}</a></li>' for t in need_ok]+[f'<li><a href="#res_{i["key"]}">Choose keep, edit or remove: "{esc(i["sentence"][:80])}{"…" if len(i["sentence"])>80 else ""}"</a></li>' for i in its if i["key"] in need_res]
+        links=[f'<li><a href="#topic_{t}">Approve: {esc(labels[t])}</a></li>' for t in need_ok]+(['<li><a href="#honest">Confirm everything is true</a></li>'] if need_honest else [])+[f'<li><a href="#res_{i["key"]}">Choose keep, edit or remove: "{esc(i["sentence"][:80])}{"…" if len(i["sentence"])>80 else ""}"</a></li>' for i in its if i["key"] in need_res]
         summary=f"""<div class=errsum role=alert tabindex=-1 id=errsum><h2>{n} answer{'s' if n!=1 else ''} still need{'' if n!=1 else 's'} a choice</h2><ul>{''.join(links)}</ul></div>"""
     pending=[i for i in its if not (fm and fm.get(f"res_{i['key']}") in ("keep","edit","remove"))]
     keepall=f"""<p><button class="btn btn-2" name=keepall value=1 formnovalidate>Keep all remaining ({len(pending)}) as true</button> <span class=hint>Only if every one of them is true.</span></p>""" if pending else ""
     return page(prog(7)+f"""{summary}<h1>Check and approve every answer</h1>{PROMISE}<p class=lead>Each answer is shown next to what you told us. Change anything that isn't right. Nothing is ready to download until you approve each answer.</p>
 <form method=post action=/approve/{token}>{rows}{keepall}
 <label class=cb><input type=checkbox name=save {'checked' if fm and fm.get('save') else ''}><span>Save my answers for next time (for a review or renewal). We'll give you a save code. Saved answers are kept for 90 days unless you delete them.</span></label>
-<div class=warning>Giving false information on a benefit claim is an offence.</div><button class="btn btn-start">I approve. Make my documents</button></form>""","Approve your answers")
+{'<p class=err>Please tick to confirm everything is true</p>' if need_honest else ''}<label class="cb honest{' needs' if need_honest else ''}" id=honest><input type=checkbox name=honest required {'checked' if fm and fm.get('honest') else ''}><span>{esc(HONEST_TICK)}</span></label>
+<button class="btn btn-start">I approve. Make my documents</button></form>""","Approve your answers")
 @app.get("/approve/{token}")
 def approve_page(token:str):
     r,o,d=ordered(token)
@@ -734,8 +956,9 @@ async def approve_save(token:str, req:Request):
             if fm.get(f"res_{i['key']}") not in ("keep","edit","remove"): fm[f"res_{i['key']}"]="keep"
     need_ok=[t for t,_,_ in F["topics"] if not fm.get(f"ok_{t}")]
     need_res=[i["key"] for i in its if fm.get(f"res_{i['key']}") not in ("keep","edit","remove")]
-    if need_ok or need_res: return render_approve(token,o,d,G,fm,need_ok,need_res)
-    d.pop("gcache",None)
+    need_honest=not fm.get("honest")
+    if need_ok or need_res or need_honest: return render_approve(token,o,d,G,fm,need_ok,need_res,need_honest)
+    d.pop("gcache",None); d["honest_at"]=time.time()
     res=d.setdefault("grounding_resolved",[]); removed=[]
     for i in its:
         ch=fm.get(f"res_{i['key']}"); res.append({"topics":i["topics"],"phrase":i["sentence"],"choice":ch,"at":time.time()})
@@ -797,6 +1020,7 @@ async def ticks_save(token:str, req:Request):
 @app.get("/documents/{token}")
 def documents_page(token:str):
     o=ready(token)
+    if FRAUD.held(o): return _held_redirect(o)
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     if not o["details_at"]: return RedirectResponse(f"/details/{token}",303)

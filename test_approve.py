@@ -35,7 +35,7 @@ for form,tier in (("dla","99"),("aa","99"),("pip","99")):
     h1=body(f"/approve/{tok}"); h2=body(f"/approve/{tok}")
     r1=sorted(set(re.findall(r'name="(res_[^"]+)"',h1))); assert r1 and r1==sorted(set(re.findall(r'name="(res_[^"]+)"',h2))), "flags must be stable between views"
     topics=[t for t,_,_ in app.FORMS[form]["topics"]]
-    fm={f"ok_{t}":"on" for t in topics[:-1]}; fm[r1[0]]="keep"; fm[f"ans_{topics[0]}"]="My edited text."
+    fm={f"ok_{t}":"on" for t in topics[:-1]}; fm["honest"]="on"; fm[r1[0]]="keep"; fm[f"ans_{topics[0]}"]="My edited text."
     e=req(f"/approve/{tok}",fm); assert e.status==200; eh=e.read().decode()
     need=1+len(r1)-1; assert f"{need} answer{'s' if need!=1 else ''} still need" in eh, eh[:600]
     assert f'value=keep required checked' in eh and "My edited text." in eh and f'href="#topic_{topics[-1]}"' in eh and "Please tick to approve this answer" in eh

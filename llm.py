@@ -49,7 +49,9 @@ STRICT RULES: Use ONLY facts the USER stated in the transcript. Never add, infer
 numbers, frequencies, durations, aids, people or places. If the user didn't say how often or how long, don't write one. If a topic wasn't discussed, return "".
 Include how often, how long, who helps and what happens without help ONLY where the user said so. Plain English, no exaggeration.
 The transcript may be short tapped answers (e.g. "Dressing: finds this hard, needs help or reminding, like this most days, each time takes 10 to 30 minutes"). Turn them into natural sentences without adding facts.
-Describe what happens on most days. If the user said there are bad days on more than half the days (4 or more a week), describe bad days as the usual situation; otherwise mention bad days and how many a week, as stated. Never describe a worst day as typical.
+Describe what happens on a typical day, then bad days and how many a week, exactly as stated. If the user said there are bad days on more than half the days (4 or more a week), describe bad days as the usual situation; otherwise mention bad days and how many a week, as stated. Never describe a worst day or a bad day as every day, and never present a worst case as typical.
+Never make anything sound more severe, more frequent or more absolute than the user's words: no "always", "never", "constantly", "completely", "at all", "impossible" or "every day" unless the user said so; "struggles" stays "struggles", not "cannot".
+Lines that start "Checked with you:" are the user's own corrections: they override anything earlier that disagrees. Only use facts from documents where the user confirmed them ("I checked these against my documents").
 Never state or imply eligibility, award rates, amounts, points, descriptors or likely outcomes. Return JSON: {{"answers":{{one key per topic id: {ids}}},"extra":{{}},"conditions":[{{"name","since","meds","dose"}}],
 "checklist":[...evidence...],"gp_letter":"...","carer_statement":"...","notes_for_user":[...],
 "sources":{{topic id: [short verbatim quotes from the USER's messages each answer is based on]}}"""
@@ -65,14 +67,24 @@ DOWN_SECS=int(os.getenv("LLM_DOWN_SECS","120")); QUOTA_DOWN_SECS=int(os.getenv("
 def _anthropic_body(model, messages, json_mode):
     sys_="\n\n".join(m["content"] for m in messages if m["role"]=="system")
     if json_mode: sys_+="\n\nReply with ONE valid JSON object only. No prose, no code fences."
-    msgs=[{"role":m["role"],"content":m["content"]} for m in messages if m["role"]!="system"]
+    msgs=[{"role":m["role"],"content":_anth_parts(m["content"])} for m in messages if m["role"]!="system"]
     if not msgs or msgs[0]["role"]!="user": msgs=[{"role":"user","content":"Hello, I'm ready to start."}]+msgs
     merged=[]  # Messages API requires alternating roles
     for m in msgs:
-        if merged and merged[-1]["role"]==m["role"]: merged[-1]["content"]+="\n\n"+m["content"]
+        if merged and merged[-1]["role"]==m["role"] and isinstance(m["content"],str) and isinstance(merged[-1]["content"],str): merged[-1]["content"]+="\n\n"+m["content"]
         else: merged.append(dict(m))
     return {"model":model,"max_tokens":int(os.getenv("LLM_MAX_TOKENS","8000")),
             "system":[{"type":"text","text":sys_,"cache_control":{"type":"ephemeral"}}],"messages":merged}
+def _anth_parts(c):
+    """OpenAI-style content parts (text / image_url data URLs) -> Anthropic content blocks. Strings pass through."""
+    if isinstance(c,str): return c
+    out=[]
+    for p in c:
+        if p.get("type")=="text": out.append({"type":"text","text":p["text"]})
+        elif p.get("type")=="image_url":
+            u=p["image_url"]["url"]; mt,data=u[5:].split(";base64,",1)
+            out.append({"type":"image","source":{"type":"base64","media_type":mt,"data":data}})
+    return out
 def _first_json(t):
     """Return the first complete JSON object in t (models sometimes add trailing text or a second object)."""
     i=t.find("{")
@@ -207,6 +219,7 @@ def draft_parallel(t, form):
 GROUNDING_PROMPT="""You check a drafted benefit-form answer against the customer's own words.
 List every claim in the DRAFT that is not directly supported by the SOURCE (customer's words): new conditions, symptoms, medicines, doses,
 numbers, frequencies, durations, aids or equipment, people, places, or any statement about eligibility or outcome.
+Also list anything stated as more severe, more frequent or more absolute than the SOURCE (e.g. "always" where the source says "most days", "cannot" where it says "struggles", a bad day described as every day).
 Return JSON only: {"unsupported":[{"phrase":"exact words from the draft","reason":"short reason"}]}. Return {"unsupported":[]} if all supported."""
 def grounding(draft_text, source_text):
     """Mandatory grounding check (raises LLMUnavailable if every checker model fails). Returns list of {phrase,reason}. Empty in MOCK mode (deterministic layer still runs)."""
@@ -216,3 +229,20 @@ def grounding(draft_text, source_text):
     if MOCK or not draft_text.strip(): return []
     out=_call([{"role":"system","content":GROUNDING_PROMPT},{"role":"user","content":f"SOURCE:\n{source_text}\n\nDRAFT:\n{draft_text}"}],json_mode=True,chain=GROUND_CHAIN,effort=GROUND_EFFORT)
     return json.loads(out).get("unsupported",[])
+
+EVIDENCE_PROMPT="""You read photos or text of UK health or care documents (GP or hospital letters, prescription lists, care plans, reports).
+List ONLY health conditions or diagnoses and medicines that are actually written in them. Never guess, infer or add anything.
+Medicines: name plus strength if written (e.g. "Donepezil 10mg"). Conditions: as written, in plain words.
+If a picture is not a health document or can't be read, return empty lists.
+Return JSON only: {"conditions":[...],"medicines":[...]}"""
+VISION_TYPES={"jpg":"image/jpeg","png":"image/png","webp":"image/webp"}   # HEIC isn't accepted by the readers: PDF text and the other types only
+def extract_evidence(images, text):
+    """images: [(ext, bytes)], text: PDF text. Returns {"conditions":[],"medicines":[]} (empty in MOCK mode; the word lists still run)."""
+    import base64
+    if MOCK or not (images or (text or "").strip()): return {"conditions":[],"medicines":[]}
+    parts=[{"type":"text","text":"DOCUMENT TEXT:\n"+(text or "")[:12000]}]
+    for ext,data in images[:6]:
+        if ext in VISION_TYPES: parts.append({"type":"image_url","image_url":{"url":f"data:{VISION_TYPES[ext]};base64,"+base64.b64encode(data).decode()}})
+    chain=[x for x in DRAFT_CHAIN if x[0]!="custom"] or DRAFT_CHAIN
+    out=json.loads(_call([{"role":"system","content":EVIDENCE_PROMPT},{"role":"user","content":parts}],json_mode=True,chain=chain,effort=DRAFT_EFFORT))
+    return {"conditions":[str(x) for x in out.get("conditions") or []][:20],"medicines":[str(x) for x in out.get("medicines") or []][:20]}

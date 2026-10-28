@@ -11,6 +11,7 @@ PLACES="hospital|a&e|school|nursery|care home|hospice|clinic|day centre|bus|trai
 MULTI=[t for t in CONDITIONS+AIDS+PEOPLE+PLACES]  # handled via phrase search
 FREQ=re.compile(r"\b(\d+(?:\.\d+)?|"+"|".join(sorted(NUMW,key=len,reverse=True))+r")\s*(?:to\s*\d+\s*)?(times?|x)?\s*(a|an|per|each|every)?\s*(day|days|night|nights|week|weeks|month|months|year|years|morning|mornings|hour|hours|hrs?|minute|minutes|mins?|seconds?|metres|meters|m|yards|miles|mg|ml|steps|falls?)\b",re.I)
 FREQW=re.compile(r"\b(daily|nightly|weekly|monthly|every day|every night|every morning|most days|most nights|all day|all night|always|constantly|hourly)\b",re.I)
+EXAGG=re.compile(r"\b(always|never|constantly|completely|totally|entirely|at all|impossible|every single|all the time|unable to do anything|bed-?bound|housebound|severe|extreme(?:ly)?)\b",re.I)
 def _num(x):
     x=x.lower(); return float(x) if re.match(r"^\d",x) else float(NUMW.get(x,-1))
 def quantities(text):
@@ -42,6 +43,8 @@ def check_answer(draft, source):
         if m.group(0).lower() not in src: flags.append({"phrase":m.group(0),"kind":"frequency"})
     for kind,vocab in (("condition or symptom",CONDITIONS),("medicine",MEDS),("aid or equipment",AIDS),("person",PEOPLE),("place",PLACES)):
         for t in terms(draft,vocab)-terms(source,vocab): flags.append({"phrase":t,"kind":kind})
+    for m in EXAGG.finditer(draft):   # stronger than the customer's words (Oct 2026: never exaggerate)
+        if not re.search(r"\b"+re.escape(m.group(0).lower())+r"\b",src): flags.append({"phrase":m.group(0),"kind":"stronger than your words"})
     for m in re.finditer(r"\b\d+(?:\.\d+)?\s*mg\b",draft,re.I):
         if m.group(0).lower().replace(" ","") not in src.replace(" ",""): flags.append({"phrase":m.group(0),"kind":"dose"})
     for m in re.finditer(r"\b(entitled|eligible|qualif\w+|will (get|receive|be awarded)|higher rate|lower rate|middle rate|enhanced rate|standard rate|points?)\b",draft,re.I):
