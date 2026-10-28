@@ -108,3 +108,8 @@ details.tickall{margin:1rem 0}details.tickall summary{cursor:pointer;font-weight
 .card .more .sub .hint{display:inline;font-weight:400}
 @supports selector(:has(a)){.cond.other:has(input[name^=oc_]:placeholder-shown) select,.cond.other:has(input[name^=oc_]:placeholder-shown) .chips{display:none}}
 .chips.nums{gap:.3rem}.chips.nums .chip span{min-width:38px;justify-content:center;padding:.4rem .55rem;font-size:.9rem}
+.prepsteps{list-style:none;padding:0;margin:1.2em 0}.prepsteps li{position:relative;padding:.55em 0 .55em 2.1em;color:var(--muted)}
+.prepsteps li:before{content:"";position:absolute;left:.2em;top:.62em;width:1.1em;height:1.1em;border-radius:50%;border:2px solid #c5d0d4;box-sizing:border-box}
+.prepsteps li.pdone{color:inherit}.prepsteps li.pdone:before{content:"\2713";border:0;background:#1e7a55;color:#fff;font-size:.75em;font-weight:700;display:grid;place-items:center;width:1.45em;height:1.45em}
+.prepsteps li.pnow{color:inherit;font-weight:700}.prepsteps li.pnow:before{border-color:var(--accent);border-top-color:transparent;animation:prepspin 1s linear infinite}
+@keyframes prepspin{to{transform:rotate(360deg)}}

@@ -56,15 +56,19 @@ def check(answers, source_text, use_llm=None):
     """answers {tid:text} -> {tid:[{phrase,kind}]} (only non-empty)."""
     import llm
     use_llm=(os.getenv("LLM_GROUNDING","1")!="0") if use_llm is None else use_llm
-    res={}
-    for tid,a in answers.items():
-        if not (a or "").strip(): continue
+    res={}; todo=[(tid,a) for tid,a in answers.items() if (a or "").strip()]
+    llm_out={}
+    if use_llm and todo:   # every answer is still checked by the model; the calls just run at the same time (was ~1-2s each, one after another)
+        import concurrent.futures as cf
+        with cf.ThreadPoolExecutor(min(8,len(todo))) as ex:
+            futs={tid:ex.submit(llm.grounding,a,source_text) for tid,a in todo}
+            for tid,fu in futs.items():
+                try: llm_out[tid]=fu.result()
+                except Exception as e: raise GroundingUnavailable(str(e)[:300]) from None  # mandatory: never silently skip
+    for tid,a in todo:
         f=check_answer(a,source_text)
-        if use_llm:
-            try:
-                for x in llm.grounding(a,source_text):
-                    if x.get("phrase") and x["phrase"].lower() not in {y["phrase"].lower() for y in f}: f.append({"phrase":x["phrase"],"kind":x.get("reason","not in your words")})
-            except Exception as e: raise GroundingUnavailable(str(e)[:300]) from None  # mandatory: never silently skip
+        for x in llm_out.get(tid,[]):
+            if x.get("phrase") and x["phrase"].lower() not in {y["phrase"].lower() for y in f}: f.append({"phrase":x["phrase"],"kind":x.get("reason","not in your words")})
         if f: res[tid]=f
     return res
 _ABBR=r"(?:Mr|Mrs|Ms|Dr|St|etc|e\.g|i\.e|approx|no|vs)"

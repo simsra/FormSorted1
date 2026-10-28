@@ -43,6 +43,11 @@ def stripe(method,path,data=None):
     return json.load(urllib.request.urlopen(req,timeout=30))
 app=FastAPI()
 @app.middleware("http")
+async def _timing(request:Request, call_next):
+    t=time.time(); r=await call_next(request); dt=time.time()-t
+    if dt>0.5: print(f"timing slow {request.method} /{request.url.path.split('/')[1]} {dt:.2f}s",flush=True)
+    return r
+@app.middleware("http")
 async def _canonical_host(request:Request, call_next):
     # Old onrender.com address -> app.formsorted.com (keep health checks, webhooks and cron working on either host)
     host=(request.headers.get("host") or "").split(":")[0]
@@ -203,7 +208,9 @@ async def payment_webhook(req:Request):
         c.execute("insert into orders(token,tier,status,stripe_session,email,created,paid_at,form) values(?,?,?,?,?,?,?,?)",(token,tier,"paid",s["id"],email,time.time(),time.time(),form))
     c.commit()
     if email:
-        subj,txt=orders.link_email(BRAND,FORMS[form]["short"],f"{PUBLIC}/start/{token}"); mailer.send(email,subj,txt)
+        subj,txt=orders.link_email(BRAND,FORMS[form]["short"],f"{PUBLIC}/start/{token}")
+        try: await run_in_threadpool(mailer.send,email,subj,txt)   # 28 Oct: blocked the whole site for the email call, then 500'd on a mail error
+        except Exception as e: print("link email failed",str(e)[:200])
     return {"ok":True}
 DELETED_PAGE="<h1>Your information has been deleted</h1><p>Everything you told us for this order has been deleted. This link no longer works.</p>"
 @app.get("/start/{token}")
@@ -232,17 +239,84 @@ def consent(token:str, health:str=Form(...), truth:str=Form(...), digital:str=Fo
     if o["status"] not in ("paid","free"): raise HTTPException(403)
     c=db(); c.execute("update orders set consent_at=? where token=?",(time.time(),token)); c.commit()
     return RedirectResponse(chat_url(o),303)
+# ---------- Preparing the form (after payment) ----------
+# 28 Oct: /prepare used to draft inside the page request (~30s of blank screen) and /approve ran the answer check
+# one call after another (~15s+). Now drafting starts in the background the moment the customer finishes,
+# the waiting page shows real steps, and the answer check is done ahead of time so approve opens straight away.
+import threading
+JOBS={}; _JLOCK=threading.Lock()   # token -> {"stage": queued|draft|check|done|error, "t": started}
+def _draft_now(token):
+    o=get(token)
+    if o["draft"]: return
+    h=json.loads(o["history"]); I=json.loads(o["intake"] or "{}")
+    if I.get("doc_text"): h=h+[{"role":"assistant","content":"Documents you uploaded"},{"role":"user","content":I["doc_text"][:12000]}]
+    t=time.time(); d=llm.draft(h,o["form"] or "aa"); d.setdefault("answers",{}); print(f"timing draft {o['form']} {time.time()-t:.1f}s",flush=True)
+    if I: merge_intake(o["form"] or "aa",d,I)
+    c=db(); c.execute("update orders set draft=?, approved_at=null where token=? and draft is null",(json.dumps(d),token)); c.commit()
+def _job(token):
+    try:
+        JOBS[token]["stage"]="draft"; _draft_now(token)
+        JOBS[token]["stage"]="check"
+        try: ground_ahead(token)
+        except Exception as e: print("ground ahead failed (approve will retry)",str(e)[:200])
+        JOBS[token]["stage"]="done"
+    except Exception as e:
+        print("prepare failed",token[:6],str(e)[:300]); JOBS[token]["stage"]="error"
+def start_prepare(token):
+    """Start drafting (and the answer check) in the background, once per order. Safe to call repeatedly."""
+    with _JLOCK:
+        j=JOBS.get(token)
+        if j and j["stage"] in ("queued","draft","check"): return j
+        j=JOBS[token]={"stage":"queued","t":time.time()}
+    threading.Thread(target=_job,args=(token,),daemon=True).start(); return j
+def ground_ahead(token):
+    """Run the mandatory answer check now and store it, but only if the answers haven't changed meanwhile."""
+    o=get(token); raw=o["draft"]
+    if not raw: return
+    d=json.loads(raw); h=_ghash(o,d)
+    if (d.get("gcache") or {}).get("h")==h: return
+    ev=_GRUN.get((token,h))
+    if ev: ev.wait(120); return
+    ev=_GRUN[(token,h)]=threading.Event()
+    try:
+        t=time.time(); G=ground(o,d); d["gcache"]={"h":h,"G":G}; print(f"timing check {o['form']} {time.time()-t:.1f}s",flush=True)
+        c=db(); c.execute("update orders set draft=? where token=? and draft=?",(json.dumps(d),token,raw)); c.commit()
+    finally: ev.set(); _GRUN.pop((token,h),None)
+_GRUN={}
+PREP_STEPS=[("read","Reading your answers"),("draft","Filling in each section of your form"),("check","Checking every answer against what you told us"),("ready","Getting your form ready to check")]
+def _stage(o):
+    j=JOBS.get(o["token"]) or {}
+    if o["draft"]: return "ready" if j.get("stage")!="check" else "check"
+    return "error" if j.get("stage")=="error" else "draft"
 @app.get("/prepare/{token}")
 def prepare(token:str):
     """After payment: draft from the interview (the only place drafting happens), then continue the paid flow."""
     o=ready(token)
     if not o["draft"]:
-        h=json.loads(o["history"]); I=json.loads(o["intake"] or "{}")
-        if I.get("doc_text"): h=h+[{"role":"assistant","content":"Documents you uploaded"},{"role":"user","content":I["doc_text"][:12000]}]
-        d=llm.draft(h,o["form"] or "aa"); d.setdefault("answers",{})
-        if I: merge_intake(o["form"] or "aa",d,I)
-        c=db(); c.execute("update orders set draft=?, approved_at=null where token=? and draft is null",(json.dumps(d),token)); c.commit()
-    return RedirectResponse(f"/deadline/{token}",303)
+        j=start_prepare(token)
+        for _ in range(8):   # quick drafts (and tests) go straight on, no waiting page
+            if j["stage"] in ("check","done","error"): break
+            time.sleep(0.1)
+        o=get(token)
+    if o["draft"]: return RedirectResponse(f"/deadline/{token}",303)
+    st=_stage(o)
+    if st=="error": JOBS.pop(token,None)   # the next visit tries again
+    items="".join(f'<li id="ps_{k}" class="{"pdone" if k=="read" else "pnow" if k=="draft" else ""}">{esc(t)}</li>' for k,t in PREP_STEPS)
+    return page(f"""<div class=prep><h1>We're filling in your form</h1><p class=lead>This usually takes under a minute. Please keep this page open. You'll check every answer before anything is final.</p>
+<ol class=prepsteps>{items}</ol><div class="bar slim"><span id=pbar style="width:30%"></span></div>
+<p class=small id=pmsg>{'This is taking longer than usual. Your answers are saved. <a href="/prepare/'+token+'">Try again</a>.' if st=="error" else ''}</p></div>
+<noscript><meta http-equiv=refresh content="5"></noscript>
+<script>(function(){{var n=0,order=["read","draft","check","ready"];function show(s){{var i=order.indexOf(s);order.forEach(function(k,j){{var e=document.getElementById("ps_"+k);e.className=j<i?"pdone":j==i?"pnow":""}});document.getElementById("pbar").style.width=Math.max(30,(i+1)*25)+"%"}}
+function poll(){{n++;fetch("/api/{token}/progress",{{cache:"no-store"}}).then(function(r){{return r.json()}}).then(function(j){{if(j.next){{show("ready");location.replace(j.next);return}}
+if(j.stage=="error"){{document.getElementById("pmsg").innerHTML='This is taking longer than usual. Your answers are saved. <a href="/prepare/{token}">Try again</a>.';return}}show(j.stage);setTimeout(poll,n<20?1500:4000)}}).catch(function(){{setTimeout(poll,4000)}})}}setTimeout(poll,1200)}})()</script>""","Filling in your form",minimal=True)
+@app.get("/api/{token}/progress")
+def prepare_progress(token:str):
+    o=ready(token)
+    if o["draft"]: return {"stage":"ready","next":f"/deadline/{token}"}
+    j=JOBS.get(token)
+    if not j: start_prepare(token)   # e.g. the server restarted mid-way: pick it up again
+    st=_stage(get(token))
+    return {"stage":st}
 def merge_intake(form,d,I):
     """Facts the customer tapped go straight in (numbers, conditions, signing notes, tick boxes); the drafter only writes sentences."""
     d.setdefault("extra",{}).update(INTAKE.extra(form,I))
@@ -273,6 +347,7 @@ async def message(token:str, req:Request):
 def finish(token:str):
     o=ready(token,paid=False)
     c=db(); c.execute("update orders set interview_done_at=coalesce(interview_done_at,?) where token=?",(time.time(),token)); c.commit()
+    if o["status"]=="paid" and o["consent_at"] and not o["draft"] and not (o["intake"] and not json.loads(o["intake"]).get("uploads_done")): start_prepare(token)
     return {"next":f"/prepare/{token}" if o["status"]=="paid" else f"/preview/{token}"}
 _BLOCKS={}; _BLOCKS_L=threading.Lock()
 def build_files(token,o,d):
@@ -473,6 +548,7 @@ async def uploads_add(token:str, req:Request):
 def uploads_done(token:str):
     o=ready(token); I=json.loads(o["intake"] or "{}"); I["uploads_done"]=True
     c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I),token)); c.commit()
+    if o["interview_done_at"] and not o["draft"]: start_prepare(token)
     return RedirectResponse(f"/prepare/{token}",303)
 
 # ---------- Deadline tracker, strength check, approval, saved answers, review mode, MR letter ----------
@@ -563,7 +639,11 @@ async def check_save(token:str, req:Request):
             tid=k[4:]; v=v.strip()[:2000]
             add("other" if tid=="_bad" else tid,v)
     c=db(); c.execute("update orders set draft=? where token=?",(json.dumps(d),token)); c.commit()
+    threading.Thread(target=_safe_ground_ahead,args=(token,),daemon=True).start()
     return RedirectResponse(f"/approve/{token}",303)
+def _safe_ground_ahead(token):
+    try: ground_ahead(token)
+    except Exception as e: print("ground ahead failed (approve will retry)",str(e)[:200])
 def BUSY(token):
     return page(f"""<h1>We're still checking your answers</h1><p class=lead>We check every answer against what you told us before you approve it. That check is taking longer than usual. Your answers are saved. Please try again in a few minutes.</p><a class="btn btn-start" href="/approve/{token}">Try again</a>""","Checking your answers")
 def source_text(o,d):
@@ -631,6 +711,8 @@ def render_approve(token,o,d,G,fm=None,need_ok=(),need_res=()):
 def approve_page(token:str):
     r,o,d=ordered(token)
     if r: return r
+    ev=_GRUN.get((token,_ghash(o,d)))
+    if ev: ev.wait(60); r,o,d=ordered(token)   # the check started after the last step is nearly done: use it
     try: G=ground_cached(o,d,token)
     except grounding.GroundingUnavailable as e: print("grounding unavailable",e); return BUSY(token)
     return render_approve(token,o,d,G)
@@ -639,6 +721,8 @@ async def approve_save(token:str, req:Request):
     r,o,d=ordered(token)
     if r: return r
     fm=dict((await req.form()).items()); F=FORMS[o["form"] or "aa"]
+    ev=_GRUN.get((token,_ghash(o,d)))
+    if ev: await run_in_threadpool(ev.wait,60); r,o,d=ordered(token)   # a check for these exact answers is already running
     try: G=await run_in_threadpool(ground_cached,o,d,token)   # blocking AI call: never on the event loop (502 outage 27 Oct)
     except grounding.GroundingUnavailable as e: print("grounding unavailable",e); return BUSY(token)
     its=flag_items(o,d,G)

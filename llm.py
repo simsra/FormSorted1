@@ -16,7 +16,8 @@ MODEL=os.getenv("LLM_MODEL") or {"anthropic":"claude-opus-5-5","openai":"gpt-5.5
 DRAFT_CHAIN=[(_dp,MODEL)]+_chain(os.getenv("LLM_FALLBACKS","openai:gpt-5.4,gemini:gemini-3.8-flash,anthropic:claude-sonnet-5-5"))
 GROUND_CHAIN=[(os.getenv("GROUNDING_PROVIDER","openai"),os.getenv("GROUNDING_MODEL","gpt-5.4-mini"))]+_chain(os.getenv("GROUNDING_FALLBACKS","openai:gpt-5.5,gemini:gemini-3.8-flash,anthropic:claude-haiku-5-5"))
 # grounding: prefer a different model family than the drafter; same family only as last resort
-GROUND_CHAIN=[x for x in GROUND_CHAIN if x[0]!=_dp]+[x for x in GROUND_CHAIN if x[0]==_dp]
+if not os.getenv("GROUNDING_PROVIDER"): GROUND_CHAIN=[x for x in GROUND_CHAIN if x[0]!=_dp]+[x for x in GROUND_CHAIN if x[0]==_dp]
+# An explicitly chosen checker always goes first (28 Oct: reordering put out-of-credit/overloaded providers first, adding seconds to every approve)
 def _avail(ch): 
     seen=[]; [seen.append(x) for x in ch if PROVIDERS.get(x[0],("",""))[1] and PROVIDERS[x[0]][0] and x not in seen]; return seen
 DRAFT_CHAIN=_avail(DRAFT_CHAIN); GROUND_CHAIN=_avail(GROUND_CHAIN)
@@ -60,7 +61,7 @@ Never state or imply eligibility, award rates, amounts, points, descriptors or l
     return s+"}"
 class LLMUnavailable(RuntimeError): pass
 _DOWN={}  # provider:model -> time it last failed hard (skip for DOWN_SECS so one outage doesn't add minutes per call)
-DOWN_SECS=int(os.getenv("LLM_DOWN_SECS","120"))
+DOWN_SECS=int(os.getenv("LLM_DOWN_SECS","120")); QUOTA_DOWN_SECS=int(os.getenv("LLM_QUOTA_DOWN_SECS","3600"))
 def _anthropic_body(model, messages, json_mode):
     sys_="\n\n".join(m["content"] for m in messages if m["role"]=="system")
     if json_mode: sys_+="\n\nReply with ONE valid JSON object only. No prose, no code fences."
@@ -83,7 +84,7 @@ def _strip_fence(t):
     if t.startswith("```"): t=t.split("\n",1)[1] if "\n" in t else t[3:]; t=t.rsplit("```",1)[0]
     return t.strip()
 TIMEOUT=int(os.getenv("LLM_TIMEOUT","90")); RETRIES=int(os.getenv("LLM_RETRIES","1"))   # fail fast so a dead provider hands over quickly
-def _call_one(provider, model, messages, json_mode=False, retries=None):
+def _call_one(provider, model, messages, json_mode=False, retries=None, effort=None):
     retries=RETRIES if retries is None else retries
     import time
     base,key=PROVIDERS[provider]
@@ -94,7 +95,9 @@ def _call_one(provider, model, messages, json_mode=False, retries=None):
         body={"model":model,"messages":messages}
         if not model.startswith(("gpt-5","o")): body["temperature"]=0.3  # gpt-5 family only accepts the default temperature
         if json_mode: body["response_format"]={"type":"json_object"}
+        if effort and model.startswith(("gpt-5","o")): body["reasoning_effort"]=effort
         req=urllib.request.Request(base+"/chat/completions",json.dumps(body).encode(),{"Authorization":"Bearer "+key,"Content-Type":"application/json"})
+    t0=time.time()
     for attempt in range(retries+1):  # retry transient overload / rate limits / timeouts
         try: r=json.load(urllib.request.urlopen(req,timeout=TIMEOUT)); break
         except urllib.error.HTTPError as e:
@@ -117,18 +120,21 @@ def _call_one(provider, model, messages, json_mode=False, retries=None):
         tin=u.get("prompt_tokens",0); tout=u.get("completion_tokens",0); text=r["choices"][0]["message"]["content"]
     for d in (USAGE,m): d["calls"]+=1; d["in"]+=tin; d["out"]+=tout
     m["cached_in"]+=cr; m["cache_write"]+=cw
+    print(f"LLM ok {k} {time.time()-t0:.1f}s in={tin} out={tout}",flush=True)
     return _first_json(_strip_fence(text)) if json_mode else text
-def _call(messages, json_mode=False, chain=None):
+def _call(messages, json_mode=False, chain=None, effort=None):
     """Try each provider:model in chain (default DRAFT_CHAIN); raise LLMUnavailable if all fail."""
     errs=[]
     import time
     for p,mdl in (chain or DRAFT_CHAIN):
         if time.time()-_DOWN.get((p,mdl),0)<DOWN_SECS: errs.append(f"{p}:{mdl} skipped (recently down)"); continue
         try:
-            out=_call_one(p,mdl,messages,json_mode)
+            out=_call_one(p,mdl,messages,json_mode,effort=effort)
             if json_mode: json.loads(out)
             USED.append(("ground" if chain is GROUND_CHAIN else "draft",f"{p}:{mdl}")); return out
-        except LLMUnavailable as e: _DOWN[(p,mdl)]=time.time(); errs.append(str(e)[:200]); print("LLM fallback:",str(e)[:200])
+        except LLMUnavailable as e:
+            # quota/credit errors won't fix themselves in 2 minutes: skip that provider for QUOTA_DOWN_SECS instead
+            _DOWN[(p,mdl)]=time.time()+(QUOTA_DOWN_SECS-DOWN_SECS if "exhausted" in str(e) else 0); errs.append(str(e)[:200]); print("LLM fallback:",str(e)[:200])
         except (ValueError, KeyError) as e: errs.append(str(e)[:200]); print("LLM fallback:",str(e)[:200])
     raise LLMUnavailable("all models failed: "+" | ".join(errs))
 USAGE={"calls":0,"in":0,"out":0,"by_model":{}}
@@ -164,10 +170,39 @@ def next_question(history, form="aa"):
     return _call([{"role":"system","content":sysm}]+msgs)
 def draft(history, form="aa"):
     if MOCK:
+        if os.getenv("MOCK_DRAFT_SLOW"): import time; time.sleep(float(os.getenv("MOCK_DRAFT_SLOW")))   # tests only: a slow drafter
         if form=="aa": return json.load(open(os.path.join(os.path.dirname(__file__),"sample_case.json")))["draft"]
         return json.loads(json.dumps({"dla":samples.DLA,"atw":samples.ATW}.get(form,samples.PIP)))
     t="\n".join(f'{m["role"].upper()}: {m["content"]}' for m in history)
-    return json.loads(_call([{"role":"system","content":draft_system(form)},{"role":"user","content":t}],json_mode=True))
+    if DRAFT_PARTS<=1: return json.loads(_call([{"role":"system","content":draft_system(form)},{"role":"user","content":t}],json_mode=True,effort=DRAFT_EFFORT))
+    return draft_parallel(t,form)
+DRAFT_EFFORT=os.getenv("LLM_DRAFT_EFFORT","low") or None; GROUND_EFFORT=os.getenv("LLM_GROUND_EFFORT","low") or None
+DRAFT_PARTS=int(os.getenv("LLM_DRAFT_PARTS","3"))   # answer groups drafted at the same time (+1 call for letters/checklist). 1 = single call
+EXTRA_KEYS={"aa":[],"dla":[],"pip":["call_prep"],"pipr":["call_prep","changes"],"atw":["support_summary","call_prep"]}
+def draft_parallel(t, form):
+    """Same rules and transcript, split into independent parts drafted at once (28 Oct: one big call took ~32s).
+    Parts: N groups of topic answers (+ their sources/tick_yes), and one call for conditions/extra/checklist/letters/notes."""
+    import concurrent.futures as cf
+    ids=[i for i,_,_ in FORMS[form]["topics"]]; n=max(1,min(DRAFT_PARTS,len(ids))); k=-(-len(ids)//n)
+    groups=[ids[i:i+k] for i in range(0,len(ids),k)]; sysm=draft_system(form)
+    def part(ins): return json.loads(_call([{"role":"system","content":sysm+"\n\nTHIS REQUEST: "+ins},{"role":"user","content":t}],json_mode=True,effort=DRAFT_EFFORT))
+    jobs=[f'Return ONLY the keys "answers" and "sources"{" and tick_yes" if form=="aa" else ""}, and only for these topic ids: {", ".join(g)}. Leave everything else out.' for g in groups]
+    rests=[["gp_letter"],["carer_statement"],["conditions","extra","checklist","notes_for_user"]+EXTRA_KEYS.get(form,[])]
+    for r_ in rests: jobs.append('Return ONLY these keys: '+", ".join(r_)+'. Do not return "answers", "sources" or "tick_yes". Use only facts the USER stated.')
+    with cf.ThreadPoolExecutor(len(jobs)) as ex: res=list(ex.map(part,jobs))   # any part failing raises: never a half draft
+    d={"answers":{},"sources":{}}; rest=[k for r_ in rests for k in r_]; extras={}
+    for r_,r in zip(rests,res[len(groups):]):
+        for key in r_:
+            if key in r: extras[key]=r[key]
+    for g,r in zip(groups,res[:len(groups)]):
+        for i in g:
+            d["answers"][i]=(r.get("answers") or {}).get(i,"") or ""
+            if (r.get("sources") or {}).get(i): d["sources"][i]=r["sources"][i]
+        if form=="aa": d.setdefault("tick_yes",[]).extend(x for x in (r.get("tick_yes") or []) if str(x) in g or x in g)
+    d.update(extras)
+    for key in ("checklist","notes_for_user","conditions"): d.setdefault(key,[])
+    d.setdefault("extra",{})
+    return d
 
 GROUNDING_PROMPT="""You check a drafted benefit-form answer against the customer's own words.
 List every claim in the DRAFT that is not directly supported by the SOURCE (customer's words): new conditions, symptoms, medicines, doses,
@@ -179,5 +214,5 @@ def grounding(draft_text, source_text):
         import random; w=draft_text.split(); n=random.randint(2,4); i=random.randint(0,max(0,len(w)-n))
         return [{"phrase":" ".join(w[i:i+n]).strip(".,").lower(),"reason":"not in your words"}]
     if MOCK or not draft_text.strip(): return []
-    out=_call([{"role":"system","content":GROUNDING_PROMPT},{"role":"user","content":f"SOURCE:\n{source_text}\n\nDRAFT:\n{draft_text}"}],json_mode=True,chain=GROUND_CHAIN)
+    out=_call([{"role":"system","content":GROUNDING_PROMPT},{"role":"user","content":f"SOURCE:\n{source_text}\n\nDRAFT:\n{draft_text}"}],json_mode=True,chain=GROUND_CHAIN,effort=GROUND_EFFORT)
     return json.loads(out).get("unsupported",[])
