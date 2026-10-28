@@ -36,6 +36,14 @@ services:
         value: gpt-5.4-mini
       - key: GROUNDING_FALLBACKS # never skipped; same family as drafter only as last resort
         value: "openai:gpt-5.5,gemini:gemini-3.8-flash,anthropic:claude-haiku-5-5"
+      - key: PRINT_MAIL_ENABLED  # Plus print-and-post (printmail.py). Stays 0 until Simon switches it on
+        value: "0"
+      - key: PRINT_PROVIDER
+        value: intelliprint
+      - key: INTELLIPRINT_TESTMODE  # 1 = Intelliprint test mode (not charged, not sent). Live posting needs 0 on purpose
+        value: "1"
+      - key: INTELLIPRINT_API_KEY
+        sync: false
       - key: CRON_SECRET
         generateValue: true
       - key: PUBLIC_URL

@@ -59,6 +59,22 @@ header `X-Cron-Secret: <CRON_SECRET>`. Pick one:
 Erasure on request (by email or token) still works locally against the same database:
 `DATABASE_URL=... SUPABASE_URL=... SUPABASE_SERVICE_KEY=... python retention.py --email someone@example.com`.
 
+## 6. Print and post (Done for you Plus, Intelliprint)
+Off by default. `printmail.py` posts the Plus pack automatically once the customer has approved the final form and
+saved their details (the "Print and post" box is ticked by default for Plus; they can untick it).
+- Env: `PRINT_MAIL_ENABLED=1`, `PRINT_PROVIDER=intelliprint`, `INTELLIPRINT_API_KEY` (secret), `INTELLIPRINT_TESTMODE`
+  (default `1`: test jobs, not charged or posted; set `0` to post for real), `INTELLIPRINT_POSTAGE` (default
+  `uk_second_class`), optional `INTELLIPRINT_INSERT_AA` / `INTELLIPRINT_INSERT_DLA` (insert IDs for pre-printed Freepost
+  DWP return envelopes held by Intelliprint; without one the pack prints a cut-out Freepost label), optional
+  `INTELLIPRINT_REQUIRE_INSERT=1` (hold instead of posting without an envelope), optional `INTELLIPRINT_WEBHOOK_SECRET`.
+- Printed: a 2-page cover sheet (sign the declaration, post it back, the Freepost address) + the filled AA1/DLA1A
+  (or the PIP extra sheets), double-sided, black and white, C4 envelope, to the address from the details step.
+- Status: webhook URL in Intelliprint's dashboard (API Keys -> webhooks) `https://app.formsorted.com/webhooks/print?k=<INTELLIPRINT_WEBHOOK_SECRET>`
+  (the body is only a nudge; the app re-reads the status from the API), plus `POST /cron/print-status` with
+  `X-Cron-Secret` (e.g. hourly). Customers are emailed once when the letter is `sent`.
+- Failures (API error, missing address, no filled form, returned letter) hold the job: `/admin` -> "Show print holds"
+  (retry or mark handled) and an email to `REVIEW_EMAIL` (hello@formsorted.com).
+
 ## Local testing
 `./run_test.sh` (SQLite + local files, mock AI, no emails). Against Postgres: `DATABASE_URL=postgresql://... ./run_test.sh`.
 

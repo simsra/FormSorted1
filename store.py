@@ -37,7 +37,7 @@ SCHEMA=[f"create table if not exists orders(token text primary key, tier text, s
         f"create table if not exists events(id text primary key, received {_REAL})",   # webhook idempotency
         f"create table if not exists saved(code text primary key, form text, answers text, personal text, created {_REAL})",
         "create table if not exists settings(k text primary key, v text)"]   # e.g. prefill_disabled_aa (form watch)
-COLS=(("form","text default 'aa'"),("draft","text"),("deadline","text default '{}'"),("approved_at",_REAL),("save_code","text"),("review_of","text"),("details_at",_REAL),("paid_at",_REAL),("ip","text"),("interview_done_at",_REAL),("turns","integer default 0"),("intake","text"),("keep_until",_REAL),("post_pack","integer default 0"),("appeal","text"),("hold","text"),("stripe_customer","text"),("card_fp","text"))
+COLS=(("form","text default 'aa'"),("draft","text"),("deadline","text default '{}'"),("approved_at",_REAL),("save_code","text"),("review_of","text"),("details_at",_REAL),("paid_at",_REAL),("ip","text"),("interview_done_at",_REAL),("turns","integer default 0"),("intake","text"),("keep_until",_REAL),("post_pack","integer default 0"),("appeal","text"),("hold","text"),("stripe_customer","text"),("card_fp","text"),("print_job","text"))
 _ready=False
 def _migrate(c):
     for s in SCHEMA: c.execute(s)

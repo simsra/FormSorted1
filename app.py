@@ -546,7 +546,11 @@ def detail_fields(form):
     return DETAIL_FIELDS+(DLA_EXTRA if form=="dla" else [])
 import re as _re
 NI_RE=_re.compile(r"^[A-CEGHJ-PR-TW-Z]{2}\d{6}[A-D]$")
-POST_OPT="<label class=cb><input type=checkbox name=post_pack value=1><span>Print and post my pack to me at the address above to sign, with a Freepost return envelope. You still check, sign and send the form yourself.</span></label>"
+def post_opt(form):
+    """Plus: printing and posting is on by default (they can untick it). Shown only when print-and-post is switched on."""
+    back="the envelope DWP sent with your form" if form in printmail.OWN_ENVELOPE else ("a return envelope" if printmail.return_envelope(form)[0]=="insert" else "the Freepost address to send it back to")
+    return f"<label class=cb><input type=checkbox name=post_pack value=1 checked><span>Print and post my {'extra sheets' if form in printmail.OWN_ENVELOPE else 'filled-in form'} to the address above, with {back}. You still check, sign and post it yourself.</span></label>"
+def can_post(o): return is_premium(o["tier"]) and printmail.live() and (o["form"] or "aa") in printmail.FORMS_POSTED
 @app.get("/details/{token}")
 def details_page(token:str, err:str=""):
     o=ready(token)
@@ -559,7 +563,7 @@ def details_page(token:str, err:str=""):
     who="the child" if form=="dla" else "the person claiming"
     rows="".join(f"""<div class=field><label class=q for=d_{k}>{esc(l)}</label><input id=d_{k} name={k} {'type='+t if t else ''} value="{esc(p.get(k,''))}" {'required' if req else ''} autocomplete=off></div>""" for k,l,t,req in detail_fields(form))
     return page(prog(8)+f"""<h1>Your details</h1><p class=lead>We add these to your documents{'' if form=='atw' else f' for {who}'} so you have less to fill in by hand. We only ask now, at the end, so we don't keep them longer than needed.</p>
-{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{POST_OPT if (is_premium(o["tier"]) and printmail.ENABLED) else ""}<button class=btn>Save and make my documents</button></form>
+{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{post_opt(form) if can_post(o) else ""}<button class=btn>Save and make my documents</button></form>
 <form method=post action=/details/{token}><input type=hidden name=skip value=1><button class="btn btn-2">Skip. I'll write my details in by hand</button></form>
 <p class=small>We delete everything 90 days after your order, or now: <a href=/delete/{token}>delete my information</a>.</p>""","Your details")
 @app.post("/details/{token}")
@@ -580,11 +584,11 @@ async def details_save(token:str, req:Request):
             if need and not v: missing=True
             if v: p[k]=v
         if missing: return back("Please fill in every required box, or choose Skip.")
-    c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),1 if (fm.get("post_pack") and is_premium(o["tier"]) and printmail.ENABLED and not fm.get("skip")) else 0,token)); c.commit()
+    c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),1 if (fm.get("post_pack") and can_post(o) and not fm.get("skip")) else 0,token)); c.commit()
     if p and await run_in_threadpool(check_hold,token,"details"):   # names known now: check again before documents are made
         c.execute("update orders set details_at=null where token=?",(token,)); c.commit(); return RedirectResponse(f"/hold/{token}",303)
     o=get(token); files=await run_in_threadpool(build_files,token,o,json.loads(o["draft"]))
-    if o["post_pack"]: printmail.queue(c,token,{k:p.get(k,"") for k in ("title","other_names","surname","addr1","addr2","addr3","postcode")},files)
+    if o["post_pack"]: start_print(token)   # Plus: print and post automatically once the final form is approved and built
     return RedirectResponse(f"/documents/{token}",303)
 
 # ---------- Whole-form orders: NI numbers and bank details, for the PDF only ----------
@@ -638,6 +642,75 @@ async def private_save(o, fm):
 def lookup_postcode(pc:str=""):
     """Town for a UK postcode (postcodes.io: free, no sign-up). Typed address always works if this is down."""
     r=WF.postcode(pc); return {"ok":bool(r),**(r or {})}
+# ---------- Print and post (Plus). printmail.py; OFF unless PRINT_MAIL_ENABLED=1 ----------
+def _print_form_pdf(o):
+    form=o["form"] or "aa"; F=FORMS[form]
+    name="PIP-extra-sheets.pdf" if form in printmail.OWN_ENVELOPE else F.get("pdf_out")
+    return store.read(o["token"],name) if name and name in pack_files(o) else None
+def print_now(token,force=False):
+    """Create the print job (idempotent per order) and send the emails that go with the result."""
+    with printmail.lock(token):
+        o=get(token)
+        if not o["post_pack"] or FRAUD.held(o) or o["status"]!="paid": return None
+        job=printmail.dispatch(db(),o,_print_form_pdf(o),BRAND,force=force); print("print job",token[:6],job.get("status"),job.get("print_id"),flush=True)
+        if job.get("status")=="held": _mail_review(*printmail.review_email(PUBLIC,o,job))
+        elif job.get("status") in ("sent","delivered"): _print_event(get(token),job,"sent")
+        return job
+def start_print(token,force=False):
+    def run():
+        try: print_now(token,force)
+        except Exception as e: print("print job crashed",token[:6],str(e)[:200],flush=True)
+    t=threading.Thread(target=run,daemon=True); t.start(); return t
+def _mail_review(subj,txt):
+    def _s():
+        try: mailer.send(FRAUD.REVIEW_TO,subj,txt)
+        except Exception as e: print("print review email failed",str(e)[:200])
+    threading.Thread(target=_s,daemon=True).start()
+def _print_event(o,job,ev):
+    if ev=="sent" and not job.get("sent_emailed_at"):
+        job["sent_emailed_at"]=time.time(); printmail.save_job(db(),o["token"],job)
+        _mail_customer(o,*printmail.sent_email(BRAND,PUBLIC,o,job))
+    elif ev=="problem": _mail_review(*printmail.review_email(PUBLIC,o,job))
+def print_refresh(token):
+    with printmail.lock(token):
+        o=get(token); job,ev=printmail.refresh(db(),o)
+        if ev: _print_event(get(token),job,ev)
+        return job
+def _refresh_soon(o):
+    """Documents page: re-check a job still in progress at most every 10 minutes (in the background)."""
+    j=printmail.job_of(o)
+    if j and j.get("print_id") and j.get("status") in printmail.IN_PROGRESS and time.time()-(j.get("checked_at") or j.get("submitted_at") or 0)>600:
+        threading.Thread(target=lambda: _quiet(print_refresh,o["token"]),daemon=True).start()
+def _quiet(f,*a):
+    try: return f(*a)
+    except Exception as e: print("print refresh failed",str(e)[:200])
+def print_panel(o):
+    if not o["post_pack"]: return ""
+    st=printmail.customer_status(printmail.job_of(o)) or ("Being printed","We're getting your printed pack ready. We'll email you when it has been posted.")
+    return f"<div class=panel id=post><h2 class=h3>Your printed pack: {esc(st[0])}</h2><p>{esc(st[1])}</p></div>"
+PRINT_WEBHOOK_KEY=os.getenv("INTELLIPRINT_WEBHOOK_SECRET","")
+@app.post("/webhooks/print")
+async def print_webhook(req:Request, k:str=""):
+    """Intelliprint letter.updated. Their docs describe no signature, so the body is only a nudge: the status is re-read from
+    the API with our key. Optional ?k=INTELLIPRINT_WEBHOOK_SECRET on the URL configured in their dashboard."""
+    if PRINT_WEBHOOK_KEY and not hmac.compare_digest(k,PRINT_WEBHOOK_KEY): raise HTTPException(403)
+    try: ev=await req.json()
+    except Exception: return {"ok":True}
+    pid=str(ev.get("print_id") or "") if isinstance(ev,dict) else ""
+    if not pid or not pid.replace("_","").isalnum(): return {"ok":True}
+    r=db().execute("select token from orders where print_job like ?",(f'%"print_id": "{pid}"%',)).fetchone()
+    if r: await run_in_threadpool(_quiet,print_refresh,r["token"])
+    return {"ok":True}
+@app.post("/cron/print-status")
+def cron_print_status(req:Request):
+    got=req.headers.get("x-cron-secret","")
+    if not CRON_SECRET or not hmac.compare_digest(got,CRON_SECRET): raise HTTPException(403)
+    n=0
+    for r in db().execute("select token, print_job from orders where print_job is not null and status='paid'").fetchall():
+        j=printmail.job_of(r)
+        if j and j.get("print_id") and j.get("status") in printmail.IN_PROGRESS+("sent",): _quiet(print_refresh,r["token"]); n+=1
+    return {"ok":True,"checked":n}
+
 # ---------- Intake v3: tap-first questions (AA1, DLA1A, PIP2) ----------
 def _intake_order(token):
     o=ready(token,paid=False)
@@ -825,7 +898,7 @@ def admin_page(body):
 @app.get("/admin")
 def admin_home():
     if not ADMIN_SECRET: raise HTTPException(404)
-    return admin_page("""<h1>Held orders</h1><form method=post action=/admin/held><div class=field><label class=q for=k>Admin key</label><input id=k type=password name=key autocomplete=off required></div><button class=btn>Show held orders</button></form>""")
+    return admin_page("""<h1>Held orders</h1><form method=post action=/admin/held><div class=field><label class=q for=k>Admin key</label><input id=k type=password name=key autocomplete=off required></div><button class=btn>Show held orders</button> <button class="btn btn-2" formaction=/admin/print>Show print holds</button></form>""")
 def _held_rows(c):
     out=[]
     for r in c.execute("select * from orders where hold is not null and status='paid' order by created desc limit 200").fetchall():
@@ -849,6 +922,36 @@ def _mail_customer(o,subj,txt):
         try: mailer.send(o["email"],subj,txt)
         except Exception as e: print("customer email failed",str(e)[:200])
     threading.Thread(target=_s,daemon=True).start()
+def _print_held(c):
+    out=[]
+    for r in c.execute("select * from orders where print_job is not null and status='paid' order by created desc limit 500").fetchall():
+        j=printmail.job_of(r)
+        if j and (j.get("status")=="held" or j.get("needs_review")) and not j.get("resolved_at"): out.append((r,j))
+    return out
+@app.post("/admin/print")
+def admin_print(key:str=Form("")):
+    _admin_ok(key); ke=esc(key); rows=_print_held(db())
+    def card(r,j):
+        p=json.loads(r["personal"] or "{}"); rc=printmail.recipient(r["form"] or "aa",p)
+        hist="".join(f"<li>{time.strftime('%d %b %H:%M',time.localtime(h.get('at') or 0))}: {esc(str(h.get('status')))} {esc(str(h.get('error') or h.get('letter_id') or ''))}</li>" for h in j.get("history",[]))
+        return f"""<div class=trace><h3>{esc(r['token'][:8])} · {esc(r['form'])} · {esc(r['tier'])}</h3><p><strong>Why held:</strong> {esc(j.get('error') or j.get('status') or '')}</p>
+<p>Send to: {esc(rc['name'] or '-')}, {esc(rc['line'] or '-')}, {esc(rc['postcode'] or '-')} · Return: {esc(str(j.get('return')))} {esc(str(j.get('insert') or ''))} · Print id: {esc(str(j.get('print_id') or '-'))} · Letter id: {esc(str(j.get('letter_id') or '-'))} · Attempts: {j.get('attempts')}</p>
+<details><summary>History</summary><ul>{hist}</ul></details>
+<form method=post action=/admin/print/{r['token']} style="display:inline"><input type=hidden name=key value="{ke}"><input type=hidden name=do value=retry><button class=btn>Try posting again</button></form>
+<form method=post action=/admin/print/{r['token']} style="display:inline"><input type=hidden name=key value="{ke}"><input type=hidden name=do value=done><button class="btn btn-2">Mark as handled</button></form></div>"""
+    return admin_page(f"<h1>Print holds ({len(rows)})</h1>"+("".join(card(r,j) for r,j in rows) or "<p>Nothing is held.</p>"))
+@app.post("/admin/print/{token}")
+def admin_print_action(token:str, key:str=Form(""), do:str=Form("")):
+    _admin_ok(key); o=get(token); j=printmail.job_of(o)
+    if not j: raise HTTPException(409,"No print job")
+    back=f"<form method=post action=/admin/print><input type=hidden name=key value='{esc(key)}'><button class=btn>Back to print holds</button></form>"
+    if do=="retry":
+        j.pop("needs_review",None); j.pop("resolved_at",None); printmail.save_job(db(),token,j); j=print_now(token,force=True) or {}
+        return admin_page(f"<h1>{'Sent to print' if j.get('status')!='held' else 'Still held'}</h1><p>Order {esc(token[:8])}: {esc(str(j.get('status')))} {esc(str(j.get('error') or j.get('letter_id') or ''))}</p>{back}")
+    if do=="done":
+        j["resolved_at"]=time.time(); j.setdefault("history",[]).append({"at":time.time(),"status":"handled by admin"}); printmail.save_job(db(),token,j)
+        return admin_page(f"<h1>Marked as handled</h1><p>Order {esc(token[:8])}.</p>{back}")
+    raise HTTPException(400)
 @app.post("/admin/release/{token}")
 def admin_release(token:str, key:str=Form("")):
     _admin_ok(key); o=get(token)
@@ -1156,7 +1259,8 @@ def documents_page(token:str):
     saved=f"<div class=panel><p><strong>Your save code: <code>{o['save_code']}</code></strong><br>Keep it safe. {'Keep a copy of your answers too. They will help when your grant is due for renewal (you can apply to renew 12 weeks before it ends).' if o['form']=='atw' else "Use it at <a href=/review>/review</a> when your review form arrives, and we'll only ask what has changed."}</p></div>" if o["save_code"] else ""
     if is_premium(o["tier"]) and o["save_code"]:
         saved+=f"""<div class=panel><h2 class=h3>Included with Done for you Plus</h2><p><strong>Turned down?</strong> You usually have 1 month from the date on the decision letter to ask DWP to look again. <a href="/appeal/{o['save_code']}">Send us the decision letter</a> and we prepare your reconsideration letter and revised answers at no extra charge.</p>
-<p><strong>Review form arrived?</strong> <a href="/review/{o['save_code']}">Start your renewal</a>. We fill it in from your saved answers at no extra charge.</p>{'<p>We will print your pack and post it to you to sign'+(', with a Freepost return envelope' if (o['form'] or 'aa') in ('aa','dla') else '')+'.</p>' if o['post_pack'] else ''}</div>"""
+<p><strong>Review form arrived?</strong> <a href="/review/{o['save_code']}">Start your renewal</a>. We fill it in from your saved answers at no extra charge.</p></div>"""
+    saved=print_panel(o)+saved; _refresh_soon(o)
     return page(prog(8)+f"""<div class=done><h1>{"Your answers are ready" if o["form"]=="atw" else "Your form is done"}</h1><p>You approved every answer. Your documents are ready.</p></div>
 {''.join(f'<div class=dl><span><strong>{lab.get(f,f)}</strong></span><a class=btn href="/download/{token}/{f}" download>Download</a></div>' for f in files)}{gone}
 {f"<div class=tracker><p class=big>Send it back by <strong>{datetime_fmt(res['deadline'])}</strong></p></div>" if res and res.get('deadline') else ''}{saved}
