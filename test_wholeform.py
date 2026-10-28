@@ -114,6 +114,35 @@ def grid_defaults(h):
     out={}
     for n in set(re.findall(r'<input type=radio name="(\d+_\d+)" value="yes"',h)): out[n]="yes"
     return out
+def newkeys(form,who,sec,data,h):
+    """Map the per-item answer sets onto the quicker screens: 'max' uses the one-answer-for-all path,
+    'alt' says 'different for some' and sets each item (so both paths reach the same boxes)."""
+    D=dict(data); A=who=="alt"
+    if sec=="often":
+        for k in [k for k in D if re.fullmatch(r"t_[a-z]+_[a-z0-9]+",k)]:
+            r=k.split("_")[1]; D[f"t_{r}"]="2" if A else D[k]
+            if A: D[f"t_{r}_diff"]="1"
+            else: D.pop(k)
+        pr=[k[3:] for k in list(D) if re.fullmatch(r"pr_(toilet|wash|dress|eat|meds|bed)",k) and D.pop(k)=="yes"]
+        if pr: D["pr_tasks"]=pr
+        for k in [k for k in D if re.fullmatch(r"a[hol]_[a-z]+",k)]:
+            p=k[:2]; D[f"{p}_all"]=("1h" if p=="al" else "monthly" if p=="ao" else "watch") if A else D[k]
+            if A: D["a_diff"]="1"
+            else: D.pop(k)
+        for n in set(re.findall(r'name="?(\w+_g)"? value="?\d+_\d+',h)):   # tap lists: max taps everything, alt taps 'None of these'
+            D[n]=["none"] if A else re.findall(rf'name="?{n}"? value="?(\d+_\d+)',h)
+    if sec=="home":
+        if any(k.startswith("aid_p_") for k in D):
+            for k in [k for k in D if k.startswith("aid_p_")]: D.pop(k)
+            D["aid_p"]=["0","2"] if A else ["all"]
+            for x in ("h","d"):
+                ks=[k for k in D if k.startswith(f"aid_{x}_")]
+                if not ks: continue
+                D[f"aid_{x}"]=D[ks[0]]
+                if A: D[f"aid_{x}_diff"]="1"; D[f"aid_{x}"]="indep" if form=="aa" and x=="h" else "none" if x=="d" else "remind"
+                else: [D.pop(k) for k in ks]
+    if sec=="health": D.setdefault("meds_how","photo" if (A and form=="aa") else "type")
+    return D
 NI={"aa":"AB123456C","dla":"CE654321A"}; HNI={"aa":"JK112233B","dla":"","his":"PR998877D"}
 SORT="60-83-71"; ACC="31926819"
 COV={}
@@ -133,13 +162,13 @@ for form,who,ANS in RUNS:
             if 'type=radio' in blk.replace('"',"") or 'type=checkbox' in blk.replace('"',""):
                 if 'class="sc g' in blk or "Another" in blk or "nums" in blk or re.search(r'value="?(yes|no)"?',blk) and blk.count("type=radio")<=3: continue
         data={"sec":sec,"nav":"next",**ANS.get(sec,{})}
-        if sec=="often": data.update({k:v for k,v in grid_defaults(h).items() if k not in data})
+        data=newkeys(form,who,sec,data,h)
         nq+=len(set(re.findall(r'name="?([a-z]\w*)"?',h)))
         r=req(f"/intake/{tok}",data); nx=loc(r)
         if not nx.startswith(f"/intake/{tok}"): break
         h=body(nx)
     assert nx==f"/uploads/{tok}", (nx,seen)
-    assert mins==sorted(mins,reverse=True) and mins[0]<=10, mins
+    assert all(0<m<=15 for m in mins) and mins[-1]<=3, mins   # computed from what's left; it can rise when an answer adds questions
     assert req(f"/approve/{tok}").status==402 and req(f"/download/{tok}/answers.html").status==402 and req(f"/details/{tok}").status==402   # nothing usable before payment
     up=body(f"/uploads/{tok}"); assert "Something else" in up and "stripe" not in up.lower()
     raw,ct=multipart([("files",("letter.pdf","application/pdf",tiny_pdf("Clinic letter: diagnosis confirmed")))])

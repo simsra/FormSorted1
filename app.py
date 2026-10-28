@@ -398,7 +398,8 @@ def merge_intake(form,d,I):
     if I.get("conds"): d["conditions"]=INTAKE.conditions(I)
     d["notes_for_user"]=INTAKE.notes(form,I)+list(d.get("notes_for_user") or [])
     if I.get("uploads"): d.setdefault("checklist",[]).append("Documents you uploaded to us: "+", ".join(u["name"] for u in I["uploads"])+". Send copies (not originals) with your form.")
-    d.setdefault("checklist",[]).extend(EVID.checklist(form,I))   # what to send, or what to get if they have nothing yet
+    d.setdefault("checklist",[]).extend(EVID.checklist(form,I))
+    if (I.get("wf") or {}).get("meds_how")=="photo": d["checklist"].append("A copy of your repeat prescription list. The form says it is sent with it.")   # what to send, or what to get if they have nothing yet
     d["intake_ticks"]=INTAKE.ticks(form,I)
 def ready(token,paid=True):
     """paid=True (default) for everything that exposes or produces answers; paid=False only for the free interview."""
@@ -645,7 +646,7 @@ def intake_page(token:str, s:str="", r:str=""):
     refused=REFUSED_BOX if r else ""
     reassure="<p class=reassure>It's normal for this to feel hard. You only tap, we do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
     return page(f"""<div class=intake><p class="progress ip"><span>Building your form · Part {i+1} of {len(secs)}</span><span class=left>About {left} minute{'s' if left!=1 else ''} left</span></p><div class="bar slim"><span style='width:{(i+1)*100//len(secs)}%'></span></div>
-{refused}{'<h1>We\'ll fill in your whole form for you</h1><p class=donefor>About 10 minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>'+HONEST_LINE if i==0 else f'<h1>{esc(secs[i][1])}</h1><p class=donefor>Just tap what fits. We\'ll write this section of the official form for you.</p>'}
+{refused}{f'<h1>We\'ll fill in your whole form for you</h1><p class=donefor>About {left} minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>'+HONEST_LINE if i==0 else f'<h1>{esc(secs[i][1])}</h1><p class=donefor>Just tap what fits. We\'ll write this section of the official form for you.</p>'}
 <form method=post action=/intake/{token}><input type=hidden name=sec value={sec}>{INTAKE.section_body(form,sec,d)}
 <div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==len(ids)-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
 <button class="linkbtn" name=nav value=save>Save and finish later</button></form></div>""",secs[i][1],minimal=True)
@@ -696,7 +697,7 @@ def uploads_page(token:str, err:str=""):
     chips=INTAKE._checks("evidence",EVID.options(form),I.get("evidence"),INTAKE.X(I,"evidence"))
     paid_=o["status"]=="paid"
     return page(prog(4,"Your evidence")+f"""<h1>What do you have that shows this?</h1><p class=lead>{'Payment received, thank you. ' if paid_ else 'Last step before you pay. '}Evidence makes your form much stronger. Tap what you have, and add a photo if you can. We check it against your answers. You'll still check everything before it's final.</p>
-{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/uploads/{token}/done enctype=multipart/form-data>
+{f'<div class=warning>{esc(err)}</div>' if err else ''}{'<div class=promise><strong>Your repeat prescription list:</strong> you said you\'d add a photo of it. Add it below, or send a copy with your form. The form says it is enclosed.</div>' if (I.get('wf') or {}).get('meds_how')=='photo' else ''}<form method=post action=/uploads/{token}/done enctype=multipart/form-data>
 <fieldset class=iq><legend>Tap all you have</legend>{chips}</fieldset>
 {f'<h2 class=h3>Added</h2><ul class=ticks>{lst}</ul>' if ups else ''}<div class=field><label class=q for=up>{'Add more photos or PDFs' if ups else 'Add a photo or PDF'} (optional, up to 10MB each)</label><p class=hint>A photo of a letter or your repeat prescription list is fine.</p><input id=up type=file name=files multiple accept="image/*,application/pdf" capture=environment></div>
 <div class=navrow><button class="btn btn-start" name=nav value=next>Continue</button></div><button class=linkbtn name=nav value=add>Add more files first</button></form>

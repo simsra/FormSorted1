@@ -30,15 +30,33 @@ def sections(form,d):
 def applies(form,sec,d):
     if sec=="helper": return d.get("who","me") not in ("me","") and d.get("signer") in ("poa","appointee","deputy")
     return True
+COST={"radio":2.5,"checks":4,"text":9,"tel":8,"date":8,"month":6,"pc":6,"email":9,"num":6,"note":0}
+def q_secs(q,w):
+    """Rough seconds to answer one question that's still to come; dep-gated ones count only if they'll show."""
+    if dep_ok(q,w): f=1
+    elif any(dn not in w and dn[:-4]+"_x" not in w for dn,_ in _deps(q)): f=.1 if any(dn.endswith("diff") for dn,_ in _deps(q)) else .25
+    else: return 0
+    k=q["kind"]
+    c=2*len(q["rows"])/3+3 if k=="tap" else 2.5*len(q["rows"]) if k=="grid" else COST.get(k,4)
+    if k=="text" and "optional" in q["label"].lower(): c=3
+    return f*c
 def minutes_left(form,d,sec):
-    ids=[k for k,_ in sections(form,d)]; i=ids.index(sec) if sec in ids else 0
-    left=sum(WEIGHT.get(k,.8) for k in ids[i:])+WEIGHT["evidence"]
-    n=max(1,round(left)); prev=d.get("left_min")
-    if isinstance(prev,int) and prev<n: n=prev   # never goes up
-    d["left_min"]=n; return n
+    """Minutes left, from the questions actually still to come given the answers so far (it can go up if an answer adds questions)."""
+    ids=[k for k,_ in sections(form,d)]; i=ids.index(sec) if sec in ids else 0; w=W(d); left=30
+    for j,k in enumerate(ids[i:]):
+        if k in WF_IDS(form) and not (k=="often" and "daily" in ids[i:]):
+            try: left+=6+sum(q_secs(q,w) for q in questions(form,k,d))
+            except Exception: left+=60*WEIGHT.get(k,.8)
+        else: left+=60*WEIGHT.get(k,.8)
+    n=max(1,round(left/60)); d["left_min"]=n; return n
+def WF_IDS(form): return {"often"}|{k for k,_ in SECTIONS.get(form,[])}
 # ---------- question model ----------
-def Q(id,label,kind="radio",opts=(),hint="",dep=None,ac="off",ph="",cls="",maxlen=120,rows=None,other=True):
-    return {"id":id,"label":label,"kind":kind,"opts":list(opts),"hint":hint,"dep":dep,"ac":ac,"ph":ph,"cls":cls,"maxlen":maxlen,"rows":rows or [],"other":other}
+def Q(id,label,kind="radio",opts=(),hint="",dep=None,ac="off",ph="",cls="",maxlen=120,rows=None,other=True,pre=None):
+    """dep: (name, values) or a list of them (all must hold). pre: options the customer already told us about earlier;
+    shown as ONE button that ticks them (never pre-ticked: the customer confirms by tapping). kind 'tap': rows
+    (field, label, 'need'|'can') as one 'tap any that apply' list with None of these."""
+    return {"id":id,"label":label,"kind":kind,"opts":list(opts),"hint":hint,"dep":dep,"ac":ac,"ph":ph,"cls":cls,"maxlen":maxlen,"rows":rows or [],"other":other,"pre":pre or []}
+def _deps(q): d=q["dep"]; return [] if not d else (d if isinstance(d,list) else [d])
 INPUT={"text":"text","date":"date","month":"month","tel":"tel","email":"email","pc":"text","num":"text"}
 def _grid(q,w):
     out=""
@@ -46,10 +64,18 @@ def _grid(q,w):
         cur=w.get(sid,"")
         out+=f'<div class=yn><span class=ynq>{esc(lab)}</span><span class="chips yn2">{_rad(sid,"yes","Yes",cur)}{_rad(sid,"no","No",cur)}</span></div>'
     return out+f'<div class=chips>{_else(q["id"],w.get(q["id"]+"_x",""))}</div>'
+def _tap(q,w):
+    cur=w.get(q["id"]) or []
+    return I._checks(q["id"],[(sid,lab) for sid,lab,_ in q["rows"]]+[("none","None of these")],cur,w.get(q["id"]+"_x",""))
+def _pre_btn(q):
+    lab={v:t for v,t in q["opts"]}; pre=[x for x in q["pre"] if x in lab]
+    if not pre: return ""
+    return f'<p class=prebtn><button type=button class="btn btn-2 usepre" data-for="{esc(q["id"])}" data-vals="{esc(" ".join(pre))}">Tap to use what you told us: {esc(", ".join(lab[x] for x in pre))}</button></p>'
 def render_q(q,w):
     n,k=q["id"],q["kind"]; cur=w.get(n)
-    if k=="radio": inner=f"<div class='chips{q['cls']}'>"+"".join(_rad(n,v,t,cur or "") for v,t in q["opts"])+(_else(n,w.get(n+"_x","")) if q["other"] else "")+"</div>"
-    elif k=="checks": inner=I._checks(n,q["opts"],cur if isinstance(cur,list) else [],w.get(n+"_x","") if q["other"] else None)
+    if k=="tap": inner=_tap(q,w)
+    elif k=="radio": inner=f"<div class='chips{q['cls']}'>"+"".join(_rad(n,v,t,cur or "") for v,t in q["opts"])+(_else(n,w.get(n+"_x","")) if q["other"] else "")+"</div>"
+    elif k=="checks": inner=_pre_btn(q)+I._checks(n,q["opts"],cur if isinstance(cur,list) else [],w.get(n+"_x","") if q["other"] else None)
     elif k=="grid": inner=_grid(q,w)
     elif k=="note": inner=""
     else:
@@ -57,13 +83,20 @@ def render_q(q,w):
         inner=f'<input name="{n}" id="w_{n}" type={INPUT[k]} value="{esc(str(cur or ""))}" autocomplete="{q["ac"]}" maxlength={q["maxlen"]} placeholder="{esc(q["ph"])}"{extra}>'
         if k=="pc": inner=f'<div class=pcrow>{inner}<button type=button class="btn btn-2 pcfind" data-for="{n}">Find</button></div><p class="hint pcout" id="pc_{n}" aria-live=polite></p>'
     h=_q(q["label"],inner,q["hint"])
-    if q["dep"]:
-        dn,vals=q["dep"]; h=f'<div class=wdep data-dep="{esc(dn)}" data-vals="{esc(" ".join(vals))}">{h}</div>'
+    for dn,vals in reversed(_deps(q)): h=f'<div class=wdep data-dep="{esc(dn)}" data-vals="{esc(" ".join(vals))}">{h}</div>'
     return h
 def _clean(s,n=120): return re.sub(r"[\x00-\x1f<>]"," ",str(s or "")).strip()[:n]
 def save_q(q,fm,w):
     n,k=q["id"],q["kind"]
     if k=="note": return
+    if k=="tap":
+        picked=[x for x in fm.getlist(n) if x in {sid for sid,_,_ in q["rows"]}|{"none"}]; xon=I.other_txt(fm,n)
+        if "none" in picked: picked=["none"]
+        w[n]=picked; w[n+"_x"]=xon
+        for sid,_,pol in q["rows"]:   # answered only if they tapped something (an item, None of these or Something else)
+            on_=sid in picked
+            w[sid]=("" if not (picked or xon) else ("yes" if on_ else "no") if pol=="need" else ("no" if on_ else "yes"))
+        return
     if k=="checks": w[n]=[_clean(x,80) for x in fm.getlist(n) if x in {v for v,_ in q["opts"]}]
     elif k=="grid":
         for sid,_ in q["rows"]: w[sid]=_clean(fm.get(sid),5) if fm.get(sid) in ("yes","no") else ""
@@ -79,10 +112,13 @@ def save_q(q,fm,w):
         w[n]=v
     if k in ("radio","checks","grid") and q["other"]: w[n+"_x"]=I.other_txt(fm,n)
 def dep_ok(q,w):
-    if not q["dep"]: return True
-    dn,vals=q["dep"]
-    if dn.endswith("_xon"): return bool(w.get(dn[:-4]+"_x"))
-    v=w.get(dn); return any(x in vals for x in (v if isinstance(v,list) else [v]))
+    for dn,vals in _deps(q):
+        if dn.endswith("_xon"):
+            if not w.get(dn[:-4]+"_x"): return False
+            continue
+        v=w.get(dn)
+        if not any(x in vals for x in (v if isinstance(v,list) else [v])): return False
+    return True
 # ---------- helpers ----------
 def W(d): return d.setdefault("wf",{})
 def nm(d,form): return I.name(d,form)
@@ -169,20 +205,22 @@ def questions(form,sec,d):
               Q("p_his_name","Their full name","text",maxlen=80,dep=("p_his",["yes"])),
               Q("p_his_rel","Who are they to you?","radio",[("Partner","Partner"),("Parent","My parent"),("Adult child","Adult child")],dep=("p_his",["yes"]))]
     elif sec=="health":
+        if conds(d):
+            qs.append(Q("meds_how","Medicines","radio",[("type","I'll type them now"),("photo","I'll add a photo of the repeat prescription list"),("none","No regular medicines")],hint="A photo is quickest. We write 'see the repeat prescription list' on the form and remind you to send a copy."))
         for i,c in enumerate(conds(d)):
-            qs.append(Q(f"med_{i}",f"Medicines for {c['name']} (optional)","text",maxlen=100,ph="e.g. Ramipril 5mg",hint="Names and strength, as on the box or repeat list."))
-            qs.append(Q(f"dose_{i}","How often?","radio",DOSE))
+            qs.append(Q(f"med_{i}",f"Medicines for {c['name']} (optional)","text",maxlen=100,ph="e.g. Ramipril 5mg",hint="Names and strength, as on the box or repeat list.",dep=("meds_how",["type"])))
+            qs.append(Q(f"dose_{i}","How often?","radio",DOSE,dep=[("meds_how",["type"])]))
         g=w.get("gp_list") or []
         if g: qs.append(Q("gp",f"{'Your' if me(d,form) else 'Their'} GP surgery","radio",[(x["id"],x["label"]) for x in g][:12],hint="Practices near the postcode you gave. Not listed? Tap Something else."))
-        qs+= [Q("gp_name","Surgery name","text",maxlen=80,dep=("gp_xon",["1"]) if g else None),Q("gp_addr","Surgery street","text",maxlen=60,dep=("gp_xon",["1"]) if g else None),
-              Q("gp_town","Surgery town","text",maxlen=40,dep=("gp_xon",["1"]) if g else None),Q("gp_pc","Surgery postcode","pc",maxlen=9,dep=("gp_xon",["1"]) if g else None),
+        qs+= [Q("gp_name","Surgery name","text",maxlen=80,dep=("gp_xon",["1"]) if g else None),Q("gp_pc","Surgery postcode","pc",maxlen=9,dep=("gp_xon",["1"]) if g else None),
+              Q("gp_addr","Surgery street","text",maxlen=60,dep=("gp_xon",["1"]) if g else None),Q("gp_town","Surgery town","text",maxlen=40,dep=("gp_xon",["1"]) if g else None),
               Q("gp_tel","Surgery phone (optional)","tel",maxlen=20,dep=("gp_xon",["1"]) if g else None),
               Q("gp_doc","Doctor's name (optional)","text",maxlen=60,ph="e.g. Dr Patel"),
               Q("gp_seen",f"When did {you} last see the GP?","radio",SEEN)]
         p=prof(form,d)
         if p:
-            qs+= [Q("pr_name",f"The {p}'s name (optional)","text",maxlen=60),Q("pr_where","Where do you see them?","text",maxlen=80,ph="e.g. St James's Hospital"),Q("pr_town","Town","text",maxlen=40),
-                  Q("pr_pc","Postcode of that place (optional)","pc",maxlen=9),Q("pr_tel","Their phone (optional)","tel",maxlen=20),
+            qs+= [Q("pr_name",f"The {p}'s name (optional)","text",maxlen=60),Q("pr_where","Where do you see them?","text",maxlen=80,ph="e.g. St James's Hospital"),
+                  Q("pr_pc","Postcode of that place (optional)","pc",maxlen=9),Q("pr_town","Town","text",maxlen=40),Q("pr_tel","Their phone (optional)","tel",maxlen=20),
                   Q("pr_hosp","Hospital number (optional)","text",maxlen=20,hint="On appointment letters."),
                   Q("pr_cond","What for?","radio",[(c["name"],c["name"]) for c in conds(d)][:6]),
                   Q("pr_often","How often?","radio",HOWOFTEN),Q("pr_seen","Last seen","radio",SEEN)]
@@ -224,14 +262,11 @@ def questions(form,sec,d):
             qs+= [Q("acc","Where does "+("you" if me(d,form) else nm(d,form))+(" live?" if me(d,form) else " live?"),"radio",[("house","House"),("bungalow","Bungalow"),("flat","Flat"),("sheltered","Sheltered housing"),("care","Care home")]),
                   Q("liveswith","Who else lives there?","radio",[("alone","Lives alone"),("partner","Partner"),("family","Family"),("carer","Live-in carer")]),
                   Q("toiletat","Where is the toilet?","checks",[("up","Upstairs"),("down","Downstairs")]),Q("sleepat","Where do they sleep?","radio",[("up","Upstairs"),("down","Downstairs")])]
-            for i,a in enumerate(aids(d)):
-                qs+= [Q(f"aid_p_{i}",f"{a}: given by a doctor, nurse or OT?","radio",YN),Q(f"aid_h_{i}",f"{a}: how does it help?","radio",[("safer","Keeps them safer"),("indep","Can do more on their own"),("pain","Less pain"),("atall","Couldn't manage without it")]),
-                       Q(f"aid_d_{i}",f"{a}: any problems using it?","radio",[("none","No problems"),("help","Needs help to use it"),("still","Still struggles with it"),("pain","Painful or tiring to use")])]
+            qs+=aid_qs(form,d,[("h","How do the aids help?",AID_H_AA),("d","Any problems using them?",AID_D_AA)])
             if "Wheelchair" in aids(d) and "indoors" in {r[0] for r in bad_rows(form,d)}:   # aids are tapped after the 'often' part, so this is asked here
                 qs.append(Q("wchair","Getting in or out of the wheelchair","radio",[("diff","Has difficulty"),("help","Needs help")]))
         else:
-            for i,a in enumerate(aids(d)):
-                qs+= [Q(f"aid_p_{i}",f"{a}: given by a doctor, nurse or OT?","radio",YN),Q(f"aid_h_{i}",f"{a}: what help do they need with it?","radio",[("none","None"),("puton","Someone puts it on or sets it up"),("watch","Needs watching while using it"),("remind","Needs reminding to use it")])]
+            qs+=aid_qs(form,d,[("h","What help do they need with them?",AID_H_DLA)])
         ev=[("abroad","Been abroad for more than 4 weeks in the last 3 years"),("eeaben","Gets a pension or benefit from an EU/EEA country or Switzerland"),("eeawork","Works in or pays insurance to an EU/EEA country or Switzerland"),("scot","Moved here from Scotland"),("notgb","Doesn't normally live in "+("England or Wales" if form=="dla" else "Great Britain"))]
         ev+= [("padp","Gets or has claimed Pension Age Disability Payment"),("warcaa","Gets War Pension Constant Attendance Allowance"),("iicaa","Gets Industrial Injuries Constant Attendance Allowance")] if form=="aa" else [("cdp","Gets or has claimed Child Disability Payment"),("newuk","Came to live in the UK in the last 3 years")]
         ev+= [("sr","Has been told they may have 12 months or less to live")]
@@ -264,20 +299,21 @@ def questions(form,sec,d):
 def often_qs(form,d):
     w=d.get("wf") or {}; you=_you(d,form); qs=[]; R=d.get("rows") or {}; bad={r[0] for r in bad_rows(form,d)}
     if form=="aa":
+        prt=[]
         for rid,subs in AA_SUB.items():
             if rid not in bad: continue
             v=R[rid]; c=set(v.get("c") or []); lab=dict((r[0],r[2]) for r in I.AA_ROWS)[rid]
-            opts=[(k,l) for k,l,_,_ in subs]; pre=[k for k,l,chips,_ in subs if c & set(chips) or "" in chips]
-            if not w.get(f"sub_{rid}"): w[f"sub_{rid}"]=pre[:1] or [subs[0][0]]
-            qs.append(Q(f"sub_{rid}",f"{lab}: which parts? (tap all)","checks",opts))
-            for k,l,_,_ in subs: qs.append(Q(f"t_{rid}_{k}",f"{l}: times a day","radio",TIMESD,cls=" nums",dep=(f"sub_{rid}",[k])))
-            if "prompt" not in c: qs.append(Q(f"pr_{rid}",f"Does {you} also need reminding or encouraging with this?","radio",YN))
+            opts=[(k,l) for k,l,_,_ in subs]; pre=[k for k,l,chips,_ in subs if c & {x for x in chips if x}]
+            qs.append(Q(f"sub_{rid}",f"{lab}: which parts? (tap all)","checks",opts,pre=pre))
+            qs+=times_qs(rid,lab,subs)
+            if "prompt" not in c: prt.append((rid,lab))
+        if prt: qs.append(Q("pr_tasks",f"Does {you} also need reminding or encouraging with any of these? (tap any)","checks",prt+[("none","None of these")]))
         if "bed" in bad: qs.append(Q("bed_enc",f"Does {you} need encouraging to get up or go to bed?","checks",[("up","To get up"),("down","To go to bed")]))
         if "indoors" in bad: qs.append(Q("pr_indoors",f"Does {you} need encouraging to move about?","radio",YN))
         if "comm" in bad: qs.append(Q("comm2","Also hard: (tap any)","checks",[("und","Being understood by people they don't know"),("ask","Asking for help when needed")]))
         if "social" in bad:
             qs.append(Q("acts","Which activities do they need help to do? (up to 6)","checks",ACTS_AA))
-            for k,l in ACTS_AA: qs+= [Q(f"ah_{k}",f"{l}: what help?","radio",ACT_HELP,dep=("acts",[k])),Q(f"ao_{k}",f"{l}: how often?","radio",ACT_OFTEN,dep=("acts",[k]))]
+            qs+=act_qs(ACTS_AA,[("ah","what help?",ACT_HELP),("ao","how often?",ACT_OFTEN)])
         if d.get("falls") in ("1-2","3-5","6+"): qs+= [Q("falls_m","Falls in the last month","radio",[("0","None"),("1","1"),("2","2"),("3+","3 or more")],cls=" nums"),Q("fall_what","What usually happens when they fall?","radio",[("legs","Legs give way"),("trip","Trips"),("dizzy","Dizzy or blacks out"),("balance","Loses balance")])]
         qs+= [Q("stum_m",f"Stumbles or near-falls in the last month","radio",[("0","None"),("1-2","1–2"),("3-5","3–5"),("6+","6 or more")],cls=" nums"),
               Q("stum_y","And in the last year","radio",[("0","None"),("1-5","1–5"),("6-20","6–20"),("20+","More than 20")],cls=" nums"),
@@ -298,34 +334,33 @@ def often_qs(form,d):
             if rid=="bed":
                 qs.append(Q("bed","During the day, does your child need help or encouraging to get in or out of bed, or settle?","radio",YN)); dp=("bed",["yes"])
             else: dp=None
-            c=set((R.get(rid) or {}).get("c") or []); pre=sorted({x for k in c for x in DLA_PRE.get(rid,{}).get(k,[])}) or [subs[0][0]]
-            if not w.get(f"sub_{rid}") and rid!="bed": w[f"sub_{rid}"]=pre
+            c=set((R.get(rid) or {}).get("c") or []); pre=[k for k,*_ in subs if k in {x for kk in c for x in DLA_PRE.get(rid,{}).get(kk,[])}]
             lab={"bed":"Bed","wash":"Washing","dress":"Dressing","eat":"Eating and drinking","meds":"Medicines and therapy"}[rid]
-            qs.append(Q(f"sub_{rid}",f"{lab}: which parts need help? (tap all)","checks",[(k,l) for k,l,_,_ in subs],dep=dp))
-            for k,l,_,_ in subs: qs.append(Q(f"t_{rid}_{k}",f"{l}: times a day","radio",TIMESD,cls=" nums",dep=(f"sub_{rid}",[k])))
+            qs.append(Q(f"sub_{rid}",f"{lab}: which parts need help? (tap all)","checks",[(k,l) for k,l,_,_ in subs],dep=dp,pre=pre))
+            qs+=times_qs(rid,lab,subs,dp)
             qs.append(Q(f"m_{rid}",f"{lab}: minutes each time, roughly","radio",MINS,cls=" nums",dep=dp))
         if "toilet" in bad: qs.append(Q("toilet2","Toilet: which parts need help? (tap all)","checks",[(k,l) for k,l in DLA_TOILET if k not in [DLA_TOILET_PRE[c] for c in (R["toilet"].get("c") or []) if c in DLA_TOILET_PRE]]))
         if "indoors" in bad: qs.append(Q("indoors2","Moving about indoors: which parts need help? (tap all)","checks",[(k,l) for k,l in DLA_INDOORS if k not in [x for c in (R["indoors"].get("c") or []) for x in DLA_INDOORS_PRE.get(c,[])]]))
-        G=lambda id,label,rows:Q(id,label,"grid",rows=rows)
-        if "see" in bad: qs+= [Q("sight_cert","Are they certified as","radio",[("severe","Severely sight impaired"),("si","Sight impaired"),("neither","Neither")]),G("see_g","Can they…",[("61_2","See keyboard keys or large print?"),("61_3","See a TV and follow a story?"),("61_4","See the shape of furniture?"),("61_5","Recognise a face across a room?"),("61_6","Recognise someone across a street?")])]
-        if "hear" in bad: qs.append(G("hear_g","Hearing",[("62_1","Audiology test in the last 6 months?"),("62_2","Can they hear a whisper in a quiet room?"),("62_3","A normal voice in a quiet room?"),("62_4","A loud voice in a quiet room?"),("62_5","TV only at very loud volume?"),("62_6","A school bell or car horn?")]))
-        if "speak" in bad: qs.append(G("speak_g","Can they…",[("63_1","Speak clearly in sentences?"),("63_2","Put words together in simple sentences?"),("63_3","Speak single words?"),("63_4","Talk with someone they know?"),("63_5","Talk with someone they don't know?")]))
+        G=lambda id,label,rows:Q(id,label+" (tap any that apply)","tap",rows=rows,hint="Anything you don't tap, we answer the less serious way on the form.")
+        if "see" in bad: qs+= [Q("sight_cert","Are they certified as","radio",[("severe","Severely sight impaired"),("si","Sight impaired"),("neither","Neither")]),G("see_g","Even with glasses",[("61_2","Can't see keyboard keys or large print","can"),("61_3","Can't see a TV well enough to follow a story","can"),("61_4","Can't see the shape of furniture","can"),("61_5","Can't recognise a face across a room","can"),("61_6","Can't recognise someone across a street","can")])]
+        if "hear" in bad: qs.append(G("hear_g","Hearing",[("62_1","Had a hearing test in the last 6 months","need"),("62_2","Can't hear a whisper in a quiet room","can"),("62_3","Can't hear a normal voice in a quiet room","can"),("62_4","Can't hear a loud voice in a quiet room","can"),("62_5","Can only hear the TV at very loud volume","need"),("62_6","Can't hear a school bell or car horn","can")]))
+        if "speak" in bad: qs.append(G("speak_g","Speaking",[("63_1","Can't speak clearly in sentences","can"),("63_2","Can't put words together in simple sentences","can"),("63_3","Can't say single words","can"),("63_4","Can't talk with someone they know","can"),("63_5","Can't talk with someone they don't know","can")]))
         if "comm" in bad: qs+= [Q("comm_how","How do they communicate? (tap any)","checks",[("64_1","Writing"),("64_1_2","BSL"),("64_1_3","Lip reading"),("64_1_4","Gestures and body language"),("64_1_5","Makaton"),("64_1_6","Signed Supported English"),("64_1_7","Signed English"),("64_1_8","Finger spelling"),("64_1_9","PECS (pictures)"),("64_1_10","Tadoma")]),
-                                G("comm_g","Can they communicate with…",[("64_3","Someone they know?"),("64_4","Someone they don't know?")])]
+                                G("comm_g","Communicating",[("64_3","Can't communicate with someone they know","can"),("64_4","Can't communicate with someone they don't know","can")])]
         if d.get("fits") in ("month","week","day"):
             Y3=[("yes","Yes"),("no","No"),("some","Sometimes")]
             qs+= [Q("fit_type","What type?","checks",[("tonic-clonic seizures","Tonic-clonic"),("absence seizures","Absences"),("focal seizures","Focal"),("blackouts","Blackouts"),("drop attacks","Drop attacks")]),
                   Q("fit_warn","Any warning before one?","radio",Y3),Q("fit_tell","Can they spot a warning and tell an adult?","radio",Y3),Q("fit_act","Can they spot a warning and get safe?","radio",Y3),
-                  G("fit_g","In the last 6 to 12 months…",[("65_5","Serious injury from a fit (last 6 months)?"),("65_6","At risk of harm after a fit?"),("65_11","Status epilepticus (last 12 months)?")]),
+                  G("fit_g","Fits",[("65_5","Seriously injured by a fit in the last 6 months","need"),("65_6","At risk of harm after a fit","need"),("65_11","Status epilepticus in the last 12 months","need")]),
                   Q("fit_days","Days a month with fits","radio",[("1","1"),("2-4","2–4"),("5-10","5–10"),("11-20","11–20"),("20+","Over 20")],cls=" nums"),Q("fit_per","Fits on those days","radio",[("1","1"),("2","2"),("3-5","3–5"),("6+","6 or more")],cls=" nums"),
                   Q("fit_nights","Nights a month with fits","radio",[("0","None"),("1","1"),("2-4","2–4"),("5-10","5–10"),("10+","Over 10")],cls=" nums"),Q("fit_nper","Fits on those nights","radio",[("1","1"),("2","2"),("3+","3 or more")],cls=" nums",dep=("fit_nights",["1","2-4","5-10","10+"]))]
         if "superv" in bad:
             known={f for c in (R["superv"].get("c") or []) for cid,_,tk,_ in I.DLA_ROWS[10][4] if cid==c for f,_ in tk}
-            rows=[(f,l) for f,l in [("66_1","Recognise and react to common dangers?"),("66_2","Cope with planned changes to routine?"),("66_3","Cope with unplanned changes?"),("66_4","Often feel anxious or panic?"),("66_5","Often get upset or frustrated?"),("66_6","Often harm themselves or others?"),("66_7","Often feel someone may harm them?"),("66_8","Often become verbally abusive or distressed in a way that could cause harm?"),("66_9","Often act impulsively?"),("66_10","Often become overwhelmed?")] if f not in known]
-            if rows: qs.append(G("superv_g","Do they…",rows))
-        if "dev" in bad: qs.append(G("dev_g","Do they need help to…",[("67_1","Understand the world around them?"),("67_2","Recognise their surroundings?"),("67_3","Follow instructions?"),("67_4","Play with others?"),("67_5","Play on their own?"),("67_6","Join in activities with others?"),("67_7","Behave appropriately?"),("67_8","Understand and respond to other people's behaviour?")]))
+            rows=[(f,l,pl) for f,l,pl in [("66_1","Don't recognise or react to common dangers","can"),("66_2","Can't cope with planned changes to routine","can"),("66_3","Can't cope with unplanned changes","can"),("66_4","Often feel anxious or panic","need"),("66_5","Often get upset or frustrated","need"),("66_6","Often harm themselves or others","need"),("66_7","Often feel someone may harm them","need"),("66_8","Often become verbally abusive or distressed in a way that could cause harm","need"),("66_9","Often act impulsively","need"),("66_10","Often become overwhelmed","need")] if f not in known]
+            if rows: qs.append(G("superv_g","Keeping safe",rows))
+        if "dev" in bad: qs.append(G("dev_g","They need help to",[(f,l,"need") for f,l in [("67_1","Understand the world around them"),("67_2","Recognise their surroundings"),("67_3","Follow instructions"),("67_4","Play with others"),("67_5","Play on their own"),("67_6","Join in activities with others"),("67_7","Behave appropriately"),("67_8","Understand and respond to other people's behaviour")]]))
         if "notatschool" not in (d.get("school") or []):
-            qs.append(G("school_g","At school or nursery, do they need help to…",[("68_1","Go to and use the toilet?"),("68_2","Move safely between lessons?"),("68_3","Change for PE?"),("68_4","Eat meals?"),("68_5","Take medicine or manage therapy?"),("68_6","Communicate?")]))
+            qs.append(G("school_g","At school or nursery, they need help to",[(f,l,"need") for f,l in [("68_1","Go to and use the toilet"),("68_2","Move safely between lessons"),("68_3","Change for PE"),("68_4","Eat meals"),("68_5","Take medicine or manage therapy"),("68_6","Communicate")]]))
         if d.get("age")!="u3" and "walk" in bad:
             qs+= [Q("canwalk","Can they physically walk?","radio",YN),
                   Q("dist","How far can they walk before they need to stop?","radio",[("200+","Over 200 metres"),("51-200","51 to 200 metres"),("50","50 metres or less"),("few","A few steps")],dep=("canwalk",["yes"])),
@@ -335,13 +370,57 @@ def often_qs(form,d):
                   Q("gait","The way they walk","radio",[("normal","Normally"),("limp","With a limp"),("shuffle","Shuffle"),("drag","Drag a leg"),("in","Feet turned in"),("toes","On their toes"),("balance","Poor balance"),("unable","Times they can't walk"),("refuse","Refuse or get distressed")],dep=("canwalk",["yes"]))]
         if d.get("age")!="u3" and "out" in bad:
             c=set(R["out"].get("c") or []); known={f for cid,_,tk,_ in I.DLA_MOB[1][4] if cid in c for f,_ in tk}
-            rows=[(f,l) for f,l in [("49_1","Find their way around places they know?"),("49_2","Ask for and follow directions?"),("49_3","Walk safely next to a busy road?"),("49_4","Cross a road safely?"),("49_5","Understand common dangers outdoors?"),("49_6","Often get anxious, distressed or disorientated outside?"),("49_7","Often behave unpredictably outside?"),("49_8","Often need physical restraint?")] if f not in known]
-            qs.append(G("out_g","Outdoors, can they / do they…",rows))
-            if "falls" in c: qs+= [Q("falls_m","Falls a month","radio",[("1","1"),("2-4","2–4"),("5-10","5–10"),("10+","Over 10")],cls=" nums"),G("falls_g","After a fall",[("50_2","Can they get up without help?"),("50_3","Injuries needing hospital treatment?")])]
+            rows=[(f,l,pl) for f,l,pl in [("49_1","Can't find their way around places they know","can"),("49_2","Can't ask for and follow directions","can"),("49_3","Can't walk safely next to a busy road","can"),("49_4","Can't cross a road safely","can"),("49_5","Don't understand common dangers outdoors","can"),("49_6","Often get anxious, distressed or disorientated outside","need"),("49_7","Often behave unpredictably outside","need"),("49_8","Often need physical restraint","need")] if f not in known]
+            if rows: qs.append(G("out_g","Outdoors",rows))
+            if "falls" in c: qs+= [Q("falls_m","Falls a month","radio",[("1","1"),("2-4","2–4"),("5-10","5–10"),("10+","Over 10")],cls=" nums"),G("falls_g","After a fall",[("50_2","Can't get up without help","can"),("50_3","Injuries that needed hospital treatment","need")])]
         qs.append(Q("hobby","Do they need help to join in hobbies, clubs or activities?","radio",YN))
         qs.append(Q("acts","Which ones? (tap up to 6)","checks",ACTS_DLA,dep=("hobby",["yes"])))
-        for k,l in ACTS_DLA: qs+= [Q(f"ah_{k}",f"{l}: what help?","radio",ACT_HELP,dep=("acts",[k])),Q(f"ao_{k}",f"{l}: how often?","radio",ACT_OFTEN,dep=("acts",[k])),Q(f"al_{k}",f"{l}: how long each time?","radio",ACT_LONG,dep=("acts",[k]))]
+        qs+=act_qs(ACTS_DLA,[("ah","what help?",ACT_HELP),("ao","how often?",ACT_OFTEN),("al","how long each time?",ACT_LONG)])
     return qs
+def times_qs(rid,lab,subs,dp=None):
+    """One 'times a day' for the whole task; each part only if the customer says it differs."""
+    qs=[Q(f"t_{rid}",f"{lab}: times a day"+(" (for each part)" if len(subs)>1 else ""),"radio",TIMESD,cls=" nums",dep=dp)]
+    if len(subs)>1:
+        qs.append(Q(f"t_{rid}_diff","Different for some parts?","checks",[("1","Yes, set each part")],other=False,dep=dp))
+        for k,l,*_ in subs: qs.append(Q(f"t_{rid}_{k}",f"{l}: times a day","radio",TIMESD,cls=" nums",dep=[(f"t_{rid}_diff",["1"]),(f"sub_{rid}",[k])]))
+    return qs
+def act_qs(ACTS,parts):
+    dp=("acts",[k for k,_ in ACTS]); qs=[Q(f"{p}_all",f"For these activities: {l}","radio",O,dep=dp) for p,l,O in parts]
+    qs.append(Q("a_diff","Different for some activities?","checks",[("1","Yes, set each one")],other=False,dep=dp))
+    for k,al in ACTS: qs+=[Q(f"{p}_{k}",f"{al}: {l}","radio",O,dep=[("a_diff",["1"]),("acts",[k])]) for p,l,O in parts]
+    return qs
+AID_H_AA=[("safer","Keeps them safer"),("indep","Can do more on their own"),("pain","Less pain"),("atall","Couldn't manage without it")]
+AID_D_AA=[("none","No problems"),("help","Needs help to use it"),("still","Still struggles with it"),("pain","Painful or tiring to use")]
+AID_H_DLA=[("none","None"),("puton","Someone puts it on or sets it up"),("watch","Needs watching while using it"),("remind","Needs reminding to use it")]
+def aid_qs(form,d,parts):
+    A=aids(d); qs=[]
+    if not A: return qs
+    qs.append(Q("aid_p","Which were given or recommended by a doctor, nurse or occupational therapist? (tap any)","checks",[(str(i),a) for i,a in enumerate(A)]+([("all","All of them")] if len(A)>1 else [])+[("none","None of them")]))
+    for k,label,O in parts:
+        if len(A)==1: qs.append(Q(f"aid_{k}",f"{A[0]}: {label[0].lower()+label[1:]}","radio",O)); continue
+        qs+= [Q(f"aid_{k}",label,"radio",O,hint="For all of them."),Q(f"aid_{k}_diff","Different for some aids?","checks",[("1","Yes, set each one")],other=False)]
+        qs+= [Q(f"aid_{k}_{i}",a,"radio",O,dep=(f"aid_{k}_diff",["1"])) for i,a in enumerate(A)]
+    return qs
+def _copy(w,src,dst):
+    """Use the 'for all' answer for one item unless the customer set that item separately."""
+    if not (w.get(dst) or w.get(dst+"_x")) and (w.get(src) or w.get(src+"_x")): w[dst]=w.get(src,""); w[dst+"_x"]=w.get(src+"_x","")
+def normalise(form,sec,d):
+    w=W(d)
+    if sec=="often":
+        for rid,subs in (AA_SUB if form=="aa" else DLA_SUB).items():
+            for k,*_ in subs:
+                if k in (w.get(f"sub_{rid}") or []): _copy(w,f"t_{rid}",f"t_{rid}_{k}")
+        sel=w.get("pr_tasks") or []
+        if sel:
+            for rid in AA_SUB: w[f"pr_{rid}"]="yes" if rid in sel else "no"
+        for k in w.get("acts") or []:
+            for p in ("ah","ao","al"): _copy(w,f"{p}_all",f"{p}_{k}")
+    if sec=="home":
+        sel=w.get("aid_p") or []
+        for i,_ in enumerate(aids(d)):
+            if sel: w[f"aid_p_{i}"]="yes" if (str(i) in sel or "all" in sel) else "no"
+            else: w.pop(f"aid_p_{i}",None)
+            for k in ("h","d"): _copy(w,f"aid_{k}",f"aid_{k}_{i}")
 def rep(pre,n,base,make,more_label):
     """Up to n repeats of a group: the first shows when base is answered yes, each next one after 'Another?' Yes."""
     out=[]; dp=(base,["yes"]) if isinstance(base,str) else (base[0],[base[1]])
@@ -359,8 +438,11 @@ def save(form,sec,d,fm):
     w=W(d); qs=questions(form,sec,d)
     for q in qs: save_q(q,fm,w)
     for q in qs:
-        if not dep_ok(q,w): w.pop(q["id"],None); w.pop(q["id"]+"_x",None)
+        if not dep_ok(q,w):
+            w.pop(q["id"],None); w.pop(q["id"]+"_x",None)
+            for r in (q["rows"] if q["kind"]=="tap" else []): w.pop(r[0],None)
     if sec=="home" and "none" in (w.get("checks") or []): w["checks"]=["none"]
+    normalise(form,sec,d)
     if sec in ("you","child") and w.get("pc"): pc_meta(w,"pc")
     if sec=="you" or sec=="parent" or sec=="child" or sec=="health":
         if sec=="health" and w.get("gp") and not w.get("gp_x"): gp_detail(w)
@@ -372,6 +454,8 @@ def prefill(form,d):
     return p
 DEP_JS="""<script>(function(){function upd(){document.querySelectorAll('[data-dep]').forEach(function(e){var n=e.getAttribute('data-dep'),v=e.getAttribute('data-vals').split(' '),on=false;document.querySelectorAll('[name="'+n+'"]').forEach(function(i){if(i.checked&&v.indexOf(i.value)>=0)on=true});e.hidden=!on})}
 document.addEventListener('change',upd);upd();
+document.querySelectorAll('.usepre').forEach(function(b){b.addEventListener('click',function(){var n=b.getAttribute('data-for');b.getAttribute('data-vals').split(' ').forEach(function(v){var i=document.querySelector('[name="'+n+'"][value="'+v+'"]');if(i&&!i.checked){i.checked=true;i.dispatchEvent(new Event('change',{bubbles:true}))}});b.parentNode.hidden=true})});
+document.querySelectorAll('.pcfind').forEach(function(b){var i=document.getElementById('w_'+b.getAttribute('data-for')),last='';if(i)i.addEventListener('input',function(){var v=i.value.replace(/\\s+/g,'').toUpperCase();if(v!=last&&/^[A-Z]{1,2}[0-9][A-Z0-9]?[0-9][A-Z]{2}$/.test(v)){last=v;b.click()}})});
 document.querySelectorAll('.pcfind').forEach(function(b){b.addEventListener('click',function(){var f=b.getAttribute('data-for'),i=document.getElementById('w_'+f),o=document.getElementById('pc_'+f);if(!i.value)return;o.textContent='Looking up…';
 fetch('/api/lookup/postcode?pc='+encodeURIComponent(i.value)).then(function(r){return r.json()}).then(function(j){if(!j.ok){o.textContent="We couldn't find that postcode. Type the address below.";return}i.value=j.postcode;o.textContent=j.town+(j.country?', '+j.country:'');
 var t=document.querySelector('[name="'+(f=='pc'?'town':f.replace(/pc$/,'town'))+'"]');if(t&&!t.value)t.value=j.town}).catch(function(){o.textContent='Type the address below.'})})})})();</script>"""
@@ -503,6 +587,8 @@ def pdf_values(form,d,uploads=None):
         from questions import CONDITION_FIELDS as CF
         for i,c in enumerate(conds(d)):
             if i<len(CF): v(CF[i][2],w.get(f"med_{i}") or None); v(CF[i][3],lab(DOSE,w.get(f"dose_{i}"),w.get(f"dose_{i}_x")))
+        if w.get("meds_how")=="photo" and conds(d): v(CF[0][2],"See the repeat prescription list sent with this form")
+        other("Medicines","meds_how")
         # Q17 professional, Q18 helper, Q19 GP
         p=prof(form,d)
         if p:
@@ -561,9 +647,8 @@ def pdf_values(form,d,uploads=None):
             if not r or r.get("lvl")=="ok": continue
             sel=w.get(f"sub_{rid}") or []; pr=("prompt" in (r.get("c") or [])) or w.get(f"pr_{rid}")=="yes"
             for k,_,_,(diff,helpf,prf) in subs:
-                n=w.get(f"t_{rid}_{k}")
+                n=lab(TIMESD,w.get(f"t_{rid}_{k}"),w.get(f"t_{rid}_{k}_x"))
                 if k not in sel or not n: continue
-                n=lab(TIMESD,n,w.get(f"t_{rid}_{k}_x")); 
                 for f in diff: v(f,n)
                 if r.get("help") or r.get("lvl") in ("help","cant"): v(helpf,n)
                 if pr: v(prf,n)
@@ -676,6 +761,8 @@ def pdf_values(form,d,uploads=None):
         from forms import DLA_CONDITION_FIELDS as CF
         for i,c in enumerate(conds(d)):
             if i<len(CF): v(CF[i][2],w.get(f"med_{i}") or None); v(CF[i][3],lab(DOSE,w.get(f"dose_{i}"),w.get(f"dose_{i}_x")))
+        if w.get("meds_how")=="photo" and conds(d): v(CF[0][2],"See the repeat prescription list sent with this form")
+        other("Medicines","meds_how")
         AF=[("41_2","41_3"),("41_5","41_6"),("41_8","41_9"),("41_11","41_12"),("41_14","41_15"),("14_17","41_18")]
         for i,a in enumerate(aids(d)):
             hf,pf=AF[i]; v(hf,lab([("none","None"),("puton","Someone puts it on or sets it up"),("watch","Needs watching while using it"),("remind","Needs reminding to use it")],w.get(f"aid_h_{i}"),w.get(f"aid_h_{i}_x")))
@@ -700,8 +787,8 @@ def pdf_values(form,d,uploads=None):
         for rid,subs in DLA_SUB.items():
             sel=w.get(f"sub_{rid}") or []; m=lab(MINS,w.get(f"m_{rid}"),w.get(f"m_{rid}_x"))
             for k,_,tf,mf in subs:
-                n=w.get(f"t_{rid}_{k}")
-                if k in sel and n: v(tf,lab(TIMESD,n,w.get(f"t_{rid}_{k}_x"))); v(mf,m)
+                n=lab(TIMESD,w.get(f"t_{rid}_{k}"),w.get(f"t_{rid}_{k}_x"))
+                if k in sel and n: v(tf,n); v(mf,m)
         for f in w.get("toilet2") or []: t(f,"/"+dict(DLA_TOILET)[f][:4].lower()) if False else T.__setitem__(f,st(form,f,"/")) if st(form,f,"/") else None
         for f in w.get("indoors2") or []: T.__setitem__(f,st(form,f,"/")) if st(form,f,"/") else None
         for c in (R.get("toilet") or {}).get("c") or []:
