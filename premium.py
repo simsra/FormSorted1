@@ -7,8 +7,12 @@ PLUS_ITEMS=["Help if you're turned down: send us the decision letter and we prep
             "Assessment briefing: what DWP may ask, with your own answers to refer to",
             "Request letters for your GP, carer, school or family, asking them to describe what they've seen",
             "Renewal included: when the review form arrives, we fill it in from your saved answers at no extra charge",
-            "Printed and posted to you, with a return envelope (coming soon)",
+            "Printed and posted to you to sign, with a Freepost return envelope (coming soon)",
             "We keep your answers for 3 years if you choose, so all of this is quick"]
+POST_PIP="Printed and posted to you to sign, to send with the form DWP sent you (coming soon)"
+def plus_items(form):
+    """PIP2 and AR1 go back in DWP's own envelope, so no Freepost envelope is promised for them."""
+    return [POST_PIP if (form in ("pip","pipr") and x.startswith("Printed and posted")) else x for x in PLUS_ITEMS]
 ASK={"aa":"DWP may phone you or the person who helps, to check details. They often ask:",
      "dla":"DWP may phone you or write to the school or doctor. They often ask:",
      "pip":"At the assessment (phone, video or face to face) the assessor will usually ask:",

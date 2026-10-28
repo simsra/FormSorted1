@@ -1,18 +1,18 @@
 import html
+import psp
 def _esc(s): return html.escape("" if s is None else str(s))  # model JSON may return numbers
 from questions import CARE_QUESTIONS
 from forms import is_full, tick_list
-def pack_html(brand, personal, draft, tier, filled_by="", prefill_off=False):
+def pack_html(brand, personal, draft, tier, filled_by="", prefill_off=False, hand_details=False):
     e=_esc
     rows="".join(f"<h3>Question {q}: {e(t)}</h3><p>{e(draft['answers'].get(str(q),'')) or '<em>Not discussed. Leave blank or answer No if it does not apply.</em>'}</p>" for q,t,_,_ in CARE_QUESTIONS)
     answered=tick_list("aa",draft.get("answers",{})); model=[str(x) for x in draft.get("tick_yes",[]) if str(x) in answered]
     ticks=", ".join(model or answered)  # model's judgement limited to answered questions; else every answered question
     li=lambda xs:"".join(f"<li>{e(x)}</li>" for x in xs)
-    script=""
-    if is_full(tier):
-        script="""<h2>Online claim: step by step</h2><ol><li>Go to gov.uk/attendance-allowance/how-to-claim and choose to apply online (if available to you) or print the filled-in AA1 (attached).</li>
-<li>"""+("The filled-in AA1 already has your approved answers and the tick boxes you confirmed. Anything too long for the boxes is on extra sheets at the end of the PDF. Check every page." if not prefill_off else "GOV.UK has just published a new version of the AA1, so we have not filled it in this time. Download the latest form and copy each answer below into it.")+"""</li>
-<li>Applying online instead? Keep this document open next to you, tick the box that matches each care question, and paste our prepared answer into the "tell us more" box. Questions where you described help (tick Yes): """+e(ticks)+"""</li><li>Add the NI number, bank details, signature and date yourself. We never fill these in.</li><li>Attach or post copies (never originals) of the evidence on your checklist.</li><li>Keep a copy and note the date you sent it. DWP usually writes within a few weeks.</li></ol>"""
+    filled=is_full(tier) and not prefill_off
+    script=("<p>The filled-in AA1 already has your approved answers and the tick boxes you confirmed. Anything too long for the boxes is on extra sheets at the end of the PDF. Check every page.</p>" if filled
+            else "<p>GOV.UK has just published a new version of the AA1, so we have not filled it in this time. Download the latest form and copy each answer below into it.</p>" if is_full(tier) and prefill_off else "")
+    script+=psp.html_section("aa",filled=filled,hand_details=hand_details)
     return f"""<!doctype html><html lang="en-GB"><meta charset="utf-8"><title>Your Attendance Allowance answers</title>
 <style>body{{font:18px/1.6 system-ui;max-width:800px;margin:2rem auto;padding:0 1rem;color:#14211f}}h3{{margin-bottom:.2rem}}.box{{background:#fffaf0;border-left:5px solid #f2c14e;padding:1rem}}</style>
 <h1>Your Attendance Allowance (AA1) answers</h1><p>Prepared by {e(brand)} for {e(personal.get('title',''))} {e(personal.get('other_names',''))} {e(personal.get('surname',''))}. {e(filled_by)}</p>
@@ -28,8 +28,8 @@ from forms import FORMS, PIP_ACTIVITIES
 CSS="<style>body{font:18px/1.6 system-ui;max-width:800px;margin:2rem auto;padding:0 1rem;color:#14211f}h3{margin-bottom:.2rem}.box{background:#fffaf0;border-left:5px solid #f2c14e;padding:1rem}.tip{color:#3d4f4c;font-size:.9em}</style>"
 NEWVER=("<div class=box><strong>GOV.UK has just published a new version of this form</strong>, so we have not filled it in for you this time. "
         "Download the latest form from GOV.UK and copy each answer below into it.</div>")
-def pack_form(brand, personal, draft, tier, form, prefill_off=False):
-    if form=="aa": return pack_html(brand,personal,draft,tier,prefill_off=prefill_off)
+def pack_form(brand, personal, draft, tier, form, prefill_off=False, hand_details=False):
+    if form=="aa": return pack_html(brand,personal,draft,tier,prefill_off=prefill_off,hand_details=hand_details)
     e=_esc; F=FORMS[form]; a=draft.get("answers",{})
     li=lambda xs:"".join(f"<li>{e(x)}</li>" for x in xs)
     nd='<em>Not discussed. If this applies, add it in your own words; if not, tick "No".</em>'
@@ -40,7 +40,7 @@ def pack_form(brand, personal, draft, tier, form, prefill_off=False):
         extra=f"<p><strong>Tick 'Yes' on questions:</strong> {e(', '.join(tick_list(form,a)) or ', '.join(map(str,draft.get('tick_yes',[]))))}</p>"
         nights="".join(f"<li>{e(k.replace('night_','').title())}: {e(v[0])} nights a week, {e(v[1])} minutes, {e(v[2])} times a night</li>" for k,v in draft.get("extra",{}).items() if k.startswith("night_"))
         if nights: extra+=f"<h3>Q70 night-time numbers</h3><ul>{nights}</ul>"
-        send="<h2>Sending it</h2><ol><li>Add the child's NI number (if they have one), your NI number, bank details, signature and date yourself. We never fill these in.</li><li>Post it to Freepost DWP DLA Child (no stamp or postcode needed), with copies (never originals) of your evidence.</li><li>The claim starts when DWP receives the form, or from the date you called the helpline if you return the form within 6 weeks. Keep a copy.</li></ol>"
+        send=psp.html_section("dla",filled=is_full(tier) and not prefill_off,hand_details=hand_details)
         title="Your Child DLA (DLA1A) answers"
     else:
         rows=f"<h3>{e(F['topics'][0][1])}</h3><p>{e(a.get('conditions','')) or nd}</p>"
@@ -54,6 +54,7 @@ def pack_form(brand, personal, draft, tier, form, prefill_off=False):
         send=""
         if is_full(tier):
             send=f"<h2>Phone call and assessment prep</h2><ul>{li(draft.get('call_prep',[]))}</ul><p>PIP new claims line: 0800 917 2222 (Mon–Fri 8am–5pm). Return the form within 1 month, or call the PIP enquiry line if you need more time.</p>"
+        send+=psp.html_section(form)
         title="Your PIP answers" if form=="pip" else "Your PIP review (AR1) answers"
     return f"""<!doctype html><html lang="en-GB"><meta charset="utf-8"><title>{title}</title>{CSS}
 <h1>{title}</h1><p>Prepared by {e(brand)}.</p>

@@ -12,6 +12,7 @@ import llm, fill_pdf, documents, quality, deadlines, letters, grounding, facts, 
 from html import escape as esc
 from forms import FORMS, is_full, tier_info, default_tier, is_premium
 import premium as PREMIUM
+import psp as PSP
 import bluebadge as BB, printmail
 import evidence as EVID, honesty as HONEST, fraud as FRAUD
 import wholeform as WF, secure as SECURE
@@ -96,7 +97,7 @@ def pack_items(form,tier):
     return out
 def order_summary(form,tier,pv=""):
     f=FORMS[form]; n,p,_=f["tiers"][tier]
-    if is_premium(tier): items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,default_tier(form))+PREMIUM.PLUS_ITEMS+["You check and approve every word before anything is final"])
+    if is_premium(tier): items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,default_tier(form))+PREMIUM.plus_items(form)+["You check and approve every word before anything is final"])
     else: items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,tier)+["You check and approve every word before anything is final"])
     up=upgrade_box(form,tier)
     return page(prog(1)+pv+f"""<div class=summary><p class=caption>Your order</p><h1>{esc(n)}</h1><p class=sub>{esc(f['short'])}</p>
@@ -112,7 +113,7 @@ def upgrade_box(form,tier):
     base,plus=list(ts)[0],[t for t in ts if is_premium(t)]
     if not plus: return ""
     plus=plus[0]; (bn,bp,_),(pn,pp,_)=ts[base],ts[plus]
-    rows=[("Official form filled in, or extra sheets",1,1),("Your answers in your own words, checked against what you told us",1,1),("Evidence checklist",1,1)]+[(x,0,1) for x in PREMIUM.PLUS_ITEMS]
+    rows=[("Official form filled in, or extra sheets",1,1),("Your answers in your own words, checked against what you told us",1,1),("Evidence checklist",1,1)]+[(x,0,1) for x in PREMIUM.plus_items(form)]
     tr="".join(f"<tr><td>{esc(l)}</td><td>{'✓' if b else '–'}</td><td>{'✓' if p else '–'}</td></tr>" for l,b,p in rows)
     other=plus if tier==base else base; on,op,_=ts[other]
     return f"""<div class=compare><h2 class=h3>Compare packs</h2><table><thead><tr><th></th><th>{esc(bn)}<br>£{bp//100}</th><th>{esc(pn)}<br>£{pp//100}</th></tr></thead><tbody>{tr}</tbody></table>
@@ -447,7 +448,7 @@ def _build_files(token,o,d):
         documents.atw_docx(BRAND,d,o["tier"],os.path.join(od,"AccessToWork-answers.docx")); files=["answers.html","AccessToWork-answers.docx"]
         store.put_dir(token,od,files); return files
     pf=pack_files(o); off=prefill_off(o)
-    open(os.path.join(od,"answers.html"),"w").write(documents.pack_form(BRAND,personal,d,o["tier"],form,prefill_off=bool(off)))
+    open(os.path.join(od,"answers.html"),"w").write(documents.pack_form(BRAND,personal,d,o["tier"],form,prefill_off=bool(off),hand_details=hand_details(o)))
     files=["answers.html"]
     if F.get("pdf_out") in pf:
         tp=tapped(o)
@@ -471,6 +472,10 @@ def _build_files(token,o,d):
             open(os.path.join(od,"reconsideration-letter.txt"),"w").write(txt); files.append("reconsideration-letter.txt")
     store.put_dir(token,od,files)   # to private Supabase bucket when configured (local temp copy removed)
     return files
+def hand_details(o):
+    """True when NI number and bank details are not on the filled form: not a whole-form order, or the customer chose Skip."""
+    if (o["form"] or "aa") not in ("aa","dla"): return False
+    return not is_wf(o) or bool(json.loads(o["draft"] or "{}").get("details_skipped"))
 def prefill_off(o):
     """Reason pre-fill is switched off for this order's form (e.g. GOV.UK published a new version), else None."""
     F=FORMS[o["form"] or "aa"]
@@ -541,7 +546,7 @@ def detail_fields(form):
     return DETAIL_FIELDS+(DLA_EXTRA if form=="dla" else [])
 import re as _re
 NI_RE=_re.compile(r"^[A-CEGHJ-PR-TW-Z]{2}\d{6}[A-D]$")
-POST_OPT="<label class=cb><input type=checkbox name=post_pack value=1><span>Print and post my pack to the address above, with a return envelope. You still check, sign and send the form yourself.</span></label>"
+POST_OPT="<label class=cb><input type=checkbox name=post_pack value=1><span>Print and post my pack to me at the address above to sign, with a Freepost return envelope. You still check, sign and send the form yourself.</span></label>"
 @app.get("/details/{token}")
 def details_page(token:str, err:str=""):
     o=ready(token)
@@ -623,7 +628,8 @@ async def private_save(o, fm):
         if fm.get("other_ben") and form=="aa": sv["other_ben"]=1
         SECURE.put(token,sv,keep_days=14 if o["post_pack"] else None)
     else: SECURE.wipe(token)
-    c=db(); c.execute("update orders set details_at=? where token=?",(time.time(),token)); c.commit()
+    d_=json.loads(o["draft"] or "{}"); d_["details_skipped"]=bool(fm.get("skip"))
+    c=db(); c.execute("update orders set details_at=?, draft=? where token=?",(time.time(),json.dumps(d_),token)); c.commit()
     if await run_in_threadpool(check_hold,token,"details"):
         c.execute("update orders set details_at=null where token=?",(token,)); c.commit(); SECURE.wipe(token); return RedirectResponse(f"/hold/{token}",303)
     o=get(token); await run_in_threadpool(build_files,token,o,json.loads(o["draft"]))
@@ -1150,11 +1156,11 @@ def documents_page(token:str):
     saved=f"<div class=panel><p><strong>Your save code: <code>{o['save_code']}</code></strong><br>Keep it safe. {'Keep a copy of your answers too. They will help when your grant is due for renewal (you can apply to renew 12 weeks before it ends).' if o['form']=='atw' else "Use it at <a href=/review>/review</a> when your review form arrives, and we'll only ask what has changed."}</p></div>" if o["save_code"] else ""
     if is_premium(o["tier"]) and o["save_code"]:
         saved+=f"""<div class=panel><h2 class=h3>Included with Done for you Plus</h2><p><strong>Turned down?</strong> You usually have 1 month from the date on the decision letter to ask DWP to look again. <a href="/appeal/{o['save_code']}">Send us the decision letter</a> and we prepare your reconsideration letter and revised answers at no extra charge.</p>
-<p><strong>Review form arrived?</strong> <a href="/review/{o['save_code']}">Start your renewal</a>. We fill it in from your saved answers at no extra charge.</p>{'<p>We will print and post your pack to you.</p>' if o['post_pack'] else ''}</div>"""
+<p><strong>Review form arrived?</strong> <a href="/review/{o['save_code']}">Start your renewal</a>. We fill it in from your saved answers at no extra charge.</p>{'<p>We will print your pack and post it to you to sign'+(', with a Freepost return envelope' if (o['form'] or 'aa') in ('aa','dla') else '')+'.</p>' if o['post_pack'] else ''}</div>"""
     return page(prog(8)+f"""<div class=done><h1>{"Your answers are ready" if o["form"]=="atw" else "Your form is done"}</h1><p>You approved every answer. Your documents are ready.</p></div>
 {''.join(f'<div class=dl><span><strong>{lab.get(f,f)}</strong></span><a class=btn href="/download/{token}/{f}" download>Download</a></div>' for f in files)}{gone}
 {f"<div class=tracker><p class=big>Send it back by <strong>{datetime_fmt(res['deadline'])}</strong></p></div>" if res and res.get('deadline') else ''}{saved}
-{bb_addon_box(o)}{ATW_NEXT if o['form']=='atw' else ''}<h2{' hidden' if o['form']=='atw' else ''}>What to do next</h2><ol class=steps{' hidden' if o['form']=='atw' else ''}><li><strong>Read it once more</strong> before you send it.</li><li><strong>Copy the answers into your claim</strong>, or print, sign and post the filled-in form.</li><li><strong>Turned down?</strong> You can ask DWP to look again (mandatory reconsideration), usually within one month of the decision letter. <a href=/letter>Draft a letter</a>.</li></ol>
+{bb_addon_box(o)}{ATW_NEXT if o['form']=='atw' else ''}{'' if o['form']=='atw' else PSP.html_section(o['form'] or 'aa',filled=(FORMS[o['form'] or 'aa'].get('pdf_out') in files),hand_details=hand_details(o))}
 <p class=small>We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>.</p>""","Your documents")
 ATW_NEXT=f"""<h2>What to do next</h2><ol class=steps><li><strong>Read it once more</strong> and change anything that isn't right.</li><li><strong>Apply online or by phone</strong> at GOV.UK (search 'Access to Work apply'), or call {facts.v('atw_helpline')} (Mon–Fri 9am–5pm). Paste or read out each answer.</li><li><strong>Add your own details</strong>: workplace address, workplace contact, NI number (or UTR if self-employed).</li><li><strong>Disagree with the decision?</strong> Call the helpline and ask for it to be reconsidered.</li></ol>"""
 FAMILY_ONLY="<h1>Coming soon with FormSorted Family</h1><p>This feature isn't available yet. We don't take payment for it until it's ready.</p>"

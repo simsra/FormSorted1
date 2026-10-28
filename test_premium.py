@@ -22,7 +22,7 @@ for form in ("aa","dla","pip"):
     assert "£99" in h and "£199" in h and "Compare packs" in h and "Upgrade to Done for you Plus, £199" in h and "How much should we" not in h and h.count(DWP)==1
     hp=body(f"/?form={form}&tier=199"); assert "Done for you Plus" in hp and "Switch to Done for you, £99" in hp and "Assessment briefing" in hp
     for x in (h,hp):
-        low=x.lower().replace(DWP.lower(),""); assert "free" not in low and "stripe" not in low and " ai " not in low and "we claim for you" not in low and "we submit your claim" not in low and "claim pack" not in low and "claims service" not in low and "claims firm" not in low and "claim handling" not in low
+        low=x.lower().replace(DWP.lower(),"").replace("freepost",""); assert "free" not in low and "stripe" not in low and " ai " not in low and "we claim for you" not in low and "we submit your claim" not in low and "claim pack" not in low and "claims service" not in low and "claims firm" not in low and "claim handling" not in low
         assert not set(re.findall(r'href="?(https?://[^" >]+)',x))-{"https://formsorted.com/privacy.html","https://formsorted.com/terms.html","https://formsorted.com/#prices"}
 assert "How much should we do for you?" in body("/?form=atw")
 # ---- Plus AA order through the intake
