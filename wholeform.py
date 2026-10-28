@@ -211,8 +211,8 @@ def questions(form,sec,d):
             qs.append(Q(f"med_{i}",f"Medicines for {c['name']} (optional)","text",maxlen=100,ph="e.g. Ramipril 5mg",hint="Names and strength, as on the box or repeat list.",dep=("meds_how",["type"])))
             qs.append(Q(f"dose_{i}","How often?","radio",DOSE,dep=[("meds_how",["type"])]))
         g=w.get("gp_list") or []
-        if g: qs.append(Q("gp",f"{'Your' if me(d,form) else 'Their'} GP surgery","radio",[(x["id"],x["label"]) for x in g][:12],hint="Practices near the postcode you gave. Not listed? Tap Something else."))
-        qs+= [Q("gp_name","Surgery name","text",maxlen=80,dep=("gp_xon",["1"]) if g else None),Q("gp_pc","Surgery postcode","pc",maxlen=9,dep=("gp_xon",["1"]) if g else None),
+        if g: qs.append(Q("gp",f"{'Your' if me(d,form) else 'Their'} GP surgery","radio",[(x["id"],x["label"]) for x in g][:12],hint="Practices near the postcode you gave. Not listed? Tap Something else and type the surgery name."))
+        qs+= ([] if g else [Q("gp_name","Surgery name","text",maxlen=80)])+[Q("gp_pc","Surgery postcode","pc",maxlen=9,dep=("gp_xon",["1"]) if g else None),
               Q("gp_addr","Surgery street","text",maxlen=60,dep=("gp_xon",["1"]) if g else None),Q("gp_town","Surgery town","text",maxlen=40,dep=("gp_xon",["1"]) if g else None),
               Q("gp_tel","Surgery phone (optional)","tel",maxlen=20,dep=("gp_xon",["1"]) if g else None),
               Q("gp_doc","Doctor's name (optional)","text",maxlen=60,ph="e.g. Dr Patel"),
@@ -445,6 +445,7 @@ def save(form,sec,d,fm):
     normalise(form,sec,d)
     if sec in ("you","child") and w.get("pc"): pc_meta(w,"pc")
     if sec=="you" or sec=="parent" or sec=="child" or sec=="health":
+        if sec=="health" and w.get("gp_list") and w.get("gp_x"): w["gp_name"]=w["gp_x"]   # 'Something else' text is the surgery name
         if sec=="health" and w.get("gp") and not w.get("gp_x"): gp_detail(w)
     if sec in ("you","child","parent") and w.get("pc") and not w.get("gp_list"): gp_options(w)
     return d

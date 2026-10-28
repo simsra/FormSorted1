@@ -1,5 +1,7 @@
-"""Timed mobile walk-through of the whole-form flow (dev server, WHOLE_FORM=1 WF_LOOKUPS=0), with screenshots.
-   python walkthrough_wf.py http://localhost:8037 OUTDIR
+"""Timed mobile walk-through of the whole-form flow (dev server, WHOLE_FORM=1, postcode and GP lookups on), with screenshots.
+   python walkthrough_wf.py http://localhost:8037 OUTDIR [worst|typical]
+worst: the 'max' answer set (every branch that adds boxes). typical: a common case (2 conditions, a few chips per task, GP picked
+from the list, no tests/operations/stays). Postcodes are typed first; a town the lookup already filled isn't typed again.
 Human time is ESTIMATED from what the customer has to do on each screen (taps and typed characters), not measured on a person:
 6 s to read a screen + 2 s per tap + 4 s per typed field + 0.35 s per character. Server time is measured."""
 import sys, os, re, json, time, subprocess
@@ -7,32 +9,73 @@ from playwright.sync_api import sync_playwright
 B=sys.argv[1]; OUT=sys.argv[2]; os.makedirs(OUT,exist_ok=True)
 src=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),"test_wholeform.py")).read()
 g={"__name__":"wf_answers"}; exec(src.split("COV={}")[0].replace("B=sys.argv[1]","B='x'#").replace("DB=sys.argv[2]","DB='x'#").replace("LOG=sys.argv[3]","LOG=''#"),g)
-P=g["P"]
-FILL="""([data,grid])=>{let taps=0,fields=0,chars=0,missing=[];const f=(document.getElementsByName('sec')[0]||{}).form||document.querySelector('form');
+P=g["P"]; newkeys=g["newkeys"]; import copy
+MODE=sys.argv[3] if len(sys.argv)>3 else "worst"
+def real_pc(A):   # postcodes that exist, so the lookup fills the town as it would for a customer
+    for sec in A.values():
+        for k,v in list(sec.items()):
+            if isinstance(v,str) and v in ("LS6 2AA","LS7 1AA"): sec[k]="LS6 2RX"
+    return A
+def typical(form):
+    A=copy.deepcopy(P[form]); x=A.__setitem__
+    if form=="aa":
+        x("conds",{"cond_0":"1","cond_0_since":"2015","cond_1":"1","cond_1_since":"2021"})
+        A["daily"]={"bad":"3",**g["rows"]("aa",{"toilet":["prompt"],"wash":["in"],"dress":["fast"],"eat":["cut"],"meds":["forget"],"social":["get"]})}
+        A["safety"].update(fallx=["getup"],eye=["confused"],night=["toilet"],nights="3",ntimes="1",watch="some")
+        A["often"]={"sub_toilet":["toilet"],"t_toilet_toilet":"3","sub_wash":["wash"],"t_wash_wash":"1","sub_dress":["on","off"],"t_dress_on":"1","sub_eat":["cut"],"t_eat_cut":"3",
+                    "sub_meds":["meds"],"t_meds_meds":"2","acts":["family","visits"],"ah_family":"with","ao_family":"weekly","eye2":["prevent"],"eye_days":"7","n_prompt":["toilet"]}
+        A["finish"]={"aids":["Walking frame","Grab rails"],"people":["GP"]}
+        A["you"].pop("addr2",None); A["you"].pop("mobile",None)
+        A["helper"]={"h_name":"Sam Testcase","h_dob":"1968-05-06","h_same":"yes","h_phone":"07700 900001","h_online":"yes"}
+        A["health"]={"med_0":"Paracetamol 500mg","dose_0":"4d","med_1":"Donepezil 10mg","dose_1":"1d","gp":"__first","gp_doc":"Dr Patel","gp_seen":"month","hp_any":"no","tests":"no","surg":"no","care_start":"2024-03","consent":"yes"}
+        A["home"]={"wchair":"no","acc":"house","liveswith":"family","toiletat":["down"],"sleepat":"up","aid_p_0":"yes","aid_p_1":"yes","aid_h_0":"safer","aid_h_1":"safer","aid_d_0":"none","aid_d_1":"none","checks":["none"],"hosp":"no","out6":"no","stmt":"noone"}
+    else:
+        x("conds",{"cond_0":"1","cond_0_since":"2021","cond_1":"1","cond_1_since":"2022"})
+        A["daily"]={"bad":"4",**g["rows"]("dla",{"toilet":["pads"],"dress":["sens"],"superv":["danger"],"speak":["few"],"comm":["und"]})}
+        A["safety"]={"fits":"no","varies":"varies","nn":["night_settle"],"nn_night_settle_n":"5","nn_night_settle_t":"1","nn_night_settle_m":"20",**g["rows"]("dla",{"out":["road"]})}
+        A["often"]={"sub_dress":["on","off"],"t_dress_on":"2","t_dress_off":"2","m_dress":"20","toilet2":["55_1"],"hobby":"yes","acts":["park","party"],"ah_park":"with","ao_park":"weekly","al_park":"1h","canwalk":"yes","walk_other":"no"}
+        A["finish"]={"school":["one"],"aids":["Ear defenders","Visual timetable"],"people":["Paediatrician","GP"]}
+        A["child"].pop("addr2",None); A["child"].pop("othernames",None)
+        A["parent"]={"p_title":"Ms","p_first":"Jo","p_surname":"Testcase","p_dob":"1985-02-03","p_nat":"British","p_same":"yes","p_phone":"07700 900003","p_email":"jo@example.com","p_text":"yes","p_welsh":"no","p_is":"yes","p_his":"no"}
+        A["health"]={"med_0":"Melatonin 2mg","dose_0":"1d","gp":"__first","gp_doc":"Dr Patel","gp_seen":"month","pr_name":"Dr Khan","pr_where":"Leeds Children's Hospital","pr_pc":"LS1 3EX","pr_town":"Leeds","pr_often":"6m","pr_seen":"1to3",
+                     "tests":"no","sc_name":"Oak Primary","sc_pc":"LS6 4AA","sc_addr":"School Lane","sc_town":"Leeds","sc_type":"main","sc_travel":"We drive them","plans":["none"],"care_start":"2021-09","consent":"yes"}
+        A["home"]={"aid_p_0":"yes","aid_p_1":"yes","aid_h_0":"none","aid_h_1":"remind","checks":["none"],"hosp":"no","stays":"no","stmt":"noone"}
+    return A
+SETS={"worst":lambda f:real_pc(copy.deepcopy(P[f])),"typical":lambda f:real_pc(typical(f))}
+FILL="""async ([data,grid,auto])=>{let taps=0,fields=0,chars=0,missing=[],skipped=0;const f=(document.getElementsByName('sec')[0]||{}).form||document.querySelector('form');
  const ev=el=>{el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));el.dispatchEvent(new Event('click',{bubbles:true}))};
  const vis=el=>{const t=(el.type==='radio'||el.type==='checkbox')?(el.closest('label')||el):el; return !!(t.offsetWidth||t.offsetHeight||t.getClientRects().length)};
  const done=[];
- for(const [n,v] of Object.entries(data)){ if(n==='sec'||n==='nav')continue; const els=[...document.getElementsByName(n)];
+ const ent=Object.entries(data); const pcs=ent.filter(([n])=>/pc$/.test(n));
+ for(const [n,v] of pcs){const e=document.getElementsByName(n)[0]; if(e&&vis(e)){e.value=String(v);e.dispatchEvent(new Event('input',{bubbles:true}));done.push(['x',e])}}
+ if(pcs.length) await new Promise(r=>setTimeout(r,2500));
+ for(const b of document.querySelectorAll('.usepre')){const n=b.getAttribute('data-for'),pv=b.getAttribute('data-vals').split(' '),want=data[n];
+   if(Array.isArray(want)&&pv.every(x=>want.includes(x))&&vis(b)){done.push(['b',b]);b.click()}}
+ for(const [n,v] of ent){ if(n==='sec'||n==='nav'||/pc$/.test(n))continue; const els=[...document.getElementsByName(n)];
   if(!els.length){missing.push(n);continue}
   const vals=Array.isArray(v)?v.map(String):[String(v)]; const e0=els[0];
+  if(v==='__first'){ if(!els.some(e=>e.checked)&&vis(e0)){e0.checked=true;ev(e0);done.push(['t',e0])} continue }
   if(e0.type==='radio'||e0.type==='checkbox'){ for(const el of els){ if(vals.includes(el.value)||(els.length===1&&e0.type==='checkbox'&&v)){ if(!el.checked){el.checked=true;ev(el);done.push(['t',el]);} } } }
   else if(e0.tagName==='SELECT'){e0.value=vals[0];ev(e0);done.push(['s',e0])}
-  else {e0.value=vals[0];ev(e0);done.push(['x',e0])}
+  else { if(e0.value&&e0.value.trim().toLowerCase()===vals[0].trim().toLowerCase()){skipped++;continue} e0.value=vals[0];ev(e0);done.push(['x',e0])}
  }
+ const groups=()=>{const g={};for(const el of f.querySelectorAll('input[type=radio]'))if(vis(el))(g[el.name]=g[el.name]||[]).push(el);return Object.entries(g).filter(([n,a])=>!a.some(e=>e.checked))};
+ let unanswered=groups().map(([n])=>n);
+ if(auto){for(let pass=0;pass<3;pass++)for(const [n,a] of groups()){a[0].checked=true;ev(a[0]);done.push(['t',a[0]])} unanswered=groups().map(([n])=>n)}
  if(grid){for(const el of f.querySelectorAll('input[type=radio][value=yes]')){if(/^\\d+_\\d+$/.test(el.name)&&!(el.name in data)&&vis(el)){el.checked=true;ev(el);done.push(['t',el]);}}}
- let hidden=0; for(const [k,el] of done){ if(!vis(el)){hidden++;continue} if(k==='t')taps++; else if(k==='s')taps+=2; else {fields++;chars+=el.value.length} }
- return {taps,fields,chars,missing,hidden}}"""
+ let hidden=0; for(const [k,el] of done){ if(!vis(el)){hidden++;continue} if(k==='t')taps++; else if(k==='b'){taps++;continue} else if(k==='s')taps+=2; else {fields++;chars+=el.value.length} }
+ return {taps,fields,chars,missing,hidden,skipped,unanswered}}"""
 def est(r): return 6+2*r["taps"]+4*r["fields"]+0.35*r["chars"]
 def submit(page,key="sec"):
     with page.expect_navigation(): page.evaluate("""(key)=>{const k=document.getElementsByName(key)[0]; const f=(k&&k.form)||document.querySelector('main form')||document.querySelector('form'); if(!f.querySelector('input[name=nav]')){const i=document.createElement('input');i.type='hidden';i.name='nav';i.value='next';f.appendChild(i)} f.submit()}""",key)
     page.wait_for_load_state("load")
 def run(form):
-    ans=P[form]; rows=[]; n=[0]
+    ans=SETS[MODE](form); rows=[]; n=[0]
     with sync_playwright() as p:
         br=p.chromium.launch(); ctx=br.new_context(viewport={"width":390,"height":844},device_scale_factor=2,is_mobile=True,has_touch=True)
         page=ctx.new_page()
         def shot(name):
-            n[0]+=1; fn=f"{form}_{n[0]:02d}_{name}.png"; page.screenshot(path=os.path.join(OUT,fn),full_page=True); return fn
+            n[0]+=1; fn=f"{form}_{'' if MODE=='worst' else 'typ_'}{n[0]:02d}_{name}.png"; page.screenshot(path=os.path.join(OUT,fn),full_page=True); return fn
         page.goto(B+"/"); shot("home")
         t=time.time()
         with page.expect_navigation(): page.evaluate(f"""()=>{{const f=document.createElement('form');f.method='post';f.action='/checkout';
@@ -45,7 +88,12 @@ def run(form):
             if "/intake/" not in page.url: break
             h=page.content(); m=re.search(r'name="?sec"? value="?(\w+)',h); sec=m.group(1)
             mm=re.search(r"About (\d+) minutes? left",h)
-            r=page.evaluate(FILL,[ans.get(sec,{}),sec=="often"])
+            d_=newkeys(form,"max",sec,{**ans.get(sec,{})},h)
+            if MODE=="typical" and sec=="home": d_["aid_p"]=["all"]
+            if MODE=="typical":
+                for k in [k for k in d_ if k.endswith("_g")]: d_[k]=d_[k][:1]   # a typical customer taps one thing per list
+            if MODE=="worst" and sec=="health": d_.update(gp_xon="1",gp_x="Oak Surgery"); d_.pop("gp_name",None)   # worst: their surgery isn't listed
+            r=page.evaluate(FILL,[d_,False,MODE=="typical"])
             shot(f"intake_{sec}"); t=time.time(); submit(page); s=time.time()-t
             rows.append((f"intake: {sec} (shows 'about {mm.group(1) if mm else '?'} min left')",r,s))
         assert "/uploads/" in page.url, page.url
@@ -92,7 +140,7 @@ def run(form):
         pd={"ni":"AB123456C" if form=="aa" else "CE654321A","holder":"M A Testcase","bank":"Test Bank","sort":"60-83-71","acc":"31926819","roll":""}
         if form=="aa": pd.update({"h_ni":"JK112233B","other_ben":"1"})
         else: pd.update({"child_ni":"SC123456A","his_ni":"PR998877D"})
-        r=page.evaluate(FILL,[pd,False]); shot("details_private_filled_TESTDATA"); submit(page,"ni")
+        r=page.evaluate(FILL,[pd,False,False]); shot("details_private_filled_TESTDATA"); submit(page,"ni")
         rows.append(("private details (NI + bank)",r,time.time()-t))
         assert "/documents/" in page.url, page.url
         shot("documents")
@@ -112,9 +160,9 @@ for form in ("aa","dla"):
     rows=run(form); tot_h=0; tot_s=0; lines=[]
     for name,r,s in rows:
         h=0 if r.get("wait") else est(r)+r.get("read",0); tot_h+=h; tot_s+=s
-        lines.append({"step":name,"taps":r.get("taps",0),"typed_fields":r.get("fields",0),"chars":r.get("chars",0),"est_customer_s":round(h),"server_s":round(s,2),"missing":r.get("missing",[])})
+        lines.append({"step":name,"taps":r.get("taps",0),"typed_fields":r.get("fields",0),"chars":r.get("chars",0),"est_customer_s":round(h),"server_s":round(s,2),"missing":r.get("missing",[]),"unanswered":r.get("unanswered",[]),"autofilled_skipped":r.get("skipped",0)})
     res[form]={"steps":lines,"est_customer_total_s":round(tot_h),"server_total_s":round(tot_s,1)}
-json.dump(res,open(os.path.join(OUT,"timing.json"),"w"),indent=1)
+json.dump(res,open(os.path.join(OUT,f"timing_{MODE}.json"),"w"),indent=1)
 for form,v in res.items():
     print(form, "estimated customer time", v["est_customer_total_s"]//60,"min",v["est_customer_total_s"]%60,"s; server",v["server_total_s"],"s")
     for l in v["steps"]: print("  ",l)
