@@ -14,7 +14,7 @@ def send(to, subject, text):
         return "smtp"
     if b=="resend":
         r=urllib.request.Request("https://api.resend.com/emails",json.dumps({"from":_from(),"to":[to],"subject":subject,"text":text}).encode(),
-            {"Authorization":"Bearer "+os.environ["RESEND_API_KEY"],"Content-Type":"application/json"})
+            {"Authorization":"Bearer "+os.environ["RESEND_API_KEY"],"Content-Type":"application/json","User-Agent":"FormSorted/1.0 (+https://formsorted.com)"})
         urllib.request.urlopen(r,timeout=30).read(); return "resend"
     log=os.getenv("MAIL_LOG",os.path.join(HERE,"data","mail.log")); os.makedirs(os.path.dirname(log),exist_ok=True)
     with open(log,"a") as f: f.write(json.dumps({"at":time.time(),"to":to,"subject":subject,"text":text})+"\n")
