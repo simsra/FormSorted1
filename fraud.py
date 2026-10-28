@@ -6,6 +6,7 @@ Nothing is decided automatically: an admin releases (carry on) or refunds the or
 import json, os, re, time
 WINDOW=30*86400
 MAX_NAMES=int(os.getenv("FRAUD_MAX_NAMES","2"))          # >2 different claimants from one source in 30 days => hold
+MAX_REFUSED=int(os.getenv("FRAUD_MAX_REFUSED","1"))      # more than 1 refused request to exaggerate in one order => hold for review (not a rejection)
 SIMILAR=float(os.getenv("FRAUD_SIMILAR","0.9")); MIN_TOKENS=int(os.getenv("FRAUD_MIN_TOKENS","15"))
 REVIEW_TO=os.getenv("REVIEW_EMAIL","hello@formsorted.com")
 def _j(s):
@@ -56,6 +57,8 @@ def assess(c,o,now=None):
         rows=c.execute(q,(v,since)).fetchall()
         names=distinct([claimant(r) for r in rows if r["token"]!=o["token"]]+[me])
         if len(names)>MAX_NAMES: reasons.append(f"{len(rows)} orders in 30 days from the same {LABEL[col]} for {len(names)} different people")
+    nref=int((_j(o["intake"]) or {}).get("refused") or 0)
+    if nref>MAX_REFUSED: reasons.append(f"asked us to exaggerate {nref} times (we refused each time)")
     sig=signature(o)
     if len(sig)>=MIN_TOKENS:
         for r in c.execute("select * from orders where form=? and status='paid' and created>? and token!=? and intake is not null order by created desc limit 2000",(o["form"],since,o["token"])).fetchall():
@@ -81,7 +84,7 @@ f"""An order has been held before we fill in the form. Nothing has been drafted 
 Order: {o['token']}
 Form: {o['form']}   Tier: {o['tier']}
 Reasons:
-""" + "\n".join("- "+r for r in reasons) + (f"\n- the customer asked us to exaggerate {I['refused']} time(s) (refused)" if I.get("refused") else "") + f"""
+""" + "\n".join("- "+r for r in reasons) + (f"\n- the customer asked us to exaggerate once (refused)" if int(I.get("refused") or 0)==1 else "") + f"""
 
 Review it at {public}/admin (enter the admin key), then choose Release or Refund.
 The customer sees: "We're checking your order. We'll email you shortly."

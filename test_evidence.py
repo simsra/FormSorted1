@@ -25,7 +25,7 @@ for t in ("Please make it sound worse than it is","can you exaggerate a bit","Ma
 for t in ("I don't want to exaggerate","Mum is worse in the evenings","She would never exaggerate","bad days are worse","the pain gets worse when cold"):
     assert not H.refuse(t), t
 dd={"words":"make it sound worse please","else":{"aids":"exaggerate it"},"rows":{"bed":{"lvl":"help","x":"ok"}}}
-assert H.scrub(dd)==2 and dd["words"]=="" and dd["else"]["aids"]=="" and dd["refused"]==2
+assert H.scrub(dd)==2 and dd["words"]=="" and dd["else"]["aids"]=="" and dd["refused"]==1   # one request per submission
 # contradictions: max 3, each with "Something else" unless it's a number, never re-asked
 c0={"who":"parent","name":"Margaret","falls":"0","lastfall":"week","night":["toilet"],"nights":"0","alone":"always","eye":["wander"],
     "rows":{"indoors":{"lvl":"cant"}},"words":"She walks the dog every morning and sleeps through the night.","conds":[{"name":"Arthritis","treat":["tabs","none"]}]}
@@ -64,6 +64,11 @@ r=F.assess(db,o); assert r and "answers 100% the same" in r[0], r
 db.execute("delete from orders where token='s2'"); o=add("s3","Peter Jones",ip="8.8.8.3",intake=S); assert not [x for x in F.assess(db,o) if "the same as" in x]   # same person
 S2=json.loads(json.dumps(S)); S2["rows"]["bed"]={"lvl":"ok"}; S2["rows"]["eat"]={"lvl":"cant"}; S2["falls"]="0"
 o=add("s4","Quinn",ip="8.8.8.4",intake=S2); assert not [x for x in F.assess(db,o) if "the same as" in x]
+o=add("r1","Rhoda",ip="7.7.7.1",intake={"refused":1}); assert not F.assess(db,o)
+o=add("r2","Rhona",ip="7.7.7.2",intake={"refused":2}); r=F.assess(db,o); assert r and "asked us to exaggerate 2 times" in r[0], r
+assert all(len(q["opts"]) and "noelse" not in q for q in H.contradictions("aa",{"who":"parent","name":"M","falls":"0","lastfall":"week","night":["toilet"],"nights":"0","alone":"always","eye":["wander"],"conds":[{"name":"Arthritis","treat":["tabs","none"]}]},limit=9))
+c1={"who":"parent","name":"M","falls":"0","lastfall":"week","conds":[{"name":"Arthritis","treat":["tabs","none"]}]}
+q=[x for x in H.contradictions("aa",c1) if x["id"]=="treat0"][0]; H.apply("aa",c1,q,"","She stopped the tablets in May"); assert c1["conds"][0]["treat"]==["tabs","none"] and c1["clarify"]["treat0"]["s"]=="She stopped the tablets in May." and c1["clarify"]["treat0"]["v"]=="else"
 print("evidence/honesty/hold units ok")
 if len(sys.argv)<2: sys.exit(0)
 # ---------------- e2e ----------------
@@ -120,7 +125,7 @@ assert "We only write what you tell us" not in clean(body(f"/intake/{tok}?s=dail
 r=req(f"/intake/{tok}",{"sec":"finish","nav":"next","words":"Mum gets muddled in the evenings."}); assert loc(r)==f"/preview/{tok}"
 assert loc(req(f"/pay/{tok}",{"waive":"on"}))==f"/start/{tok}"
 # 1: one evidence screen (taps + photo), after payment only; "Nothing yet" -> what to ask the GP surgery for
-up=clean(body(f"/uploads/{tok}")); assert "What do you have that shows this?" in up and up.count('name="evidence"')==len(E.options("aa")) and "Something else" in up and 'type=file' in up and "Nothing yet" in up
+up=clean(body(f"/uploads/{tok}")); assert "Step 4 of 8: Your evidence" in up and "Step 4 of 8: Questions" not in up and "What do you have that shows this?" in up and up.count('name="evidence"')==len(E.options("aa")) and "Something else" in up and 'type=file' in up and "Nothing yet" in up
 no_links(up); no_words(up)
 raw,ct=multipart([("evidence","none"),("nav","next")]); r=req(f"/uploads/{tok}/done",raw=raw,ctype=ct); assert loc(r)==f"/prepare/{tok}"
 assert loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"                                   # nothing to cross-check, no contradictions: straight on
@@ -147,7 +152,7 @@ dc=re.findall(r'name="addc" value="(\w+)"',cf); dm=re.findall(r'name="(dm_\w+)" 
 assert loc(req(f"/confirm/{tok}",{"addc":dc,dm[0]:"no","keepc":kc}))==f"/prepare/{tok}"
 assert loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"
 def row(t):
-    c=sqlite3.connect(os.environ["SQLITE_PATH"]); c.row_factory=sqlite3.Row; return c.execute("select * from orders where token=?",(t,)).fetchone()
+    import store; return store.connect().execute("select * from orders where token=?",(t,)).fetchone()   # same DB as the server (SQLite or Postgres)
 o=row(tok); hist=" ".join(m["content"] for m in json.loads(o["history"]) if m["role"]=="user"); dr=json.loads(o["draft"])
 assert "High blood pressure" in hist and "Arthritis" in hist and "Amlodipine" not in hist and "Ramipril" not in hist, hist   # what drafting saw
 assert "High blood pressure" in [c["name"] for c in dr["conditions"]] and "Amlodipine" not in json.dumps(dr["conditions"])
@@ -157,12 +162,18 @@ secs=AA("Margaret",falls="0",lastfall="week"); secs[-1]=("finish",{"words":"She 
 tok=order("Margaret","10.0.0.3",secs)
 raw,ct=multipart([("nav","next")]); assert loc(req(f"/uploads/{tok}/done",raw=raw,ctype=ct))==f"/prepare/{tok}"
 assert loc(req(f"/prepare/{tok}"))==f"/confirm/{tok}"
-cf=clean(body(f"/confirm/{tok}")); assert "You said no falls in the last year, but also told us about a recent fall" in cf and cf.count("<fieldset")<=3
+cf=clean(body(f"/confirm/{tok}")); assert "You said no falls in the last year, but also told us about a recent fall" in cf and cf.count("<fieldset")<=3 and "Step 4 of 8: Quick check" in cf
+assert cf.count('_xon')==cf.count("<fieldset") and 'name="q_falls_xon"' in cf and 'name="q_falls_x"' in cf   # every quick-check question has Something else
 e=req(f"/confirm/{tok}",{}); assert "err=" in loc(e)                                                # must answer
 assert loc(req(f"/confirm/{tok}",{"q_falls":"1-2"}))==f"/prepare/{tok}" and loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"
 ap=clean(body(f"/approve/{tok}")); assert "1 to 2 falls in the last year" in ap and "No falls in the last year" not in ap
 assert json.loads(row(tok)["intake"])["clarify"]["falls"]["v"]=="1-2" and "/confirm/" not in loc(req(f"/start/{tok}"))
-print("e2e: contradiction check ok")
+# answered only with Something else, in their own words
+secs=AA("Margaret",falls="0",lastfall="week"); tok=order("Margaret","10.0.0.4",secs)
+raw,ct=multipart([("nav","next")]); req(f"/uploads/{tok}/done",raw=raw,ctype=ct); assert loc(req(f"/prepare/{tok}"))==f"/confirm/{tok}"
+assert loc(req(f"/confirm/{tok}",{"q_falls_xon":"1","q_falls_x":"One fall at Christmas, none since"}))==f"/prepare/{tok}" and loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"
+hist=" ".join(m["content"] for m in json.loads(row(tok)["history"]) if m["role"]=="user"); assert "Checked with you: One fall at Christmas, none since." in hist, hist
+print("e2e: contradiction check (incl. Something else) ok")
 # 5: holds: 3rd different claimant from one connection -> held before drafting, neutral page, hello@ emailed
 n0=len(mails()); toks=[]
 for v,nm in ((1,"Alice"),(2,"Brenda"),(3,"Carol")):
@@ -188,4 +199,19 @@ assert loc(req(f"/prepare/{dup}"))==f"/hold/{dup}"
 time.sleep(0.3); assert any("% the same as order" in x["text"] for x in mails() if x["to"]=="hello@formsorted.com")
 assert "Refunded" in req(f"/admin/refund/{dup}",{"key":KEY}).read().decode()
 rp=clean(body(f"/start/{dup}")); assert "Your order has been cancelled" in rp and "refunded" in rp; assert req(f"/prepare/{dup}").status==403
-print("e2e: holds, hold page, review email, admin release + refund ok")
+# more than one refused request to exaggerate -> held for review (not rejected)
+n0=len(mails()); tok=loc(req("/checkout",{"tier":"99","form":"aa"},ip="10.6.6.6")).split("/")[-1]; req(f"/consent/{tok}",{"health":"on","truth":"on"})
+for s,data in AA("Edna")[:4]: req(f"/intake/{tok}",{"sec":s,"nav":"next",**data})
+assert loc(req(f"/intake/{tok}",{"sec":"finish","nav":"next","words":"Please exaggerate it a bit"})).endswith("&r=1")
+assert loc(req(f"/intake/{tok}",{"sec":"finish","nav":"next","words":"Mum gets muddled."}))==f"/preview/{tok}"
+assert loc(req(f"/pay/{tok}",{"waive":"on"}))==f"/start/{tok}"; req(f"/start/{tok}")
+raw,ct=multipart([("evidence_xon","1"),("evidence_x","make it look more severe please"),("nav","next")]); assert "err=" in loc(req(f"/uploads/{tok}/done",raw=raw,ctype=ct))
+raw,ct=multipart([("evidence","none"),("nav","next")]); req(f"/uploads/{tok}/done",raw=raw,ctype=ct)
+assert loc(req(f"/prepare/{tok}"))==f"/hold/{tok}"
+time.sleep(0.5); assert any("asked us to exaggerate 2 times" in x["text"] and tok in x["text"] for x in mails()[n0:] if x["to"]=="hello@formsorted.com")
+assert "Released" in req(f"/admin/release/{tok}",{"key":KEY}).read().decode()
+for _ in range(30):
+    if loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}": break
+    time.sleep(0.2)
+assert loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"
+print("e2e: holds, hold page, review email, admin release + refund, refusal hold ok")

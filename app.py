@@ -27,7 +27,7 @@ def get(token):
 STEPS=["Choose","Pay","Agree","Questions","Deadline","Strength check","Approve","Your documents"]
 BB_STEPS=["Choose","Agree","Your answers","Check and pay","Your Blue Badge answers"]
 def bbprog(n): return f"<p class=progress>Step {n} of {len(BB_STEPS)}: {BB_STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(BB_STEPS)}%'></span></div>"
-def prog(n): return f"<p class=progress>Step {n} of {len(STEPS)}: {STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(STEPS)}%'></span></div>"
+def prog(n,label=None): return f"<p class=progress>Step {n} of {len(STEPS)}: {label or STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(STEPS)}%'></span></div>"
 def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
     if minimal:  # order summary: no outbound links except Terms/Privacy
         indep='<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not affiliated with DWP or GOV.UK.</div></div>'
@@ -603,7 +603,7 @@ def uploads_page(token:str, err:str=""):
     I=json.loads(o["intake"] or "{}"); ups=I.get("uploads") or []; form=o["form"] or "aa"
     lst="".join(f"<li>{esc(u['name'])}</li>" for u in ups)
     chips=INTAKE._checks("evidence",EVID.options(form),I.get("evidence"),INTAKE.X(I,"evidence"))
-    return page(prog(4)+f"""<h1>What do you have that shows this?</h1><p class=lead>Payment received, thank you. Evidence makes your form much stronger. Tap what you have, and add a photo if you can. We check it against your answers. You'll still check everything before it's final.</p>
+    return page(prog(4,"Your evidence")+f"""<h1>What do you have that shows this?</h1><p class=lead>Payment received, thank you. Evidence makes your form much stronger. Tap what you have, and add a photo if you can. We check it against your answers. You'll still check everything before it's final.</p>
 {f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/uploads/{token}/done enctype=multipart/form-data>
 <fieldset class=iq><legend>Tap all you have</legend>{chips}</fieldset>
 {f'<h2 class=h3>Added</h2><ul class=ticks>{lst}</ul>' if ups else ''}<div class=field><label class=q for=up>{'Add more photos or PDFs' if ups else 'Add a photo or PDF'} (optional, up to 10MB each)</label><p class=hint>A photo of a letter or your repeat prescription list is fine.</p><input id=up type=file name=files multiple accept="image/*,application/pdf" capture=environment></div>
@@ -671,9 +671,9 @@ def confirm_page(token:str, err:str=""):
     for m in dm: body+=INTAKE._q(f"Your documents list these medicines: {m['text']}. Add them to {my} form?",INTAKE._radios(m["id"],[("yes","Yes, add them"),("no","No, leave them out")],"")+INTAKE._else(m["id"],""))
     if sc: body+=INTAKE._q("You told us about these, but we didn't see them in your documents. That's fine, most letters only cover one thing. Untick any that aren't right:",'<div class=chips>'+"".join(INTAKE._chk("keepc",m["id"],m["text"],True) for m in sc)+'</div>')
     for q in Q:
-        body+=INTAKE._q(q["q"],INTAKE._radios("q_"+q["id"],q["opts"],"",' nums' if q.get("nums") else '')+('' if q.get("noelse") else INTAKE._else("q_"+q["id"],"")))
+        body+=INTAKE._q(q["q"],INTAKE._radios("q_"+q["id"],q["opts"],"",' nums' if q.get("nums") else '')+INTAKE._else("q_"+q["id"],""),"Or tap Something else and tell us in your own words.")
     n=len(Q)+len(dm)
-    return page(prog(4)+f"""<h1>Quick check before we write</h1><p class=lead>{'A few things' if n+bool(dc)+bool(sc)>1 else 'One thing'} didn't quite match. Tap what's right, so your form is accurate. We only write what you confirm.</p>
+    return page(prog(4,"Quick check")+f"""<h1>Quick check before we write</h1><p class=lead>{'A few things' if n+bool(dc)+bool(sc)>1 else 'One thing'} didn't quite match. Tap what's right, so your form is accurate. We only write what you confirm.</p>
 {f'<div class=warning role=alert>{esc(err)}</div>' if err else ''}<form method=post action=/confirm/{token}>{body}<div class=navrow><button class="btn btn-start">Continue</button></div></form>""","Quick check",minimal=True)
 @app.post("/confirm/{token}")
 async def confirm_save(token:str, req:Request):
@@ -729,7 +729,7 @@ def admin_held(key:str=Form("")):
         h=FRAUD.hold_info(r); I=_intake_of(r); _,T=INTAKE.topic_texts(r["form"],I) if I and r["form"] in INTAKE.FORMS_V3 else ("",{})
         said="".join(f"<li><strong>{esc(t)}</strong>: {esc(v[:300])}</li>" for t,v in T.items() if v)
         return f"""<div class=trace><h3>{esc(r['token'][:8])} · {esc(r['form'])} · {esc(r['tier'])} · {time.strftime('%d %b %H:%M',time.localtime(r['created'] or 0))}</h3>
-<p><strong>Why held:</strong></p><ul>{''.join(f'<li>{esc(x)}</li>' for x in h.get('reasons',[]))}{f"<li>asked us to exaggerate {I['refused']} time(s) (refused)</li>" if I.get('refused') else ''}</ul>
+<p><strong>Why held:</strong></p><ul>{''.join(f'<li>{esc(x)}</li>' for x in h.get('reasons',[]))}{"<li>asked us to exaggerate once (refused)</li>" if int(I.get('refused') or 0)==1 else ''}</ul>
 <p>Claimant: {esc(FRAUD.claimant(r) or 'not given yet')} · Email: {esc(r['email'] or '-')} · IP: {esc(r['ip'] or '-')}</p><details><summary>Their answers</summary><ul>{said}</ul></details>
 <form method=post action=/admin/release/{r['token']} style="display:inline"><input type=hidden name=key value="{ke}"><button class=btn>Release (carry on)</button></form>
 <form method=post action=/admin/refund/{r['token']} style="display:inline" onsubmit="return confirm('Refund in full and delete their answers?')"><input type=hidden name=key value="{ke}"><button class="btn btn-warn">Refund and delete</button></form></div>"""
@@ -747,7 +747,7 @@ def admin_release(token:str, key:str=Form("")):
     h=FRAUD.hold_info(o); h["released_at"]=time.time()
     c=db(); c.execute("update orders set hold=? where token=?",(json.dumps(h),token)); c.commit()
     if o["interview_done_at"] and not o["draft"] and (_intake_of(o).get("uploads_done") or not o["intake"]): start_prepare(token)
-    _mail_customer(o,f"{BRAND}: your form is being prepared",f"Thank you for waiting. We've checked your order and we're filling in your form now.\n\nCarry on here: {PUBLIC}/start/{token}\n\nKeep this link private.\n\n{BRAND}")
+    _mail_customer(o,f"{BRAND}: your form is being prepared",f"Thank you for waiting. We've checked your order and you can carry on now.\n\nCarry on here: {PUBLIC}/start/{token}\n\nKeep this link private.\n\n{BRAND}")
     return admin_page(f"<h1>Released</h1><p>Order {esc(token[:8])} is carrying on. The customer has been emailed.</p><form method=post action=/admin/held><input type=hidden name=key value='{esc(key)}'><button class=btn>Back to held orders</button></form>")
 @app.post("/admin/refund/{token}")
 def admin_refund(token:str, key:str=Form("")):
@@ -837,7 +837,9 @@ async def check_save(token:str, req:Request):
     fm=await req.form(); a=d["answers"]; extra=d.setdefault("user_added",{})
     if any(HONEST.refuse(str(v)) for k,v in fm.items() if k.endswith("_x") or k.startswith("add_")):
         I0=_intake_of(o)
-        if I0: I0["refused"]=int(I0.get("refused") or 0)+1; c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I0),token)); c.commit()
+        if I0:
+            I0["refused"]=int(I0.get("refused") or 0)+1; c=db(); c.execute("update orders set intake=? where token=?",(json.dumps(I0),token)); c.commit()
+            if check_hold(token,"check"): return RedirectResponse(f"/hold/{token}",303)
         return RedirectResponse(f"/check/{token}?r=1",303)
     def add(tid,v):
         a[tid]=((a.get(tid) or "")+" "+v).strip(); extra[tid]=(extra.get(tid,"")+" "+v).strip()

@@ -29,7 +29,7 @@ def scrub(d):
         if refuse(v.get("x")): v["x"]=""; n+=1
     for c in d.get("conds") or []:
         if refuse(c.get("tx")): c["tx"]=""; n+=1
-    if n: d["refused"]=int(d.get("refused") or 0)+n
+    if n: d["refused"]=int(d.get("refused") or 0)+1   # one refused request per answer submitted
     return n
 # ---------- contradictions ----------
 ACTIVE=re.compile(r"\b(walk(?:s|ing)? (?:the|my|our|his|her) dogs?|(?:go|goes|going|went) (?:to the )?gym|(?:go|goes|going) (?:for )?(?:a )?(?:run|jog|long walk|hike|bike ride)s?|running|jogging|hiking|(?:play|plays|playing) (?:football|tennis|golf|squash|rugby)|cycl(?:e|es|ing) (?:to|every|most)|swim(?:s|ming)? (?:every|most|lengths)|walk(?:s|ing)? (?:to|into) (?:the )?(?:shops?|town|work|village)|long walks?)\b",re.I)
@@ -63,13 +63,13 @@ def contradictions(form,d,limit=3):
         lf=d.get("lastfall") in ("week","month","months"); fx=set(d.get("fallx") or [])&{"hurt","getup","clinic"}
         if d.get("falls")=="0" and (lf or fx):
             out.append({"id":"falls","topic":"34","q":"You said no falls in the last year, but also told us about a recent fall. How many falls in the last year?",
-              "opts":[("1-2","1–2"),("3-5","3–5"),("6+","6 or more"),("0","None")],"noelse":True})
+              "opts":[("1-2","1–2"),("3-5","3–5"),("6+","6 or more"),("0","None")]})
         if d.get("night") and d.get("nights")=="0":
             out.append({"id":"nights","topic":"42","q":f"You told us about help at night, and also 0 nights a week. How many nights a week does {you} need help?" if not me else "You told us about help at night, and also 0 nights a week. How many nights a week do you need help?",
-              "opts":[(str(i),str(i)) for i in range(1,8)]+[("none","No help at night")],"noelse":True,"nums":True})
+              "opts":[(str(i),str(i)) for i in range(1,8)]+[("none","No help at night")],"nums":True})
         if d.get("alone")=="always" and (d.get("eye") or d.get("watch") in ("some","most")):
             out.append({"id":"alone","topic":"40","q":f"You said {you} can be left alone as long as needed, and also that someone needs to keep an eye on {'you' if me else 'them'}. Which is closer?",
-              "opts":[("always","As long as needed"),("hours","A few hours"),("lt1","Under an hour"),("never","Not at all")],"noelse":True})
+              "opts":[("always","As long as needed"),("hours","A few hours"),("lt1","Under an hour"),("never","Not at all")]})
     if form=="pip":
         m=SOCIAL.search(txt)
         if "avoid" in (_lv(d,"a9").get("c") or []) and m:
@@ -80,7 +80,7 @@ def contradictions(form,d,limit=3):
         if "none" in tr and [x for x in tr if x not in ("none","ns")]:
             others=", ".join(TM[x].lower() for x in tr if x in TM and x not in ("none","ns"))
             out.append({"id":f"treat{i}","topic":"conditions","q":f"{c['name']}: you ticked “No treatment” and also {others}. Which is right?",
-              "opts":[("has",f"Treatment: {others}"),("none","No treatment")],"noelse":True,"cond":i})
+              "opts":[("has",f"Treatment: {others}"),("none","No treatment")],"cond":i})
     return [x for x in out if x["id"] not in done][:limit]
 def apply(form,d,item,v,other=""):
     """Record the answer (never asked again) and fix the tapped facts it covers. Returns the customer's own sentence (or '')."""
@@ -114,7 +114,8 @@ def apply(form,d,item,v,other=""):
         elif v in ("someone","rare") and r: r["c"]=[x for x in r.get("c") or [] if x!="avoid"]+(["someone"] if v=="someone" else [])
     elif k.startswith("treat"):
         c=(d.get("conds") or [])[item["cond"]]
-        c["treat"]=["none"] if v=="none" else [x for x in c.get("treat") or [] if x!="none"]
+        if v=="none": c["treat"]=["none"]
+        elif v=="has": c["treat"]=[x for x in c.get("treat") or [] if x!="none"]
     if other: s=(s+". " if s else "")+other.rstrip(".")
     d.setdefault("clarify",{})[k]={"v":v or "else","topic":item["topic"],"s":(s.rstrip(".")+".") if s else ""}
     return s
