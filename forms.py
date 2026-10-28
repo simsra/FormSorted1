@@ -57,7 +57,7 @@ ATW_TOPICS=[
 FORMS={
  "aa":{"name":"Attendance Allowance","short":"Attendance Allowance (AA1)","form":"AA1","gov":"https://www.gov.uk/attendance-allowance",
    "who":"State Pension age and over","topics":AA_TOPICS,"pdf":"aa1.pdf","pdf_out":"AA1-filled.pdf",
-   "tiers":{"99":("Done for you",9900,"We fill in the official AA1 form for you, ready to print and sign. Plus answers to every care question in your own words, an evidence checklist, and GP and carer letters."),
+   "tiers":{"99":("Done for you",9900,"We fill in the official AA1 form for you, ready to print and sign. Plus answers to every care question in your own words, an evidence checklist, and a request letter for your GP."),
             "199":("Done for you Plus",19900,"Everything in Done for you, plus help if you're turned down, an assessment briefing, request letters for your GP, carer, school or family, renewal included, and printed and posted to you.")},
    "legacy_tiers":{"49":("Claim Answers",4900,""),"79":("Form pack",7900,"")},
    "subject":"the person claiming"},
