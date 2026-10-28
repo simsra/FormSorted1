@@ -10,7 +10,8 @@ $PY/uvicorn app:app --port ${PORT:-8019} >${LOGDIR:-/tmp}/aa-test-server.log 2>&
 sleep 3; $PY/python test_flows.py http://localhost:${PORT:-8019}; R=$?
 $PY/python test_intake.py http://localhost:${PORT:-8019} || R=1
 $PY/python test_premium.py http://localhost:${PORT:-8019} || R=1
-$PY/python test_bluebadge.py http://localhost:${PORT:-8019} || R=1; kill $S
+$PY/python test_bluebadge.py http://localhost:${PORT:-8019} || R=1
+$PY/python test_plus_next.py http://localhost:${PORT:-8019} || R=1; kill $S
 MOCK_GROUND_FLAKY=1 $PY/uvicorn app:app --port ${PORT_FLAKY:-8032} >${LOGDIR:-/tmp}/aa-test-flaky.log 2>&1 & F=$!; sleep 3; $PY/python test_approve.py http://localhost:${PORT_FLAKY:-8032} || R=1; kill $F
 MOCK_GROUND_SLOW=6 $PY/uvicorn app:app --port ${PORT_SLOW:-8033} >${LOGDIR:-/tmp}/aa-test-slow.log 2>&1 & W=$!; sleep 3; $PY/python test_responsive.py http://localhost:${PORT_SLOW:-8033} || R=1; kill $W
 MOCK_DRAFT_SLOW=4 MOCK_GROUND_SLOW=3 $PY/uvicorn app:app --port ${PORT_PREP:-8034} >${LOGDIR:-/tmp}/aa-test-prep.log 2>&1 & P=$!; sleep 3; $PY/python test_prepare.py http://localhost:${PORT_PREP:-8034} || R=1; kill $P

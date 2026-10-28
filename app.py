@@ -11,6 +11,7 @@ from starlette.concurrency import run_in_threadpool
 import llm, fill_pdf, documents, quality, deadlines, letters, grounding, facts, ticks as TICKS, contsheet, formwatch
 from html import escape as esc
 from forms import FORMS, is_full, tier_info, default_tier, is_premium
+import plus as PLUS
 import premium as PREMIUM
 import psp as PSP
 import bluebadge as BB, printmail
@@ -97,7 +98,7 @@ def pack_items(form,tier):
     return out
 def order_summary(form,tier,pv=""):
     f=FORMS[form]; n,p,_=f["tiers"][tier]
-    if is_premium(tier): items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,default_tier(form))+PREMIUM.plus_items(form)+["You check and approve every word before anything is final"])
+    if is_premium(tier): items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,default_tier(form))+PREMIUM.plus_items(form)+["You check and approve every word before anything is final"])+"".join(f"<li class=note>{esc(x)}</li>" for x in PLUS.notes(form))
     else: items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,tier)+["You check and approve every word before anything is final"])
     up=upgrade_box(form,tier)
     return page(prog(1)+pv+f"""<div class=summary><p class=caption>Your order</p><h1>{esc(n)}</h1><p class=sub>{esc(f['short'])}</p>
@@ -113,11 +114,15 @@ def upgrade_box(form,tier):
     base,plus=list(ts)[0],[t for t in ts if is_premium(t)]
     if not plus: return ""
     plus=plus[0]; (bn,bp,_),(pn,pp,_)=ts[base],ts[plus]
-    rows=[("Official form filled in, or extra sheets",1,1),("Your answers in your own words, checked against what you told us",1,1),("Evidence checklist",1,1)]+[(x,0,1) for x in PREMIUM.plus_items(form)]
-    tr="".join(f"<tr><td>{esc(l)}</td><td>{'✓' if b else '–'}</td><td>{'✓' if p else '–'}</td></tr>" for l,b,p in rows)
+    tr=compare_table_rows(form)
     other=plus if tier==base else base; on,op,_=ts[other]
-    return f"""<div class=compare><h2 class=h3>Compare packs</h2><table><thead><tr><th></th><th>{esc(bn)}<br>£{bp//100}</th><th>{esc(pn)}<br>£{pp//100}</th></tr></thead><tbody>{tr}</tbody></table>
+    return f"""<div class=compare><h2 class=h3>Compare packs</h2><table><thead><tr><th></th><th>{esc(bn)}<br>£{bp//100}</th><th>{esc(pn)}<br>£{pp//100}</th></tr></thead><tbody>{tr}</tbody></table>{plus_notes(form)}
 <form method=get action=/><input type=hidden name=form value={form}><input type=hidden name=tier value={other}><button class="btn btn-2">{'Upgrade to' if other==plus else 'Switch to'} {esc(on)}, £{op//100}</button></form></div>"""
+def compare_table_rows(form):
+    """£99 vs Plus rows from plus.py. No 'bought separately' or saving line (Simon, 28 Oct 2026: none until SSCS1 and posting are live)."""
+    cell=lambda v: "✓" if v==1 else ("–" if not v else esc(v))
+    return "".join(f"<tr><td>{esc(l)}{f'<small>{esc(d)}</small>' if d else ''}</td><td>{cell(b)}</td><td>{cell(p)}</td></tr>" for l,d,b,p in PLUS.compare_rows(form))
+def plus_notes(form): return "".join(f"<p class=hint>{esc(x)}</p>" for x in PLUS.notes(form)+[PLUS.FOOT])
 FREE_PER_IP_DAY=int(os.getenv("FREE_PER_IP_DAY","5")); MAX_TURNS=int(os.getenv("MAX_TURNS","40")); FREE_PER_DAY_TOTAL=int(os.getenv("FREE_PER_DAY_TOTAL","500"))
 def client_ip(req):
     """Real visitor IP. Render sits behind Cloudflare: True-Client-IP / CF-Connecting-IP are set by Cloudflare and can't be spoofed.
@@ -159,25 +164,40 @@ def preview(token:str):
     if o["form"]=="bb": return bb_preview(o)
     if is_wf(o) and not json.loads(o["intake"]).get("uploads_done"): return RedirectResponse(f"/uploads/{token}",303)
     f=FORMS[o["form"] or "aa"]; n,p,_=tier_info(o["form"] or "aa",o["tier"]); got,total=INTAKE.coverage(o["form"],json.loads(o["intake"])) if o["intake"] else covered(o)
-    facts=[f"Your details cover {got} of {total} sections of the form" if o["intake"] else f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa",o["tier"])]
+    choose=(o["form"] or "aa") in PLUS.PLUS_FORMS and o["tier"] in ("99","199")
+    facts=[f"Your details cover {got} of {total} sections of the form" if o["intake"] else f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa","99" if choose else o["tier"])]
     return page(f"""<div class=summary><p class=caption>Details gathered</p><h1>We're ready to fill in your form</h1>
 <p class=lede><strong>We fill in the whole official form for you. You just check it, sign it and post it.</strong> Pay once and we write every section from what you tapped, check each one against what you told us, and you approve it before anything is final.</p>
 <figure class=lockprev><img src="/static/preview-placeholder.svg" alt="Example illustration of a filled-in form (not your answers)" width=520 height=360><figcaption>Illustration only. Your own answers appear after payment.</figcaption></figure>
 <ul class=ticks>{''.join(f'<li>{x}</li>' for x in facts)}</ul>
-<div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
-<form method=post action=/pay/{token}>{KEEP_OPT if is_premium(o["tier"]) else ""}<label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
-<button class="btn btn-wide">Pay £{p//100} to get your completed form</button></form>{TRUST}{f'<p class=change><a href="/intake/{token}?s=about">Change my answers</a></p>' if o["intake"] else ''}
+{pack_choice(o) if choose else f'<div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div><form method=post action=/pay/{token}>'+(KEEP_OPT if is_premium(o["tier"]) else "")}<label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
+<button class="btn btn-wide" id=paybtn>Pay £{p//100} to get your completed form</button></form>{TRUST}{f'<p class=change><a href="/intake/{token}?s=about">Change my answers</a></p>' if o["intake"] else ''}
 <p class=hint>One-off fee. No success fee. If you don't pay, we delete everything you told us after 7 days.</p><p class=hint>{esc(DWP_LINE)}</p></div>""","Your form is ready",minimal=True)
+def pack_choice(o):
+    """'How would you like it finished?': £99 or Plus, chosen at the end, before paying. £99 is the default unless they picked Plus at the start.
+    No countdown, nothing ticked for them, no saving line. The keep-answers option only shows (and only counts) for Plus."""
+    form=o["form"] or "aa"; ts=FORMS[form]["tiers"]; cur="199" if o["tier"]=="199" else "99"
+    (bn,bp,_),(pn,pp,_)=ts["99"],ts["199"]
+    opt=lambda t,n,pr,h: f"""<label class=radio><input type=radio name=pack value={t} data-price={pr//100} {'checked' if t==cur else ''} required><span><strong>{esc(n)} – £{pr//100}</strong><span class=hint>{esc(h)}</span></span></label>"""
+    return f"""<style>.pk .keepopt{{display:none}}.pk:has(input[value="199"]:checked) .keepopt{{display:block}}.compare small{{display:block;color:#5a6a72;font-size:.85em}}</style>
+<div class=compare><h2 class=h3>How would you like it finished?</h2><p class=hint>{esc(PLUS.FOOT)}</p>
+<table><thead><tr><th></th><th>{esc(bn)}<br>£{bp//100}</th><th>{esc(pn)}<br>£{pp//100}</th></tr></thead><tbody>{compare_table_rows(form)}</tbody></table>{''.join(f"<p class=hint>{esc(x)}</p>" for x in PLUS.notes(form))}</div>
+<form method=post action=/pay/{o['token']} class=pk><fieldset style="border:0;padding:0;margin:0"><legend class=q>Choose your pack</legend>
+{opt("99",bn,bp,"We fill in the form. You check, sign and send it.")}{opt("199",pn,pp,PLUS.SUMMARY[form])}</fieldset>
+<div class=keepopt>{KEEP_OPT}</div>
+<script>document.querySelectorAll('.pk input[name=pack]').forEach(function(r){{r.addEventListener('change',function(){{var b=document.getElementById('paybtn');if(b)b.textContent='Pay £'+r.dataset.price+' to get your completed form'}})}})</script>"""
 KEEP_OPT="<label class=cb><input type=checkbox name=keep value=1><span>Keep my answers for 3 years, so you can help with a reconsideration or my renewal without asking again. I can delete them at any time. (Optional. Without this we delete them after 90 days.)</span></label>"
 THREE_YEARS=3*365*86400
 @app.post("/pay/{token}")
-def pay(token:str, waive:str=Form(...), keep:str=Form("")):
+def pay(token:str, waive:str=Form(...), keep:str=Form(""), pack:str=Form("")):
     o=ready(token,paid=False)
+    if pack in ("99","199") and o["status"]!="paid" and (o["form"] or "aa") in PLUS.PLUS_FORMS and o["tier"] in ("99","199") and pack!=o["tier"]:
+        c0=db(); c0.execute("update orders set tier=?, keep_until=null where token=?",(pack,token)); c0.commit(); o=get(token)   # chosen on the finish screen
     if keep and is_premium(o["tier"]) and o["status"]!="paid": c0=db(); c0.execute("update orders set keep_until=? where token=?",(time.time()+THREE_YEARS,token)); c0.commit()
     if o["status"]=="paid": return RedirectResponse(f"/start/{token}",303)
     if not o["interview_done_at"]: return RedirectResponse(chat_url(o),303)
     c=db()
-    if DEV:
+    if DEV or tier_info(o["form"] or "aa",o["tier"])[1]==0:   # £0: only for items included with Plus (tiers created server-side, never at checkout)
         c.execute("update orders set status='paid', paid_at=? where token=?",(time.time(),token)); c.commit(); return RedirectResponse(f"/start/{token}",303)
     s=stripe_session(o); c.execute("update orders set stripe_session=? where token=?",(s["id"],token)); c.commit()
     return RedirectResponse(s["url"],303)
@@ -468,7 +488,8 @@ def _build_files(token,o,d):
         if o["appeal"]:
             ap=json.loads(o["appeal"]); nm=" ".join(x for x in (personal.get("other_names"),personal.get("surname")) if x)
             addr=", ".join(personal.get(k) for k in ("addr1","addr2","addr3","postcode") if personal.get(k))
-            txt=letters.mr_letter(form if form in letters.NAMES else "pip",{"name":nm,"address":addr,"decision_date":datetime_fmt(ap["decision_date"]) if ap.get("decision_date") else "","points":PREMIUM.appeal_letter_points(form,d,ap.get("topics",[])),"evidence":["A copy of the decision letter"]+[u["name"] for u in ap.get("uploads",[])]})
+            I0=I if I.get("who") or form=="dla" else json.loads((PLUS.root(db(),o) or {"intake":None})["intake"] or "{}")
+            txt=letters.mr_letter(form if form in letters.NAMES else "pip",{"for":{"who":I0.get("who"),"signer":I0.get("signer")},"name":nm,"address":addr,"decision_date":datetime_fmt(ap["decision_date"]) if ap.get("decision_date") else "","points":PREMIUM.appeal_letter_points(form,d,ap.get("topics",[])),"evidence":["A copy of the decision letter"]+[u["name"] for u in ap.get("uploads",[])]})
             open(os.path.join(od,"reconsideration-letter.txt"),"w").write(txt); files.append("reconsideration-letter.txt")
     store.put_dir(token,od,files)   # to private Supabase bucket when configured (local temp copy removed)
     return files
@@ -580,6 +601,10 @@ async def details_save(token:str, req:Request):
             if need and not v: missing=True
             if v: p[k]=v
         if missing: return back("Please fill in every required box, or choose Skip.")
+        pt=PLUS.redeemed_from(db(),token)
+        po_=db().execute("select personal from orders where token=?",(pt,)).fetchone() if pt else None
+        if po_ and not PLUS.same_person(json.loads(po_[0] or "{}"),p):
+            return back("This included form is for the same person as your Done for you Plus order. For someone else, please start a new order. If their name has changed, email hello@formsorted.com.")
     c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),1 if (fm.get("post_pack") and is_premium(o["tier"]) and printmail.ENABLED and not fm.get("skip")) else 0,token)); c.commit()
     if p and await run_in_threadpool(check_hold,token,"details"):   # names known now: check again before documents are made
         c.execute("update orders set details_at=null where token=?",(token,)); c.commit(); return RedirectResponse(f"/hold/{token}",303)
@@ -1097,6 +1122,7 @@ async def approve_save(token:str, req:Request):
         c.execute("insert into saved(code,form,answers,personal,created) values(?,?,?,?,?) on conflict(code) do update set form=excluded.form, answers=excluded.answers, personal=excluded.personal, created=excluded.created",(code,o["form"] or "aa",json.dumps({"answers":d["answers"],"said":{t:sm.get(t,"") for t,_,_ in F["topics"]}}),o["personal"],time.time()))
     d.pop("ticks_confirmed_at",None)   # answers changed: ticks must be checked again
     c.execute("update orders set draft=?, approved_at=?, save_code=? where token=?",(json.dumps(d),time.time(),code,token)); c.commit()
+    PLUS.grant(c,get(token))   # Plus: record 'next form included' (and Blue Badge) for this order
     return RedirectResponse(f"/ticks/{token}" if needs_ticks(o) else f"/details/{token}",303)
 def tapped(o):
     """(intake, tick states from the taps, 'no difficulty' topic ids) for orders that used the tap questions, else None.
@@ -1155,14 +1181,23 @@ def documents_page(token:str):
     dl=json.loads(o["deadline"] or "{}"); res=deadlines.compute(o["form"] or "aa",dl.get("how","phone"),dl.get("requested"),dl.get("received")) if dl.get("requested") else None
     saved=f"<div class=panel><p><strong>Your save code: <code>{o['save_code']}</code></strong><br>Keep it safe. {'Keep a copy of your answers too. They will help when your grant is due for renewal (you can apply to renew 12 weeks before it ends).' if o['form']=='atw' else "Use it at <a href=/review>/review</a> when your review form arrives, and we'll only ask what has changed."}</p></div>" if o["save_code"] else ""
     if is_premium(o["tier"]) and o["save_code"]:
-        saved+=f"""<div class=panel><h2 class=h3>Included with Done for you Plus</h2><p><strong>Turned down?</strong> You usually have 1 month from the date on the decision letter to ask DWP to look again. <a href="/appeal/{o['save_code']}">Send us the decision letter</a> and we prepare your reconsideration letter and revised answers at no extra charge.</p>
-<p><strong>Review form arrived?</strong> <a href="/review/{o['save_code']}">Start your renewal</a>. We fill it in from your saved answers at no extra charge.</p>{'<p>We will print your pack and post it to you to sign'+(', with a Freepost return envelope' if (o['form'] or 'aa') in ('aa','dla') else '')+'.</p>' if o['post_pack'] else ''}</div>"""
+        saved+=plus_panel(o)
     return page(prog(8)+f"""<div class=done><h1>{"Your answers are ready" if o["form"]=="atw" else "Your form is done"}</h1><p>You approved every answer. Your documents are ready.</p></div>
 {''.join(f'<div class=dl><span><strong>{lab.get(f,f)}</strong></span><a class=btn href="/download/{token}/{f}" download>Download</a></div>' for f in files)}{gone}
 {f"<div class=tracker><p class=big>Send it back by <strong>{datetime_fmt(res['deadline'])}</strong></p></div>" if res and res.get('deadline') else ''}{saved}
 {bb_addon_box(o)}{ATW_NEXT if o['form']=='atw' else ''}{'' if o['form']=='atw' else PSP.html_section(o['form'] or 'aa',filled=(FORMS[o['form'] or 'aa'].get('pdf_out') in files),hand_details=hand_details(o))}
 <p class=small>We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>.</p>""","Your documents")
 ATW_NEXT=f"""<h2>What to do next</h2><ol class=steps><li><strong>Read it once more</strong> and change anything that isn't right.</li><li><strong>Apply online or by phone</strong> at GOV.UK (search 'Access to Work apply'), or call {facts.v('atw_helpline')} (Mon–Fri 9am–5pm). Paste or read out each answer.</li><li><strong>Add your own details</strong>: workplace address, workplace contact, NI number (or UTR if self-employed).</li><li><strong>Disagree with the decision?</strong> Call the helpline and ask for it to be reconsidered.</li></ol>"""
+NEXT_LABEL={"aa":"Next Attendance Allowance form","dla":"Your child's DLA renewal form","pip":"Your PIP review form","pipr":"Your next PIP review form"}
+def plus_panel(o):
+    """What's included with this Plus order, and whether the included next form has been used."""
+    form=o["form"] or "aa"; c=db(); st=PLUS.status(c,o,PLUS.NEXT)
+    nxt=(f"<p><strong>{esc(NEXT_LABEL.get(form,'Your next form'))}: included.</strong> When the renewal or review form arrives{', or if you want to ask for the higher rate' if form=='aa' else ''}, <a href=\"/review/{o['save_code']}\">start it here</a>. We fill it in from your saved answers and only ask what has changed. No charge.</p>" if st=="available"
+         else f"<p><strong>{esc(NEXT_LABEL.get(form,'Your next form'))}:</strong> already used. A new form is £99.</p>" if st=="used" else "")
+    post=('<p>We will print your pack and post it to you to sign'+(', with a Freepost return envelope' if form in ('aa','dla') else '')+'.</p>') if o['post_pack'] else ''
+    return f"""<div class=panel><h2 class=h3>Included with Done for you Plus</h2><p><strong>Turned down?</strong> You usually have 1 month from the date on the decision letter to ask DWP to look again. <a href="/appeal/{o['save_code']}">Send us the decision letter</a> and we prepare your reconsideration letter from your answers, for you to check, sign and send. No charge.</p>
+{nxt}{post}<p class=hint>{esc(PLUS.FOOT)}</p></div>"""
+NEXT_USED="<h1>Your included form has been used</h1><p class=lead>Done for you Plus includes one next form for the same person and benefit, and it has already been used. You can start a new form for £99.</p><p><a class=btn href=/>Start a new form</a></p>"
 FAMILY_ONLY="<h1>Coming soon with FormSorted Family</h1><p>This feature isn't available yet. We don't take payment for it until it's ready.</p>"
 @app.get("/review")
 def plus_order(code):
@@ -1178,6 +1213,8 @@ def review_start(code:str=""):
 @app.get("/review/{code}")
 def review_page(code:str):
     if not DEV and not plus_order(code): return page(FAMILY_ONLY,"Coming soon")
+    po=plus_order(code)
+    if po and PLUS.status(db(),po,PLUS.NEXT)!="available": return page(NEXT_USED,"Already used")
     s=db().execute("select * from saved where code=?",(code,)).fetchone()
     if not s: raise HTTPException(404)
     F=FORMS[s["form"]]; a=json.loads(s["answers"])["answers"]
@@ -1200,8 +1237,9 @@ async def review_save(code:str, req:Request):
             a[t]=ch[:4000]; said[t]=ch; changes.append(f"{l.split(': ',1)[-1]}: {ch}")  # TODO LLM: merge old answer + change into one answer
         else: said[t]="(Same as last time) "+(prev.get("said",{}).get(t) or a.get(t,""))
     d={"answers":a,"said":said,"changes":" ".join(changes) or "No changes reported.","checklist":["Any new letters or reports since your last award"],"notes_for_user":["Review mode: answers carried over from last time. Check each one is still true."],"extra":{},"conditions":[],"tick_yes":[]}
-    token=orders.new_token(); c=db()
-    c.execute("insert into orders(token,tier,status,created,form,consent_at,draft,personal,review_of) values(?,?,?,?,?,?,?,?,?)",(token,("199" if plus_order(code) else default_tier(target)) if target!="atw" else "49","paid",time.time(),target,time.time(),json.dumps(d),s["personal"] or "{}",code)); c.commit()
+    token=orders.new_token(); c=db(); po=plus_order(code)
+    if po and not PLUS.redeem(c,po,PLUS.NEXT,token,target): return page(NEXT_USED,"Already used")   # one next form per Plus order, same benefit
+    c.execute("insert into orders(token,tier,status,created,form,consent_at,draft,personal,review_of) values(?,?,?,?,?,?,?,?,?)",(token,("199" if po else default_tier(target)) if target!="atw" else "49","paid",time.time(),target,time.time(),json.dumps(d),s["personal"] or "{}",code)); c.commit()
     return RedirectResponse(f"/deadline/{token}",303)
 @app.get("/appeal/{code}")
 def appeal_page(code:str, err:str=""):
@@ -1327,9 +1365,9 @@ def bb_preview(o):
     token=o["token"]; n,p,_=tier_info("bb",o["tier"]); d=bb_data(o); k=len(BB.answers(d))
     return page(bbprog(4)+f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your Blue Badge answers are ready to prepare</h1>
 <ul class=ticks><li>{k} answers to write up for the online application</li>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS[1:4])}</ul>
-<div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
+<div class=total><span>{esc(n)}</span><strong>{'Included' if p==0 else f'£{p//100}'}</strong></div>
 <form method=post action=/pay/{token}><label class=cb><input type=checkbox name=waive required><span>Please prepare my answers straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
-<button class="btn btn-wide">Pay £{p//100} to get your answers</button></form>{BB_TRUST}<p class=change><a href="/bb/{token}">Change my answers</a></p>
+<button class="btn btn-wide">{'Get my answers (included with Done for you Plus)' if p==0 else f'Pay £{p//100} to get your answers'}</button></form>{BB_TRUST}<p class=change><a href="/bb/{token}">Change my answers</a></p>
 <p class=hint>{esc(BB.NOT_ELIG)}</p><p class=hint>If you don't pay, we delete everything you told us after 7 days.</p></div>""","Your Blue Badge answers",minimal=True)
 @app.get("/bb/{token}/documents")
 def bb_documents(token:str):
@@ -1359,9 +1397,14 @@ def bb_addon(parent:str):
     c=db(); ex=c.execute("select token from orders where form='bb' and review_of=? and status in ('free','paid')",(parent,)).fetchone()
     if ex: return RedirectResponse(f"/start/{ex[0]}",303)
     token=orders.new_token(); d=BB.prefill(p["form"] or "aa",json.loads(p["intake"] or "{}"))
-    c.execute("insert into orders(token,tier,status,created,form,ip,review_of,consent_at,intake,email) values(?,?,?,?,?,?,?,?,?,?)",(token,BB.ADDON_TIER,"free",time.time(),"bb",p["ip"],parent,time.time(),json.dumps(d),p["email"])); c.commit()
+    tier=BB_INCLUDED if PLUS.redeem(c,p,PLUS.BB,token,p["form"] or "aa") else BB.ADDON_TIER   # included once with Plus, else £15
+    c.execute("insert into orders(token,tier,status,created,form,ip,review_of,consent_at,intake,email) values(?,?,?,?,?,?,?,?,?,?)",(token,tier,"free",time.time(),"bb",p["ip"],parent,time.time(),json.dumps(d),p["email"])); c.commit()
     return RedirectResponse(f"/bb/{token}",303)
+BB_INCLUDED="0"
 def bb_addon_box(o):
     if (o["form"] or "aa") not in BB.PARENT_FORMS: return ""
+    if PLUS.status(db(),o,PLUS.BB)=="available":
+        return f"""<div class=panel><h2 class=h3>Applying for a Blue Badge too?</h2><p>Included with Done for you Plus: we turn the answers you've already given us into answers for the online Blue Badge application, with a checklist of what to upload. No charge.</p>
+<form method=post action=/bb/addon/{o['token']}><button class="btn btn-2">Get my Blue Badge answers</button></form><p class=hint>{esc(BB.NOT_ELIG)}</p></div>"""
     return f"""<div class=panel><h2 class=h3>Applying for a Blue Badge too?</h2><p>We can turn the answers you've already given us into answers for the online Blue Badge application, with a checklist of what to upload. £15, and you only pay once you've checked your answers.</p>
 <form method=post action=/bb/addon/{o['token']}><button class="btn btn-2">Add Blue Badge answers, £15</button></form><p class=hint>{esc(BB.NOT_ELIG)}</p></div>"""

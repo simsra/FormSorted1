@@ -4,6 +4,7 @@ Creates (or reuses) one product + GBP price + Payment Link per plan. Matches by 
 Metadata form/tier match FORMS in forms.py (app.py webhook checks form, tier and amount_total)."""
 import os, sys, json, base64, urllib.request, urllib.parse, urllib.error
 from forms import FORMS
+import plus as PLUS
 KEY=os.environ.get("STRIPE_KEY") or os.environ.get("STRIPE_TEST_KEY") or sys.exit("set STRIPE_KEY")
 MODE="test" if "_test_" in KEY else "live"
 THANKS=os.getenv("THANKS_URL","https://formsorted.com/thanks.html")
@@ -13,7 +14,6 @@ PLANS=[("aa","99","STRIPE_LINK_AA_99"),("dla","99","STRIPE_LINK_DLA_99"),("pip",
 DESC={"49":"Your answers for every question on the form, drafted from what you tell us, for you to check and copy across.",
       "59":"Your answers for every question on the form, drafted from what you tell us, for you to check and copy across.",
       "99":"Done for you: we prepare your answers from what you tell us and fill in the form where there is one, ready for you to check, sign and send.",
-      "199":"Done for you Plus: everything in Done for you, plus an assessment briefing, request letters for your GP, carer, school or family, a reconsideration letter if needed and your renewal form, prepared from your answers.",
       "79":"Your answers drafted from what you tell us, plus a completed form ready to check, sign and send."}
 def api(method,path,data=None):
     body=urllib.parse.urlencode(data,doseq=True).encode() if data else None
@@ -30,7 +30,7 @@ def main():
     for form,tier,cfg in PLANS:
         name,amount,_=FORMS[form]["tiers"][tier]; k=f"{form}_{tier}"; md={"form":form,"tier":tier,"fs_key":k}
         pname=f"{FORMS[form]['name']}: {name}"
-        prod=find_product(k) or api("POST","/products",{"name":pname,"description":DESC[tier],**{f"metadata[{a}]":b for a,b in md.items()}})
+        prod=find_product(k) or api("POST","/products",{"name":pname,"description":PLUS.summary(form) if tier=="199" else DESC[tier],**{f"metadata[{a}]":b for a,b in md.items()}})
         pr=api("GET","/prices",{"lookup_keys[]":f"fs_{k}_{amount}"})["data"]
         price=pr[0] if pr else api("POST","/prices",{"product":prod["id"],"currency":"gbp","unit_amount":amount,"lookup_key":f"fs_{k}_{amount}"})
         link=next((l for l in links if l["metadata"].get("fs_key")==k and l["metadata"].get("price")==price["id"]),None)

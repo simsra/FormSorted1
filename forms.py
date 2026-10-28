@@ -1,5 +1,7 @@
 """Form registry: one engine, several government forms. Each form = question topics + delivery (filled PDF or typed answers)."""
 from questions import CARE_QUESTIONS
+import plus as _plus
+def _plus_summary(f): return _plus.summary(f)   # per-form Plus copy lives in plus.py
 # Topic tuple: (id, label shown in pack, chat prompt)
 AA_TOPICS=[(str(q),f"Question {q}: {t}",p) for q,t,p,_ in CARE_QUESTIONS]
 DLA_TOPICS=[
@@ -58,25 +60,25 @@ FORMS={
  "aa":{"name":"Attendance Allowance","short":"Attendance Allowance (AA1)","form":"AA1","gov":"https://www.gov.uk/attendance-allowance",
    "who":"State Pension age and over","topics":AA_TOPICS,"pdf":"aa1.pdf","pdf_out":"AA1-filled.pdf",
    "tiers":{"99":("Done for you",9900,"We fill in the official AA1 form for you, ready to print and sign. Plus answers to every care question in your own words, an evidence checklist, and a request letter for your GP."),
-            "199":("Done for you Plus",19900,"Everything in Done for you, plus help if you're turned down, an assessment briefing, request letters for your GP, carer, school or family, renewal included, and printed and posted to you to sign, with a Freepost return envelope.")},
+            "199":("Done for you Plus",19900,_plus_summary("aa"))},
    "legacy_tiers":{"49":("Claim Answers",4900,""),"79":("Form pack",7900,"")},
    "subject":"the person claiming"},
  "dla":{"name":"Child DLA","short":"Disability Living Allowance for children (DLA1A)","form":"DLA1A","gov":"https://www.gov.uk/disability-living-allowance-children",
    "who":"children under 16","topics":DLA_TOPICS,"pdf":"dla1a.pdf","pdf_out":"DLA1A-filled.pdf",
    "tiers":{"99":("Done for you",9900,"We fill in the official DLA1A form for you, ready to check, sign and post free. Plus answers to every question in your own words, mapped to the question numbers, and a school and medical evidence checklist."),
-            "199":("Done for you Plus",19900,"Everything in Done for you, plus help if you're turned down, an assessment briefing, request letters for your GP, carer, school or family, renewal included, and printed and posted to you to sign, with a Freepost return envelope.")},
+            "199":("Done for you Plus",19900,_plus_summary("dla"))},
    "legacy_tiers":{"49":("Answers",4900,""),"79":("Form pack",7900,"")},
    "subject":"the child"},
  "pip":{"name":"PIP","short":"PIP: How your disability affects you (PIP2)","form":"PIP2","gov":"https://www.gov.uk/pip",
    "who":"16 to State Pension age","topics":PIP_TOPICS,"pdf":None,
    "tiers":{"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each PIP2 question, PIP extra sheets ready to print and send with your form, an evidence checklist, a phone-call prep sheet, assessment notes and a request letter for your GP."),
-            "199":("Done for you Plus",19900,"Everything in Done for you, plus help if you're turned down, an assessment briefing, request letters for your GP, carer, school or family, renewal included, and printed and posted to you to sign, to send with the form DWP sent you.")},
+            "199":("Done for you Plus",19900,_plus_summary("pip"))},
    "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,"")},
    "subject":"you (or the person you help)"},
  "pipr":{"name":"PIP review","short":"PIP review form (AR1)","form":"AR1","gov":"https://www.gov.uk/pip/when-your-pip-claim-is-reviewed",
    "who":"people already getting PIP","topics":PIP_TOPICS,"pdf":None,
    "tiers":{"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each AR1 activity section, extra sheets ready to send, an evidence checklist, a 'what has changed' summary, an assessment-call prep sheet and a request letter for your GP."),
-            "199":("Done for you Plus",19900,"Everything in Done for you, plus help if you're turned down, an assessment briefing, request letters for your GP, carer, school or family, renewal included, and printed and posted to you to sign, to send with the form DWP sent you.")},
+            "199":("Done for you Plus",19900,_plus_summary("pipr"))},
    "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,"")},
    "subject":"you (or the person you help)"},
  "atw":{"name":"Access to Work","short":"Access to Work application","form":"AtW","gov":"https://www.gov.uk/access-to-work",
@@ -89,6 +91,7 @@ FORMS["bb"]={"name":"Blue Badge","short":"Blue Badge application answers","form"
    "who":"anyone applying for a Blue Badge, or helping someone apply","topics":[],"pdf":None,"kind":"bluebadge",
    "tiers":{"29":("Blue Badge answers",2900,"Answers for the online Blue Badge application, ready to paste, a hidden-disability write-up, a checklist of what to upload, and a letter asking the council to look again if refused"),
             "15":("Blue Badge answers (add-on)",1500,"Answers for the online Blue Badge application, ready to paste, prepared from the answers you already gave us")},
+   "included_tiers":{"0":("Blue Badge answers (included with Done for you Plus)",0,"Answers for the online Blue Badge application, ready to paste, prepared from the answers you already gave us")},
    "subject":"the person the badge is for"}
 
 
@@ -106,7 +109,7 @@ def tick_list(form, answers):
 FULL_TIERS={"79","99","199"}
 def is_full(tier): return str(tier) in FULL_TIERS
 def tier_info(form,tier):
-    f=FORMS[form]; return f["tiers"].get(tier) or f.get("legacy_tiers",{}).get(tier) or next(iter(f["tiers"].values()))
+    f=FORMS[form]; return f["tiers"].get(tier) or f.get("included_tiers",{}).get(tier) or f.get("legacy_tiers",{}).get(tier) or next(iter(f["tiers"].values()))
 def default_tier(form): return list(FORMS[form]["tiers"])[0]
 PREMIUM_TIERS={"199"}
 def is_premium(tier): return str(tier) in PREMIUM_TIERS
