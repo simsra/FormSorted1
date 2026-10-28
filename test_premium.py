@@ -1,4 +1,4 @@
-"""Done for you (£99) and Done for you Plus (£199): comparison, 3-year opt-in, briefing + supporting letters from approved answers only,
+"""Done for you (£99) and Done for you Plus (£199): comparison, 3-year opt-in, briefing from approved answers only + request letters (the person writes their own words),
 print-and-post (disabled, queued only), appeal (reconsideration) and renewal for Plus orders, retention. DEV server:  python test_premium.py URL"""
 import sys, re, json, io, uuid, time, urllib.request, urllib.parse, os
 from forms import FORMS, is_full, is_premium, tier_info, default_tier
@@ -47,7 +47,12 @@ import app as A
 o=A.get(tok); d=json.loads(o["draft"])
 for x in re.findall(r"<p class=you>(.*?)</p>",br):   # every quoted block is an approved answer, word for word
     import html as H; assert H.unescape(x) in d["answers"].values(), x
-assert "Letter for: GP" in sl and "Letter for: Family carer" in sl and "http" not in br+sl
+assert "For: GP" in sl and "For: Family carer" in sl and "http" not in br+sl
+import html as H; slt=H.unescape(re.sub(r"<[^>]+>"," ",sl))
+assert "Request letters" in sl and "question 56 (page 28)" in slt and "only write what you know to be true" in slt
+for a in d["answers"].values():   # never the customer's answers pasted in for them to sign
+    if a and len(a)>25: assert a not in slt, a
+for bad in ("the following is correct","Signed:","Role:","I am Margaret","To whom it may concern","Letter for:"): assert bad not in slt, bad
 assert o["keep_until"] and o["keep_until"]>time.time()+2.9*365*86400 and o["post_pack"]==0
 assert not A.db().execute("select v from settings where k=?",(f"printjob_{tok}",)).fetchone()
 # ---- appeal (reconsideration) included

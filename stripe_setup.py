@@ -13,7 +13,7 @@ PLANS=[("aa","99","STRIPE_LINK_AA_99"),("dla","99","STRIPE_LINK_DLA_99"),("pip",
 DESC={"49":"Your answers for every question on the form, drafted from what you tell us, for you to check and copy across.",
       "59":"Your answers for every question on the form, drafted from what you tell us, for you to check and copy across.",
       "99":"Done for you: we prepare your answers from what you tell us and fill in the form where there is one, ready for you to check, sign and send.",
-      "199":"Done for you Plus: everything in Done for you, plus an assessment briefing, supporting letters, a reconsideration letter if needed and your renewal form, prepared from your answers.",
+      "199":"Done for you Plus: everything in Done for you, plus an assessment briefing, request letters for your GP, carer, school or family, a reconsideration letter if needed and your renewal form, prepared from your answers.",
       "79":"Your answers drafted from what you tell us, plus a completed form ready to check, sign and send."}
 def api(method,path,data=None):
     body=urllib.parse.urlencode(data,doseq=True).encode() if data else None

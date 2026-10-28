@@ -463,7 +463,7 @@ def _build_files(token,o,d):
     if is_premium(o["tier"]):
         I=json.loads(o["intake"] or "{}")
         open(os.path.join(od,"assessment-briefing.html"),"w").write(PREMIUM.briefing(BRAND,form,personal,d)); files.append("assessment-briefing.html")
-        open(os.path.join(od,"supporting-letters.html"),"w").write(PREMIUM.supporting_letters(BRAND,form,personal,d,I.get("people"))); files.append("supporting-letters.html")
+        open(os.path.join(od,"supporting-letters.html"),"w").write(PREMIUM.supporting_letters(BRAND,form,personal,d,I.get("people"),I)); files.append("supporting-letters.html")
         if o["appeal"]:
             ap=json.loads(o["appeal"]); nm=" ".join(x for x in (personal.get("other_names"),personal.get("surname")) if x)
             addr=", ".join(personal.get(k) for k in ("addr1","addr2","addr3","postcode") if personal.get(k))
@@ -1142,7 +1142,7 @@ def documents_page(token:str):
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
     if not o["details_at"]: return RedirectResponse(f"/details/{token}",303)
-    F=FORMS[o["form"] or "aa"]; lab={'assessment-briefing.html':'Assessment and phone-call briefing','supporting-letters.html':'Supporting letters for others to sign','reconsideration-letter.txt':'Your reconsideration letter, ready to sign and send','PIP-extra-sheets.pdf':'Printable extra sheets, one per question (PDF), to send with your form','answers.html':'Your approved answers, checklist and letters','AA1-filled.pdf':'Official AA1 form, filled in (PDF)','DLA1A-filled.pdf':'Official DLA1A form, filled in (PDF)','AccessToWork-answers.docx':'Your answers as a Word document (DOCX), in application order','Note-for-supporter.pdf':'A note for the person who writes the statement box (we leave that box for them)'}
+    F=FORMS[o["form"] or "aa"]; lab={'assessment-briefing.html':'Assessment and phone-call briefing','supporting-letters.html':'Request letters for your GP, carer, school or family','reconsideration-letter.txt':'Your reconsideration letter, ready to sign and send','PIP-extra-sheets.pdf':'Printable extra sheets, one per question (PDF), to send with your form','answers.html':'Your approved answers, checklist and letters','AA1-filled.pdf':'Official AA1 form, filled in (PDF)','DLA1A-filled.pdf':'Official DLA1A form, filled in (PDF)','AccessToWork-answers.docx':'Your answers as a Word document (DOCX), in application order','Note-for-supporter.pdf':'A note for the person who writes the statement box (we leave that box for them)'}
     files=pack_files(o)
     if is_wf(o): files=[f for f in files if f!="answers.html"]+["answers.html"]
     gone=f"<div class=panel><p>Your National Insurance number and bank details have been deleted from our system for safety. Need another copy with them filled in? <a href=/details/{token}>Type them again</a>.</p></div>" if is_wf(o) and not SECURE.has(token) else ""
