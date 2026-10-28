@@ -17,7 +17,6 @@ DLA={"answers":{
  "tick_yes":["42","44","49","54","55","58","59","64","66","67","68","70"],
  "checklist":["EHCP or IEP (Section B and F)","Autism diagnosis letter","Speech and language therapy report","Letter from school SENCo or teacher","Sleep or behaviour diary for 1–2 weeks"],
  "gp_letter":"Dear Dr ...,\nWe are claiming Disability Living Allowance for Leo. Please could you provide a short letter confirming his diagnosis and the extra care and supervision he needs compared with other children his age.\nThank you.",
- "carer_statement":"I have taught Leo since September 2025. He needs one-to-one adult support for most of the school day, has no sense of danger and has meltdowns about twice a week that need a quiet space.",
  "notes_for_user":["Check the nights per week and minutes for night-time help.","Add the date his care needs started (Q71) if you know it.","Tick boxes are listed below for you to tick by hand."]}
 PIP={"answers":{
  "conditions":"Rheumatoid arthritis (since 2019) and depression (since 2021). Methotrexate 15mg weekly, sertraline 100mg daily. Under the rheumatology team at the local hospital and my GP.",
@@ -37,7 +36,6 @@ PIP={"answers":{
  "extra":{},"conditions":[],"tick_yes":[],
  "checklist":["Rheumatology clinic letters","Repeat prescription list","GP letter about how your conditions affect daily life","Statement from your partner about the help they give","Any occupational therapy or physio reports"],
  "gp_letter":"Dear Dr ...,\nI am completing the PIP form. Please could you write a short letter describing my conditions, treatment and how they affect my daily activities and walking.\nThank you.",
- "carer_statement":"I help my partner most days with washing her hair, dressing (buttons, socks, shoes), preparing hot meals and reminding her about her weekly medication.",
  "notes_for_user":["Check the walking distance is accurate on most days.","Remember the 'majority of days' rule: describe what happens on more than half of days.","Leave any activity you have no difficulty with as 'no difficulty'."],
  "call_prep":["Have ready: NI number, bank details, GP name/address/phone, dates of any hospital or care home stays, dates abroad over 4 weeks.","Say who is helping you and ask for them to be added to the call if needed.","Ask about a home visit if you can't manage the call or forms."],
  "changes":"Since my last award my hand stiffness has got worse and I now need help with my hair and dressing on most days."}
@@ -53,6 +51,6 @@ ATW={"answers":{
  "extra":{},"conditions":[],"tick_yes":[],
  "support_summary":[{"item":"Text-to-speech and mind-mapping software","type":"Equipment or software","cost":"[quote]"},{"item":"Speech-to-text tool for meetings","type":"Equipment or software","cost":"[quote]"},{"item":"Coaching sessions for planning and time management","type":"Support worker or coaching","cost":"[quote]"}],
  "checklist":["Dyslexia assessment report","ADHD diagnosis letter (not required, but helpful if you have it)","Any quotes for equipment, software or coaching","Your workplace contact's name and work email (you add these)"],
- "gp_letter":"","carer_statement":"",
+ "gp_letter":"",
  "notes_for_user":["Check the hours and tasks are right.","Add your workplace address, workplace contact and NI number yourself.","Only ask for support you actually need."],
  "call_prep":["Have ready: your contact details, workplace address and postcode, workplace contact details, NI number if you have it (UTR if self-employed).","You can ask for all communication by email if phone calls are hard."]}

@@ -52,8 +52,8 @@ The transcript may be short tapped answers (e.g. "Dressing: finds this hard, nee
 Describe what happens on a typical day, then bad days and how many a week, exactly as stated. If the user said there are bad days on more than half the days (4 or more a week), describe bad days as the usual situation; otherwise mention bad days and how many a week, as stated. Never describe a worst day or a bad day as every day, and never present a worst case as typical.
 Never make anything sound more severe, more frequent or more absolute than the user's words: no "always", "never", "constantly", "completely", "at all", "impossible" or "every day" unless the user said so; "struggles" stays "struggles", not "cannot".
 Lines that start "Checked with you:" are the user's own corrections: they override anything earlier that disagrees. Only use facts from documents where the user confirmed them ("I checked these against my documents").
-Never state or imply eligibility, award rates, amounts, points, descriptors or likely outcomes. Return JSON: {{"answers":{{one key per topic id: {ids}}},"extra":{{}},"conditions":[{{"name","since","meds","dose"}}],
-"checklist":[...evidence...],"gp_letter":"...","carer_statement":"...","notes_for_user":[...],
+Never write a statement, letter or words for anyone else to sign or put in the form (the statement from someone who knows the claimant is theirs to write); gp_letter is only the customer's own request to their GP. For a topic about that statement, only say who could write it, never what they would say. Never state or imply eligibility, award rates, amounts, points, descriptors or likely outcomes. Return JSON: {{"answers":{{one key per topic id: {ids}}},"extra":{{}},"conditions":[{{"name","since","meds","dose"}}],
+"checklist":[...evidence...],"gp_letter":"...","notes_for_user":[...],
 "sources":{{topic id: [short verbatim quotes from the USER's messages each answer is based on]}}"""
     if form=="aa": s+=""","tick_yes":[AA1 question numbers (topic ids) where the user described help or difficulty]"""
     if form=="dla": s+=""","extra" may include night_bed/night_toilet/night_treatment/night_settle/night_danger/night_wander/night_behaviour as [nights per week, minutes, times a night] and care_start"""
@@ -183,14 +183,18 @@ def next_question(history, form="aa"):
 def draft(history, form="aa"):
     if MOCK:
         if os.getenv("MOCK_DRAFT_SLOW"): import time; time.sleep(float(os.getenv("MOCK_DRAFT_SLOW")))   # tests only: a slow drafter
-        if form=="aa": return json.load(open(os.path.join(os.path.dirname(__file__),"sample_case.json")))["draft"]
-        return json.loads(json.dumps({"dla":samples.DLA,"atw":samples.ATW}.get(form,samples.PIP)))
+        if form=="aa": return _strip(json.load(open(os.path.join(os.path.dirname(__file__),"sample_case.json")))["draft"])
+        return _strip(json.loads(json.dumps({"dla":samples.DLA,"atw":samples.ATW}.get(form,samples.PIP))))
     t="\n".join(f'{m["role"].upper()}: {m["content"]}' for m in history)
-    if DRAFT_PARTS<=1: return json.loads(_call([{"role":"system","content":draft_system(form)},{"role":"user","content":t}],json_mode=True,effort=DRAFT_EFFORT))
-    return draft_parallel(t,form)
+    if DRAFT_PARTS<=1: return _strip(json.loads(_call([{"role":"system","content":draft_system(form)},{"role":"user","content":t}],json_mode=True,effort=DRAFT_EFFORT)))
+    return _strip(draft_parallel(t,form))
 DRAFT_EFFORT=os.getenv("LLM_DRAFT_EFFORT","low") or None; GROUND_EFFORT=os.getenv("LLM_GROUND_EFFORT","low") or None
 DRAFT_PARTS=int(os.getenv("LLM_DRAFT_PARTS","3"))   # answer groups drafted at the same time (+1 call for letters/checklist). 1 = single call
 EXTRA_KEYS={"aa":[],"dla":[],"pip":["call_prep"],"pipr":["call_prep","changes"],"atw":["support_summary","call_prep"]}
+NOT_OURS=("carer_statement","supporter_statement")   # never our words for the supporter: dropped from any draft
+def _strip(d):
+    for k in NOT_OURS: d.pop(k,None)
+    return d
 def draft_parallel(t, form):
     """Same rules and transcript, split into independent parts drafted at once (28 Oct: one big call took ~32s).
     Parts: N groups of topic answers (+ their sources/tick_yes), and one call for conditions/extra/checklist/letters/notes."""
@@ -199,7 +203,7 @@ def draft_parallel(t, form):
     groups=[ids[i:i+k] for i in range(0,len(ids),k)]; sysm=draft_system(form)
     def part(ins): return json.loads(_call([{"role":"system","content":sysm+"\n\nTHIS REQUEST: "+ins},{"role":"user","content":t}],json_mode=True,effort=DRAFT_EFFORT))
     jobs=[f'Return ONLY the keys "answers" and "sources"{" and tick_yes" if form=="aa" else ""}, and only for these topic ids: {", ".join(g)}. Leave everything else out.' for g in groups]
-    rests=[["gp_letter"],["carer_statement"],["conditions","extra","checklist","notes_for_user"]+EXTRA_KEYS.get(form,[])]
+    rests=[["gp_letter"],["conditions","extra","checklist","notes_for_user"]+EXTRA_KEYS.get(form,[])]
     for r_ in rests: jobs.append('Return ONLY these keys: '+", ".join(r_)+'. Do not return "answers", "sources" or "tick_yes". Use only facts the USER stated.')
     with cf.ThreadPoolExecutor(len(jobs)) as ex: res=list(ex.map(part,jobs))   # any part failing raises: never a half draft
     d={"answers":{},"sources":{}}; rest=[k for r_ in rests for k in r_]; extras={}

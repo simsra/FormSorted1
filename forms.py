@@ -14,7 +14,7 @@ DLA_TOPICS=[
  ("development","Q67: Extra help with development","Do they need extra help with learning, play, understanding or social skills at home?"),
  ("school","Q68: School or nursery","At school or nursery: what extra help do they get with learning (EHCP / IDP, 1:1 support)? What is their behaviour like? How do they get there?"),
  ("night","Q69–70: Help during the night (from 11pm)","At night (when everyone is in bed): what help do they need — settling, toilet, treatment, turning, supervision? How many nights a week, how many times a night, how many minutes each time?"),
- ("statement","Q38: Statement from someone who knows the child","Who knows the child well (teacher, SENCo, health visitor, therapist, relative) and could write a short statement?"),
+ ("statement","Q38: Who could write the statement (they write it themselves)","Who knows the child well (teacher, SENCo, health visitor, therapist, relative) and could write a short statement?"),
 ]
 DLA_FIELDS={"42":"42_1","walking":"48_1","65":"65_1","school_learning":"68_7","school_behaviour":"68_8","school_travel":"68_9",
  "mobility_other":"53","care_other":"72","anything_else":"89","statement":"38_3","reports":"24_1"}

@@ -430,7 +430,7 @@ def fallback_draft(form,d):
     ans={t:" ".join(v).strip() for t,v in T.items()}
     tick_yes=[t for t,a in ans.items() if a and t.isdigit()] if form=="aa" else []
     return {"answers":ans,"sources":{t:[raw[t]] for t in ans if raw.get(t)},"tick_yes":tick_yes,"conditions":[],"extra":{},
-            "checklist":[],"notes_for_user":[],"gp_letter":"","carer_statement":"","drafted_from":"taps"}
+            "checklist":[],"notes_for_user":[],"gp_letter":"","drafted_from":"taps"}
 def coverage(form,d):
     from forms import FORMS
     _,T=topic_texts(form,d); tops=FORMS[form]["topics"]; return sum(1 for t,_,_ in tops if T.get(t)),len(tops)

@@ -21,7 +21,7 @@ def pack_html(brand, personal, draft, tier, filled_by="", prefill_off=False):
 <h2>Care questions</h2>{rows}<p><strong>Tick "Yes" on questions:</strong> {e(ticks)}</p>
 <h2>Evidence checklist</h2><ul>{li(draft.get('checklist',[]))}</ul>
 {f'<h2>Draft letter to the GP</h2><pre style="white-space:pre-wrap;font:inherit">{e(draft["gp_letter"])}</pre>' if draft.get('gp_letter') else ''}
-{f"<h2>Draft statement from someone who knows them (AA1 page 28)</h2><p>{e(draft['carer_statement'])}</p>" if draft.get('carer_statement') else ''}{script}
+{script}
 <p style="font-size:.85em;color:#555">Independent service, not affiliated with DWP.</p></html>"""
 
 from forms import FORMS, PIP_ACTIVITIES
@@ -62,7 +62,7 @@ def pack_form(brand, personal, draft, tier, form, prefill_off=False):
 <h2>Your answers</h2>{rows}{extra}
 <h2>Evidence checklist</h2><ul>{li(draft.get('checklist',[]))}</ul>
 {f'<h2>Draft letter to the GP or consultant</h2><pre style="white-space:pre-wrap;font:inherit">{e(draft["gp_letter"])}</pre>' if draft.get('gp_letter') else ''}
-{f"<h2>Draft statement from someone who knows {'the child' if form=='dla' else 'you'}</h2><p>{e(draft['carer_statement'])}</p>" if draft.get('carer_statement') else ''}{send}
+{send}
 <p style="font-size:.85em;color:#555">Independent service, not affiliated with DWP.</p></html>"""
 
 # ---- Access to Work ----
