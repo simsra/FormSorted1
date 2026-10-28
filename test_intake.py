@@ -47,7 +47,7 @@ for f in I.FORMS_V3:
         if sname!="about": assert "Something else" in I.section_body(f,sname,{}), (f,sname)
 # v4: 'No difficulty' asks nothing more and ticks nothing; help answers get at most 2 follow-up groups
 dv=I.save("aa","daily",{},FM({"r_bed_lvl":"ok","r_bed_c":["out"],"r_wash_lvl":"help","r_wash_c":["in","pain","every"],"r_wash_days":"3"}))
-assert dv["rows"]["bed"]=={"lvl":"ok"} and "x29" not in I.ticks("aa",dv) and I.ticks("aa",dv)["x31"]=="/Yes"
+assert dv["rows"]["bed"]=={"lvl":"ok"} and I.ticks("aa",dv).get("x29")=="/No" and I.ticks("aa",dv)["x31"]=="/Yes"
 _,T=I.topic_texts("aa",dv); assert "no difficulty" in T["29"] and "3 days a week" in T["31"] and "every time" in T["31"] and "pain or exhaustion" in T["31"], T["31"]
 card=I.row_card("aa",I.AA_ROWS[0],{}); assert card.count("<p class=sub>")==2 and "Something else" in card and "No difficulty" in card
 for f in I.FORMS_V3:   # at most 6 'What happens?' options per card (+ Something else)

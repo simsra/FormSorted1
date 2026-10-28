@@ -323,7 +323,10 @@ def ticks(form,d):
     out={}
     for r in rows(form,None,d):
         v=(d.get("rows") or {}).get(r[0])
-        if not v or v.get("lvl")=="ok": continue
+        if not v: continue
+        if v.get("lvl")=="ok":   # 28 Oct: "no difficulty" is an answer too: the form's Yes/No question is No, never Yes
+            if r[3] and "/No" in NO_OK.get(form,()) and r[3][0] not in out: out[r[3][0]]="/No"
+            continue
         if r[3]: out[r[3][0]]=r[3][1]
         for cid,_,tk,hp in r[4]:
             if cid in (v.get("c") or []):
@@ -332,6 +335,9 @@ def ticks(form,d):
                     for f,s in hp: out[f]=s
     if form=="aa":
         if d.get("falls") in ("1-2","3-5","6+"): out["x34"]="/Fall"
+        elif d.get("falls")=="0": out["x34"]="/No"
+        if d.get("alone")=="always" and not d.get("eye"): out["x40"]="/No"
+        if d.get("watch")=="no": out["302"]="/No"
         fx=d.get("fallx") or []
         if "getup" in fx: out["x34-3"]="/Yes"
         if "clinic" in fx: out["x34-2"]="/Yes"
@@ -348,10 +354,31 @@ def ticks(form,d):
         if d.get("varies")=="varies": out["42"]="/Changes from day to day"
         if d.get("nn"): out["70"]="/Yes"
         if [x for x in d.get("school") or [] if x!="notatschool"]: out["68"]="/Yes"
+        if "special" in (d.get("school") or []): out["36"]="/Yes"
+        if "ehcp" in (d.get("school") or []): out["37_1"]="/Educational Health Care Plan"
+        if d.get("aids"): out["41"]="/Yes"
     return out
+NO_OK={"aa":("/No",),"dla":("/No",)}
+def no_difficulty(form,d):
+    """Topic ids where every row the customer answered was 'No difficulty' (and nothing else was added to that topic).
+    These questions are answered No on the form: no 'difficulty' tick and no 'no difficulty' sentence in the box."""
+    d=d or {}; R=d.get("rows") or {}; by={}
+    for r in rows(form,None,d):
+        v=R.get(r[0])
+        if v: by.setdefault(r[1],[]).append(v.get("lvl")=="ok")
+    out=[t for t,oks in by.items() if oks and all(oks)]
+    if form=="aa" and d.get("falls")=="0" and not d.get("fallx") and not X(d,"fallx"): out.append("34")
+    return out
+def aids_list(d):
+    """Aids the customer tapped (plus 'Something else' text), for the form's aids table."""
+    a=list((d or {}).get("aids") or [])
+    x=X(d or {},"aids").strip()
+    if x: a+=[y.strip() for y in re.split(r"[,;\n]",x) if y.strip()]
+    return a
 def extra(form,d):
     """Number boxes on the PDF, from taps only."""
     e={}
+    if aids_list(d): e["aids"]=aids_list(d)
     if form=="aa":
         if _ok(d.get("days_help")): e["days_week_day"]=d["days_help"]
         if _ok(d.get("nights")) and d.get("night"): e["nights_week"]=d["nights"]

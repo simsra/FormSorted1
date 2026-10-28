@@ -93,6 +93,9 @@ DLA=[
  ("67","Q67: Need extra help with their development?","development","gate"),
  ("68","Q68: Need encouragement, prompting or assistance at school or nursery?","school","gate"),
  ("70","Q70: Wake and need assistance or supervision during the night?","night","gate"),
+ ("36","Q36: Is this a specialist school?","school",(r"specialist school","/Yes")),
+ ("37_1","Q37: Does the child have an Educational Health Care Plan?","school",(r"\bEHCP\b|education,? health and care plan","/Educational Health Care Plan")),
+ ("41","Q41: Does the child use any aids or adaptations?","daycare",(r"aids used","/Yes")),
 ]
 CATALOG={"aa":AA,"dla":DLA}
 PDF={"aa":"aa1.pdf","dla":"dla1a.pdf"}
@@ -115,7 +118,10 @@ def label(state): return re.sub(r"[\x00-\x1f]","",state.lstrip("/")).replace("\u
 def _snip(txt,m): s=max(0,m.start()-50); return ("…" if s else "")+txt[s:m.end()+50].strip()+("…" if m.end()+50<len(txt) else "")
 def _negated(txt,m):
     """'I am not confused', 'never falls': skip matches directly negated (but 'can't read' is a difficulty, so kept)."""
-    return bool(re.search(r"\b(not|never|no)\s+(\w+\s+){0,2}$",txt[max(0,m.start()-30):m.start()],re.I))
+    if re.search(r"\b(not|never|no)\s+(\w+\s+){0,2}$",txt[max(0,m.start()-30):m.start()],re.I): return True
+    # 28 Oct: 'I have no difficulty getting in and out of bed' -> the whole sentence is negated, not just the next 2 words
+    sent=re.split(r"[.!?\n]\s*",txt[:m.start()])[-1]
+    return bool(re.search(r"\bno (difficulty|difficulties|problems?|trouble|help needed)\b|\bdoes(n't| not) need\b",sent,re.I))
 def propose(form, answers, filled=None):
     """Return list of dicts: field, question, page, options, proposed (state or ''), why (customer-facing evidence)."""
     a=answers or {}; out=[]; opts=options(form); filled=filled or {}
@@ -132,6 +138,27 @@ def propose(form, answers, filled=None):
             if m and (not need or re.search(need[0],txt,re.I)): st,why=state,f'Based on your approved answer: "{_snip(txt,m)}"'
         if st and st not in opts[field][1]: st=""
         out.append({"field":field,"question":q,"topic":topic,"page":opts[field][0],"options":opts[field][1],"proposed":st,"why":why})
+    return out
+def propose_tapped(form, answers, intake_ticks, no_diff=()):
+    """Proposals for orders that came through the tap questions (28 Oct fix).
+    The taps are the source of truth: a box is ticked only if the customer tapped something that maps to it,
+    and 'No difficulty' answers the form's Yes/No question with No. Wording in the drafted answers never adds a tick
+    (before this, 'I have no difficulty getting in and out of bed' ticked 'difficulty getting out of bed')."""
+    it=intake_ticks or {}; out=propose(form,answers)
+    for x in out:
+        st=it.get(x["field"],"")
+        rule=next(r for f,_,_,r in CATALOG[form] if f==x["field"])
+        if not st and rule=="more" and x["topic"] not in no_diff and x["proposed"]: st=x["proposed"]   # we wrote text in that box
+        if not st and rule=="more" and x["topic"] in no_diff: st="/No"   # nothing else to tell for a 'no difficulty' question
+        parent=re.split(r"[-_]",x["field"])[0]
+        if not st and isinstance(rule,tuple) and parent!=x["field"] and it.get(parent) not in (None,"","/No") and x["proposed"]:
+            st=x["proposed"]   # a detail box under a question they tapped Yes, backed by a quote from their approved answer
+        if st and st not in x["options"]: st=""
+        x["proposed"]=st
+        x["why"]=("You told us there's no difficulty with this." if st=="/No" else
+                  "We have written your approved answer in this question's box." if st and rule=="more" else
+                  "From what you tapped in the questions." if st else
+                  "You didn't tap anything for this, so we have left it blank. Tick it yourself if it applies.")
     return out
 def validate(form, choices):
     """Keep only catalogued fields and real on-states. choices: {field: state or ''}"""

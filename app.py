@@ -364,6 +364,9 @@ def _build_files(token,o,d):
     open(os.path.join(od,"answers.html"),"w").write(documents.pack_form(BRAND,personal,d,o["tier"],form,prefill_off=bool(off)))
     files=["answers.html"]
     if F.get("pdf_out") in pf:
+        tp=tapped(o)
+        if tp:   # 'no difficulty' questions stay No with an empty box; aids go in the form's aids table
+            d=dict(d); d["no_difficulty"]=tp[2]; d["extra"]={**(d.get("extra") or {}),**({"aids":INTAKE.aids_list(tp[0])} if INTAKE.aids_list(tp[0]) else {})}
         fill_pdf.fill_form(form,personal,d,os.path.join(od,F["pdf_out"]),ticks=d.get("ticks") if d.get("ticks_confirmed_at") else None); files.append(F["pdf_out"])
     if "PIP-extra-sheets.pdf" in pf:
         open(os.path.join(od,"PIP-extra-sheets.pdf"),"wb").write(pip_sheet_pdf(form,personal,d)); files.append("PIP-extra-sheets.pdf")
@@ -748,6 +751,12 @@ async def approve_save(token:str, req:Request):
     d.pop("ticks_confirmed_at",None)   # answers changed: ticks must be checked again
     c.execute("update orders set draft=?, approved_at=?, save_code=? where token=?",(json.dumps(d),time.time(),code,token)); c.commit()
     return RedirectResponse(f"/ticks/{token}" if needs_ticks(o) else f"/details/{token}",303)
+def tapped(o):
+    """(intake, tick states from the taps, 'no difficulty' topic ids) for orders that used the tap questions, else None.
+    Recomputed from the stored taps so orders drafted before the 28 Oct fix get the corrected ticks too."""
+    I=json.loads(o["intake"] or "{}"); form=o["form"] or "aa"
+    if not I.get("rows") or form not in INTAKE.FORMS_V3: return None
+    return I,INTAKE.ticks(form,I),INTAKE.no_difficulty(form,I)
 def ticks_pending(o):
     return needs_ticks(o) and not json.loads(o["draft"] or "{}").get("ticks_confirmed_at")
 @app.get("/ticks/{token}")
@@ -757,9 +766,11 @@ def ticks_page(token:str, err:str=""):
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     form=o["form"] or "aa"
     if not needs_ticks(o): return RedirectResponse(f"/details/{token}",303)
-    saved=d.get("ticks") if d.get("ticks_confirmed_at") else None; F=FORMS[form]; rows=""; last=None; it=d.get("intake_ticks") or {}; nset=0
-    for i,x in enumerate(TICKS.propose(form,d.get("answers",{}))):
-        if x["field"] in it and it[x["field"]] in x["options"]: x["proposed"]=it[x["field"]]; x["why"]="From what you tapped in the questions."
+    saved=d.get("ticks") if d.get("ticks_confirmed_at") else None; F=FORMS[form]; rows=""; last=None; nset=0
+    tp=tapped(o); it=tp[1] if tp else (d.get("intake_ticks") or {})
+    props=TICKS.propose_tapped(form,d.get("answers",{}),tp[1],tp[2]) if tp else TICKS.propose(form,d.get("answers",{}))
+    for i,x in enumerate(props):
+        if not tp and x["field"] in it and it[x["field"]] in x["options"]: x["proposed"]=it[x["field"]]; x["why"]="From what you tapped in the questions."
         cur=saved.get(x["field"],"") if saved is not None else x["proposed"]; nset+=bool(cur)
         q=x["question"].split(":")[0]
         if q!=last: rows+=f"<h2 class=tickq>{esc(q)} <span class=hint>(page {x['page']} of the form)</span></h2>"; last=q

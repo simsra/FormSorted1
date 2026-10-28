@@ -11,4 +11,4 @@ $PY/python test_bluebadge.py http://localhost:${PORT:-8019} || R=1; kill $S
 MOCK_GROUND_FLAKY=1 $PY/uvicorn app:app --port 8032 >/tmp/aa-test-flaky.log 2>&1 & F=$!; sleep 3; $PY/python test_approve.py http://localhost:8032 || R=1; kill $F
 MOCK_GROUND_SLOW=6 $PY/uvicorn app:app --port 8033 >/tmp/aa-test-slow.log 2>&1 & W=$!; sleep 3; $PY/python test_responsive.py http://localhost:8033 || R=1; kill $W
 MOCK_DRAFT_SLOW=4 MOCK_GROUND_SLOW=3 $PY/uvicorn app:app --port 8034 >/tmp/aa-test-prep.log 2>&1 & P=$!; sleep 3; $PY/python test_prepare.py http://localhost:8034 || R=1; kill $P
-$PY/python test_prefill.py || R=1; $PY/python test_strength.py || R=1; exit $R
+$PY/python test_prefill.py || R=1; $PY/python test_strength.py || R=1; $PY/python test_fill_gaps.py || R=1; exit $R

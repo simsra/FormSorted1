@@ -4,15 +4,24 @@ import os
 from pypdf import PdfReader, PdfWriter
 from questions import CARE_QUESTIONS, EXTRA_FIELDS, PERSONAL_FIELDS, CONDITION_FIELDS
 HERE=os.path.dirname(__file__)
+import re as _r
+def uk_date(s):
+    """'2014-10-08' -> '08/10/2014' (the forms ask for DD / MM / YYYY). Anything else is left as typed."""
+    m=_r.match(r"^\s*(\d{4})-(\d{2})-(\d{2})\s*$",s or "")
+    return f"{m[3]}/{m[2]}/{m[1]}" if m else s
+DATE_KEYS=("dob","parent_dob")
+AA_AIDS=[("27-1","27-3"),("27-5","27-7"),("27-9","27-11"),("27-13","27-15"),("27-17","27-19"),("27-21","27-23")]
+DLA_AIDS=["41_1","41_4","41_7","41_10","41_13","14_16"]
+def _personal(personal, mapping):
+    return {f:(uk_date(personal[k]) if k in DATE_KEYS else personal[k]) for k,f in mapping.items() if personal.get(k)}
 def build_values(personal, draft):
-    v={}
-    for k,f in PERSONAL_FIELDS.items():
-        if personal.get(k): v[f]=personal[k]
+    v=_personal(personal,PERSONAL_FIELDS); nd=set(draft.get("no_difficulty") or [])
     for q,_,_,f in CARE_QUESTIONS:
         a=draft["answers"].get(str(q),"")
-        if a: v[f]=a
+        if a and str(q) not in nd: v[f]=a   # a 'no difficulty' question is answered No: its box stays empty
+    for aid,(f,_) in zip((draft.get("extra") or {}).get("aids") or [],AA_AIDS): v[f]=aid
     for k,f in EXTRA_FIELDS.items():
-        if draft.get("extra",{}).get(k): v[f]=draft["extra"][k]
+        if (draft.get("extra") or {}).get(k): v[f]=draft["extra"][k]
     for c,fs in zip(draft.get("conditions",[]),CONDITION_FIELDS):
         for key,f in zip(("name","since","meds","dose"),fs):
             if c.get(key): v[f]=c[key]
@@ -44,9 +53,9 @@ def _write(form, values, personal, out_path, ticks=None):
 # ---- Child DLA (DLA1A, GOV.UK version 10/25) ----
 from forms import DLA_FIELDS, DLA_NIGHT_FIELDS, DLA_PERSONAL, DLA_CONDITION_FIELDS
 def dla_values(personal, draft):
-    a=draft.get("answers",{}); v={}
-    for k,f in DLA_PERSONAL.items():
-        if personal.get(k): v[f]=personal[k]
+    nd=set(draft.get("no_difficulty") or [])
+    a={k:t for k,t in draft.get("answers",{}).items() if k not in nd}; v=_personal(personal,DLA_PERSONAL)
+    for aid,f in zip((draft.get("extra") or {}).get("aids") or [],DLA_AIDS): v[f]=aid
     j=lambda *ks:"\n\n".join(a[k] for k in ks if a.get(k))
     m={"42":a.get("42",""),"walking":a.get("walking",""),"65":a.get("65",""),"school_learning":a.get("school",""),
        "mobility_other":j("outdoors"),"care_other":j("daycare","supervision_day","senses","development","night"),
