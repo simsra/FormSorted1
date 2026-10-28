@@ -1,7 +1,7 @@
 import hashlib
 """FormSorted claim service prototype (AA1, DLA1A, PIP2, AR1). Run: uvicorn app:app --port 8000
 Env: STRIPE_SECRET_KEY, PUBLIC_URL, ANTHROPIC_API_KEY/GEMINI_API_KEY/OPENAI_API_KEY, LLM_PROVIDER/LLM_MODEL/LLM_FALLBACKS, GROUNDING_PROVIDER/GROUNDING_MODEL/GROUNDING_FALLBACKS (see SETUP_RENDER_SUPABASE.md), BRAND. Placeholders => DEV mode (no payment, mock LLM)."""
-import os, json, sqlite3, secrets, urllib.request, urllib.parse, base64, time
+import threading, os, json, sqlite3, secrets, urllib.request, urllib.parse, base64, time
 from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 import orders, mailer, asyncio, hmac, store
@@ -274,7 +274,12 @@ def finish(token:str):
     o=ready(token,paid=False)
     c=db(); c.execute("update orders set interview_done_at=coalesce(interview_done_at,?) where token=?",(time.time(),token)); c.commit()
     return {"next":f"/prepare/{token}" if o["status"]=="paid" else f"/preview/{token}"}
+_BLOCKS={}; _BLOCKS_L=threading.Lock()
 def build_files(token,o,d):
+    """One build per order at a time: a second concurrent build (double submit) used to delete the folder mid-write."""
+    with _BLOCKS_L: lk=_BLOCKS.setdefault(token,threading.Lock())
+    with lk: return _build_files(token,o,d)
+def _build_files(token,o,d):
     form=o["form"] or "aa"; F=FORMS[form]; personal=json.loads(o["personal"] or "{}"); od=os.path.join(OUT,token); os.makedirs(od,exist_ok=True)
     if form=="atw":
         open(os.path.join(od,"answers.html"),"w").write(documents.pack_atw(BRAND,d,o["tier"]))
