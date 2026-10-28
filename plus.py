@@ -35,15 +35,18 @@ ITEMS={
 }
 POST_ON={"aa":"Printed and posted to you to sign, with a Freepost return envelope","dla":"Printed and posted to you to sign, with a Freepost return envelope",
          "pip":"Printed and posted to you to sign, to send with the form DWP sent you","pipr":"Printed and posted to you to sign, to send with the form DWP sent you"}
+def posting():
+    """Posting counts as included only once print-and-post is really live (printmail.live() on the Intelliprint branch)."""
+    return printmail.live() if hasattr(printmail,"live") else printmail.ENABLED
 POST_SOON="Coming soon: printed and posted to you to sign. Not yet part of the service."   # as on the Terms page today
 def items(form):
     """[(label, detail)] of what Plus delivers today for this form. Posting only when the print provider is live."""
     out=list(ITEMS.get(form,ITEMS["aa"]))
-    if printmail.ENABLED: out.append((POST_ON[form if form in POST_ON else "aa"],""))
+    if posting(): out.append((POST_ON[form if form in POST_ON else "aa"],""))
     return out+[KEEP]
 def notes(form):
     """Plain lines shown under the Plus list (never counted as included)."""
-    return ([] if printmail.ENABLED else [POST_SOON])+([PIP_STAT] if form in ("pip","pipr") else [])
+    return ([] if posting() else [POST_SOON])+([PIP_STAT] if form in ("pip","pipr") else [])
 def flat(form): return [f"{l}: {d[0].lower()+d[1:]}" if d else l for l,d in items(form)]
 RC="(a reconsideration letter from your answers)"
 SUMMARY={"aa":f"Everything in Done for you, plus help if the claim is turned down {RC}, a phone-call briefing, request letters for everyone who helps, Blue Badge answers, and the next Attendance Allowance form from your saved answers.",
@@ -52,7 +55,7 @@ SUMMARY={"aa":f"Everything in Done for you, plus help if the claim is turned dow
  "pipr":f"Everything in Done for you, plus help if your award is reduced or stopped {RC}, an assessment briefing, request letters for everyone who helps you, and your next PIP review form from your saved answers."}
 def summary(form):
     """One-sentence tier description (forms.py and the payment product description)."""
-    return SUMMARY[form]+(" Printed and posted to you to sign." if printmail.ENABLED else "")
+    return SUMMARY[form]+(" Printed and posted to you to sign." if posting() else "")
 BASE={"aa":"The whole AA1 form filled in, to download","dla":"The whole DLA1A form filled in, to download","pip":"Typed answers for every PIP2 activity, with extra sheets","pipr":"Typed answers for every AR1 activity, with extra sheets"}
 def compare_rows(form):
     """(label, detail, in £99, in Plus). '£15 extra' where the £99 customer can buy it separately today; nothing else is priced."""

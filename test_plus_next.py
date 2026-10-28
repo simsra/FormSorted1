@@ -21,7 +21,7 @@ for f in PLUS.PLUS_FORMS:
     for b in BANNED: assert b not in " "+txt+" ", (f,b)
     assert "reconsideration letter" in txt and "check, sign and send" in txt and "same price whatever dwp decides" in txt
     assert ("1 in 4" in txt)==(f in ("pip","pipr")), f
-    assert ("posted to you" in txt) and (("coming soon" in txt) != printmail.ENABLED), f   # posting: only 'coming soon' until live
+    assert ("posted to you" in txt) and (("coming soon" in txt) != PLUS.posting()), f   # posting: only 'coming soon' until live
     assert ("blue badge" in txt)==(f in PLUS.BB_FORMS), f
 assert "may never need this" in " ".join(PLUS.flat("aa")) and "higher rate" in " ".join(PLUS.flat("aa"))
 assert "renewal" in " ".join(PLUS.flat("dla")).lower() and "PIP claim at 16" in " ".join(PLUS.flat("dla"))
