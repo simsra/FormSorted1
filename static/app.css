@@ -113,3 +113,6 @@ details.tickall{margin:1rem 0}details.tickall summary{cursor:pointer;font-weight
 .prepsteps li.pdone{color:inherit}.prepsteps li.pdone:before{content:"\2713";border:0;background:#1e7a55;color:#fff;font-size:.75em;font-weight:700;display:grid;place-items:center;width:1.45em;height:1.45em}
 .prepsteps li.pnow{color:inherit;font-weight:700}.prepsteps li.pnow:before{border-color:var(--accent);border-top-color:transparent;animation:prepspin 1s linear infinite}
 @keyframes prepspin{to{transform:rotate(360deg)}}
+/* Oct 2026: honesty line and declaration tick */
+.honest{background:var(--alt);border-left:5px solid var(--accent);padding:.6rem .9rem;margin:.4rem 0 1rem}
+.cb.honest{margin:1.2rem 0;font-weight:600}.cb.honest.needs{outline:3px solid #b3261e;outline-offset:4px}

@@ -308,6 +308,15 @@ def topic_texts(form,d):
     if E("aids"): T[{"aa":"33","dla":"daycare","pip":"other"}[form]].append(f"Other aids used: {E('aids')}.")
     if d.get("aids"): T[{"aa":"33","dla":"daycare","pip":"other"}[form]].append("Aids used: "+", ".join(d["aids"])+".")
     if d.get("words"): T[{"aa":"40","dla":"42","pip":"other"}[form]].append("In my own words: "+d["words"])
+    if d.get("meds_confirmed"):   # only medicines the customer confirmed on /confirm (never straight from a document)
+        s="Medicines (I checked these against my documents): "+", ".join(d["meds_confirmed"])+"."
+        if "conditions" in T: T["conditions"].append(s)
+        else: intro+=" "+s
+    for k,c in (d.get("clarify") or {}).items():   # answers to the short "which is right?" questions: override earlier taps
+        if not c.get("s"): continue
+        s="Checked with you: "+c["s"]
+        if c.get("topic") in T: T[c["topic"]].append(s)
+        else: intro+=" "+s
     return " ".join(intro.split()),{k:" ".join(v) for k,v in T.items()}
 def history(form,d):
     """Q/A transcript in topic order (one answer per topic), so drafting, grounding and 'what you told us' work unchanged."""

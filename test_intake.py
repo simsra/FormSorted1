@@ -107,12 +107,20 @@ for form in I.FORMS_V3:
         assert req(f"/download/{tok}/answers.html").status==402
         assert loc(req(f"/pay/{tok}",{"waive":"on"}))==f"/start/{tok}"
         assert loc(req(f"/start/{tok}"))==f"/uploads/{tok}"
-        up=body(f"/uploads/{tok}"); assert "Payment received" in up and "Skip" in up
+        up=body(f"/uploads/{tok}"); assert "Payment received" in up and "What do you have that shows this?" in up and "Nothing yet" in up and "Something else" in up
         raw,ct=multipart([("files",("meds.pdf","application/pdf",tiny_pdf("Repeat prescription: Donepezil 10mg once daily"))),("files",("letter.png","image/png",PNG)),("files",("bad.exe","application/octet-stream",b"MZ"))])
         r=req(f"/uploads/{tok}",raw=raw,ctype=ct); assert "err=" in loc(r)
         up=body(f"/uploads/{tok}"); assert "meds.pdf" in up and "letter.png" in up and "bad.exe" not in up
         assert loc(req(f"/uploads/{tok}/done",{}))==f"/prepare/{tok}"
-        assert loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"
+        nx=loc(req(f"/prepare/{tok}"))
+        if nx==f"/confirm/{tok}":   # evidence cross-check: the medicine in the PDF is only added if the customer says so
+            cf=body(nx); assert "Donepezil 10mg" in cf and "Quick check before we write" in cf
+            fmc={n:"yes" for n in re.findall(r'name="(dm_\w+)" value="yes"',cf)}
+            for n,v in re.findall(r'name="(q_\w+)" value="([^"]+)"',cf): fmc.setdefault(n,v)
+            for n in re.findall(r'name="keepc" value="(\w+)"',cf): pass
+            fmc["keepc"]=re.findall(r'name="keepc" value="(\w+)"',cf)
+            assert loc(req(nx,fmc))==f"/prepare/{tok}"; nx=loc(req(f"/prepare/{tok}"))
+        assert nx==f"/deadline/{tok}", nx
         assert loc(req(f"/intake/{tok}"))==f"/start/{tok}" and loc(req(f"/start/{tok}"))==f"/deadline/{tok}"   # locked once drafted, no redirect loop
         ck=body(f"/check/{tok}")   # strength check v2: friendly, optional, taps, max 3, never no-difficulty
         assert "could be clearer" not in ck and "turned down" not in ck and "Nothing written yet" not in ck and "This is quite short" not in ck
@@ -127,7 +135,7 @@ for form in I.FORMS_V3:
         ap=body(f"/approve/{tok}"); assert "What you told us" in ap
         if form=="aa": assert "Grips the bed rail for ages" in ap and "Other aids used: Bath lift." in ap   # 'Something else' reaches what-you-told-us (and so drafting + grounding)
         assert ("Margaret can&#x27;t do it" in ap.replace("&#39;","&#x27;") and "Margaret needs help" in ap) if form=="aa" else ("Leo" in ap and "night" in ap.lower()) if form=="dla" else ("I manage, but it is slow" in ap and "not safe doing it alone" in ap), form
-        ok={f"ok_{x}":"on" for x,_,_ in FORMS[form]["topics"]}
+        ok={f"ok_{x}":"on" for x,_,_ in FORMS[form]["topics"]}; ok["honest"]="on"
         for i_,rn in enumerate(sorted(set(re.findall(r'name="(res_[^"]+)"',ap)))): ok[rn]="keep"
         r=req(f"/approve/{tok}",ok)
         if form in ("aa","dla") and tier=="99":

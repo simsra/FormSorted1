@@ -1,14 +1,19 @@
 #!/bin/sh
 # Local test: starts a DEV server on :8019 (SQLite, or Postgres if DATABASE_URL is exported) and runs test_flows.py
-cd "$(dirname "$0")"; PY=../../.venv/bin
+cd "$(dirname "$0")"; PY=${PY:-../../.venv/bin}
 unset GEMINI_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY LLM_API_KEY RESEND_API_KEY  # tests run in mock mode (no paid calls)
 export STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_test_local} CRON_SECRET=${CRON_SECRET:-cron_test_local} RETENTION_LOOP=0 FREE_PER_IP_DAY=${FREE_PER_IP_DAY:-500} FREE_PER_DAY_TOTAL=${FREE_PER_DAY_TOTAL:-5000}
-$PY/uvicorn app:app --port ${PORT:-8019} >/tmp/aa-test-server.log 2>&1 & S=$!
+# the older tests make many orders for different people from one address: review holds are tested on their own server below
+export FRAUD_MAX_NAMES=${FRAUD_MAX_NAMES:-100000} FRAUD_SIMILAR=${FRAUD_SIMILAR:-2}
+$PY/uvicorn app:app --port ${PORT:-8019} >${LOGDIR:-/tmp}/aa-test-server.log 2>&1 & S=$!
 sleep 3; $PY/python test_flows.py http://localhost:${PORT:-8019}; R=$?
 $PY/python test_intake.py http://localhost:${PORT:-8019} || R=1
 $PY/python test_premium.py http://localhost:${PORT:-8019} || R=1
 $PY/python test_bluebadge.py http://localhost:${PORT:-8019} || R=1; kill $S
-MOCK_GROUND_FLAKY=1 $PY/uvicorn app:app --port 8032 >/tmp/aa-test-flaky.log 2>&1 & F=$!; sleep 3; $PY/python test_approve.py http://localhost:8032 || R=1; kill $F
-MOCK_GROUND_SLOW=6 $PY/uvicorn app:app --port 8033 >/tmp/aa-test-slow.log 2>&1 & W=$!; sleep 3; $PY/python test_responsive.py http://localhost:8033 || R=1; kill $W
-MOCK_DRAFT_SLOW=4 MOCK_GROUND_SLOW=3 $PY/uvicorn app:app --port 8034 >/tmp/aa-test-prep.log 2>&1 & P=$!; sleep 3; $PY/python test_prepare.py http://localhost:8034 || R=1; kill $P
+MOCK_GROUND_FLAKY=1 $PY/uvicorn app:app --port ${PORT_FLAKY:-8032} >${LOGDIR:-/tmp}/aa-test-flaky.log 2>&1 & F=$!; sleep 3; $PY/python test_approve.py http://localhost:${PORT_FLAKY:-8032} || R=1; kill $F
+MOCK_GROUND_SLOW=6 $PY/uvicorn app:app --port ${PORT_SLOW:-8033} >${LOGDIR:-/tmp}/aa-test-slow.log 2>&1 & W=$!; sleep 3; $PY/python test_responsive.py http://localhost:${PORT_SLOW:-8033} || R=1; kill $W
+MOCK_DRAFT_SLOW=4 MOCK_GROUND_SLOW=3 $PY/uvicorn app:app --port ${PORT_PREP:-8034} >${LOGDIR:-/tmp}/aa-test-prep.log 2>&1 & P=$!; sleep 3; $PY/python test_prepare.py http://localhost:${PORT_PREP:-8034} || R=1; kill $P
+EV=${LOGDIR:-/tmp}/ev-test; rm -rf $EV; mkdir -p $EV
+FRAUD_MAX_NAMES=2 FRAUD_SIMILAR=0.9 SQLITE_PATH=$EV/orders.db OUT_DIR=$EV/out MAIL_LOG=$EV/mail.log $PY/uvicorn app:app --port ${PORT_EV:-8035} >${LOGDIR:-/tmp}/aa-test-evidence.log 2>&1 & V=$!; sleep 3
+FRAUD_MAX_NAMES=2 FRAUD_SIMILAR=0.9 SQLITE_PATH=$EV/orders.db MAIL_LOG=$EV/mail.log $PY/python test_evidence.py http://localhost:${PORT_EV:-8035} || R=1; kill $V
 $PY/python test_prefill.py || R=1; $PY/python test_strength.py || R=1; exit $R
