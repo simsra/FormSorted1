@@ -1,4 +1,7 @@
-"""Print-and-post for Done for you Plus orders. OFF unless PRINT_MAIL_ENABLED=1 (default 0: nothing is ever sent).
+"""'Post it to me to sign': we print the completed pack and post it to the CUSTOMER, who signs it in ink and sends it to DWP
+(Freepost return envelope or label for AA1/DLA1A; DWP's own envelope for PIP2/AR1). Included in Done for you Plus; an optional
+paid add-on (POST_ADDON_PENCE, default 999 = £9.99) for Done for you. Every order can always download instead.
+OFF unless PRINT_MAIL_ENABLED=1 (default 0: the option is not shown, nothing is posted, no print emails are sent).
 
 Env:
   PRINT_MAIL_ENABLED=0|1        master switch (default 0)
@@ -13,6 +16,8 @@ Env:
                                 pack carries a cut-out Freepost address label instead.
   INTELLIPRINT_REQUIRE_INSERT=1 hold the order for review instead of posting without a return envelope.
   INTELLIPRINT_API_BASE         default https://api.intelliprint.net/v1 (tests point it at a local mock)
+  POST_ADDON_PENCE              price of the add-on for Done for you orders, in pence (default 999). Charged as an inline
+                                Checkout line item: no Stripe product or price is created for it.
 
 API (https://www.intelliprint.net/reference): POST /prints (JSON), GET /prints/{id}. Mail item statuses: draft,
 waiting_to_print, printing, enclosing, shipping, sent, returned, cancelled, invalid_address (+ 'delivered', an estimate,
@@ -63,55 +68,68 @@ def missing_address(r):
     return [k for k,v in (("name",r["name"]),("address",r["line"]),("postcode",r["postcode"])) if not v]
 
 # ---------------- the printed pack ----------------
+# Posted to the CUSTOMER to sign and send back (AA1, PIP2 and AR1 need an ink signature, so we never post to DWP).
+import re as _re, psp
+ADDON_PENCE=int(_env("POST_ADDON_PENCE","999") or 999)   # 'Post it to me to sign' add-on for Done for you (£99); Plus includes it
+REMIND_DAYS=(5,10)                                           # reminder emails after the pack is posted
 class _Doc(FPDF):
     def __init__(self):
         super().__init__(format="A4"); self.add_font("D","",os.path.join(FONTS,"DejaVuSans.ttf")); self.add_font("D","B",os.path.join(FONTS,"DejaVuSans-Bold.ttf"))
+        self.add_font("D","I",os.path.join(FONTS,"DejaVuSans.ttf")); self.add_font("D","BI",os.path.join(FONTS,"DejaVuSans-Bold.ttf"))
         self.set_auto_page_break(True,18); self.set_margins(20,20,20)
-def cover_sheet(form,rcpt,ret,brand="FormSorted"):
+def html_pdf(h):
+    """Our own HTML documents (answers, request letters) as plain printable A4. Links become plain text."""
+    h=_re.sub(r"(?is)<(style|script|title|head)[^>]*>.*?</\1>","",h); h=_re.sub(r"(?is)<!doctype[^>]*>|</?(html|body|meta|link)[^>]*>","",h)
+    h=_re.sub(r"(?is)</?(div|section|article|span|small|figure|figcaption|label|code)[^>]*>","",h)
+    h=_re.sub(r"(?is)<pre[^>]*>(.*?)</pre>",lambda m:"<p>"+m.group(1).replace("\n","<br>")+"</p>",h)
+    h=_re.sub(r"(?is)<a\b[^>]*>(.*?)</a>",r"\1",h); h=_re.sub(r"(?i)<(p|h[1-6]|li|ul|ol|em|strong|b|i)\s[^>]*>",r"<\1>",h)
+    p=_Doc(); p.set_margins(18,16,18); p.add_page(); p.set_font("D","",11); p.write_html(h,font_family="D")
+    return bytes(p.output())
+def cover_sheet(form,rcpt,ret,brand="FormSorted",contents=()):
     """2 pages so the form starts on its own sheet when printed double-sided. Page 1 leaves the top-left address-window
-    area empty (Intelliprint prints the recipient address; address_window=left). Page 2: how to send it back."""
-    p=_Doc(); p.add_page(); code=FORM_CODE[form]
-    p.set_y(100); p.set_font("D","B",16); p.multi_cell(0,8,f"Your {code} pack from {brand}",new_x="LMARGIN",new_y="NEXT"); p.ln(3)
-    p.set_font("D","",11)
+    area empty (Intelliprint prints the recipient address; address_window=left): what's in the pack and the exact boxes
+    to sign. Page 2: the step-by-step guide and how to send it back (Freepost label, envelope insert, or DWP's envelope)."""
+    p=_Doc(); p.add_page(); code=FORM_CODE[form]; own=form in OWN_ENVELOPE
+    p.set_y(100); p.set_font("D","B",18); p.multi_cell(0,9,"Sign here and post it back",new_x="LMARGIN",new_y="NEXT")
+    p.set_font("D","",11); p.multi_cell(0,6,f"Your {code} pack from {brand}",new_x="LMARGIN",new_y="NEXT"); p.ln(3)
     hi=f"Dear {rcpt['name']}," if rcpt.get("name") else "Hello,"
-    para=[hi,f"Here is your {FORM_NAME[form]}, filled in from the answers you approved." if form in ("aa","dla") else f"Here are your {FORM_NAME[form]}, made from the answers you approved.",
-          "We have not sent anything to DWP. You check it, sign it and post it yourself."]
-    for t in para: p.multi_cell(0,6,t,new_x="LMARGIN",new_y="NEXT"); p.ln(2)
-    p.set_font("D","B",12); p.cell(0,8,"What to do now",new_x="LMARGIN",new_y="NEXT"); p.set_font("D","",11)
-    if form in ("aa","dla"):
-        steps=[f"Read every page of the {code} form. If anything is wrong, change it in pen.",
-               "Sign and date the declaration at the end of the form. We have left it blank: only you can sign it.",
-               "Add anything we left for you, such as your National Insurance number and bank details if the form asks.",
-               ("Put the form, and any evidence you want to send, in the return envelope in this pack and post it. You do not need a stamp." if ret[0]=="insert" else
-                "Put the form, and any evidence you want to send, in an envelope with the Freepost address on the next page, and post it. You do not need a stamp.")]
-    else:
-        steps=[f"Find the {code} form DWP sent you. It has your own barcode on it, so use that one.",
-               f"In each question box on your {code}, write \"See extra sheet\", or copy the answer in.",
-               "Write your National Insurance number on every extra sheet.",
-               f"Sign and date the declaration on your {code}. Only you can sign it.",
-               f"Post the {code} and these sheets in the envelope DWP sent with your form."]
-    for i,s in enumerate(steps,1): p.multi_cell(0,6,f"{i}.  {s}",new_x="LMARGIN",new_y="NEXT"); p.ln(1)
-    p.ln(2); p.set_font("D","",10)
-    p.multi_cell(0,5,"Keep a copy of everything you send. If DWP asks you about your claim, your answers are also in your documents online.",new_x="LMARGIN",new_y="NEXT")
+    for t in (hi,(f"Here are your extra sheets for the {code} form DWP sent you, made from the answers you approved." if own
+                  else f"Here is your {FORM_NAME[form]}, filled in from the answers you approved."),
+              (f"We have not sent anything to DWP. You copy your answers onto the {code}, sign it in ink and post it yourself." if own
+               else "We have not sent anything to DWP. You check it, sign it in ink and post it yourself.")):
+        p.multi_cell(0,6,t,new_x="LMARGIN",new_y="NEXT"); p.ln(1)
+    p.ln(2); p.set_font("D","B",12); p.cell(0,7,"Sign and date in black ink, by hand, here:",new_x="LMARGIN",new_y="NEXT"); p.set_font("D","",11)
+    for s in psp.SIGN_BOXES[form]: p.multi_cell(0,6,"\u2610  "+s,new_x="LMARGIN",new_y="NEXT"); p.ln(1)
+    p.multi_cell(0,6,"Do not type, paste or e-sign a signature, and do not use correction fluid.",new_x="LMARGIN",new_y="NEXT")
+    if contents:
+        p.ln(3); p.set_font("D","B",12); p.cell(0,7,"In this pack",new_x="LMARGIN",new_y="NEXT"); p.set_font("D","",11)
+        for c in contents: p.multi_cell(0,6,"\u2022  "+c,new_x="LMARGIN",new_y="NEXT")
+        if ret[0]=="insert": p.multi_cell(0,6,f"\u2022  A return envelope addressed to {FREEPOST[form]['address']}",new_x="LMARGIN",new_y="NEXT")
     p.add_page(); kind,val=ret
-    p.set_font("D","B",14); p.cell(0,9,"Sending it back",new_x="LMARGIN",new_y="NEXT"); p.set_font("D","",11)
+    p.set_font("D","B",14); p.cell(0,9,"Step by step",new_x="LMARGIN",new_y="NEXT"); p.set_font("D","",10)
+    steps=[(h,t) for h,t in psp.steps(form) if h not in ("Print it","Print the extra sheets","Post it")]
+    for i,(h,t) in enumerate(steps,1):
+        p.set_font("D","B",10); p.multi_cell(0,5,f"{i}. {h}",new_x="LMARGIN",new_y="NEXT"); p.set_font("D","",10); p.multi_cell(0,5,t,new_x="LMARGIN",new_y="NEXT"); p.ln(1)
+    p.ln(2); p.set_font("D","B",12); p.cell(0,8,"Sending it back",new_x="LMARGIN",new_y="NEXT"); p.set_font("D","",11)
     if kind=="insert":
         p.multi_cell(0,6,f"Use the return envelope in this pack. It is already addressed to {FREEPOST[form]['address']}. You do not need a stamp.",new_x="LMARGIN",new_y="NEXT")
     elif kind=="label":
-        p.multi_cell(0,6,"Put the signed form in an envelope and write only this address on it, or cut out the label below and stick it on. You do not need a postcode or a stamp.",new_x="LMARGIN",new_y="NEXT")
-        p.ln(8); y=p.get_y(); p.set_dash_pattern(dash=2,gap=2); p.rect(30,y,150,40); p.set_dash_pattern()
-        p.set_xy(30,y+14); p.set_font("D","B",16); p.cell(150,10,val,align="C"); p.set_y(y+44); p.set_font("D","",9)
+        p.multi_cell(0,6,"Put the signed form in an envelope and write only this address on it, or cut out the label below and stick it on. Write nothing else on the envelope. You do not need a postcode or a stamp.",new_x="LMARGIN",new_y="NEXT")
+        if p.get_y()>230: p.add_page()
+        p.ln(5); y=p.get_y(); p.set_dash_pattern(dash=2,gap=2); p.rect(30,y,150,36); p.set_dash_pattern()
+        p.set_xy(30,y+12); p.set_font("D","B",16); p.cell(150,10,val,align="C"); p.set_y(y+39); p.set_font("D","",9)
         p.cell(0,5,"Cut along the dotted line",align="C",new_x="LMARGIN",new_y="NEXT")
     elif kind=="own":
-        p.multi_cell(0,6,f"Use the envelope DWP sent you with your {val} form. If you have lost it, phone the PIP enquiry line and ask where to send it.",new_x="LMARGIN",new_y="NEXT")
-    p.ln(6); p.set_font("D","",10)
-    p.multi_cell(0,5,"Post it before your deadline. If you need more time, phone DWP before the deadline and ask.",new_x="LMARGIN",new_y="NEXT")
+        p.multi_cell(0,6,dict(psp.steps(form))["Post it"],new_x="LMARGIN",new_y="NEXT")
     return bytes(p.output())
-def build_pack(form,rcpt,ret,form_pdf,brand="FormSorted"):
-    """Cover sheet (2 pages) + the filled form / extra sheets, as one PDF."""
+def build_pack(form,rcpt,ret,parts,brand="FormSorted"):
+    """Cover sheet (2 pages) + each part [(label, pdf bytes)] in order (form first), as one PDF.
+    Each part starts on a new sheet when printed double-sided."""
     from pypdf import PdfReader, PdfWriter
+    if isinstance(parts,(bytes,bytearray)): parts=[(FORM_NAME[form],parts)]
     w=PdfWriter()
-    for src in (cover_sheet(form,rcpt,ret,brand),form_pdf):
+    for src in [cover_sheet(form,rcpt,ret,brand,[l for l,_ in parts])]+[b for _,b in parts]:
+        if len(w.pages)%2: w.add_blank_page(width=595.28,height=841.89)
         for pg in PdfReader(io.BytesIO(src)).pages: w.add_page(pg)
     b=io.BytesIO(); w.write(b); return b.getvalue()
 
@@ -172,7 +190,7 @@ _LOCKS={}; _LL=threading.Lock()
 def lock(token):
     with _LL: return _LOCKS.setdefault(token,threading.Lock())
 
-def dispatch(c,o,form_pdf,brand="FormSorted",force=False):
+def dispatch(c,o,parts,brand="FormSorted",force=False):
     """Create the print job for one approved Plus order. Returns the job dict saved on the order.
     Never raises: any problem leaves the job as status 'held' with the reason (the caller notifies us)."""
     token=o["token"]; form=o["form"] or "aa"; old=job_of(o) or {}
@@ -186,9 +204,9 @@ def dispatch(c,o,form_pdf,brand="FormSorted",force=False):
     miss=missing_address(rc)
     if miss: return hold("missing "+", ".join(miss)+" in the customer's details")
     if ret[0]=="label" and _env("INTELLIPRINT_REQUIRE_INSERT")=="1": return hold(f"no return-envelope insert configured (INTELLIPRINT_INSERT_{form.upper()})")
-    if not form_pdf: return hold("no filled form PDF to print (pre-fill may be switched off for this form)")
+    if not parts: return hold("no filled form PDF to print (pre-fill may be switched off for this form)")
     try:
-        pdf=build_pack(form,rc,ret,form_pdf,brand)
+        pdf=build_pack(form,rc,ret,parts,brand)
         r=provider().send({"token":token,"form":form,"pdf":pdf,"filename":f"{FORM_CODE[form]}-pack-{token[:8]}.pdf","recipient":rc,
                            "insert":job["insert"],"reference":f"{brand} {token[:8]} {FORM_CODE[form]}"})
     except PrintError as e: return hold(f"{e.kind}: {e}")
@@ -227,15 +245,39 @@ def customer_status(job):
     if s=="returned": return "Came back to us","Your printed pack came back undelivered. We're looking into it and will email you."
     if s in ("held","invalid_address","cancelled"): return "Being checked","We're checking a detail before we post your printed pack. We'll email you. You can still download everything below."
     return None
-def sent_email(brand,public,o,job):
+def _what_to_do(o):
+    f=o["form"] or "aa"
+    if f in OWN_ENVELOPE: return f"copy your answers onto the {FORM_CODE[f]} DWP sent you, sign and date it in black ink in the boxes listed on the cover sheet, and post it with the extra sheets."
+    return "sign and date it in black ink in the boxes listed on the cover sheet, and post it."
+def _how_back(o,job):
     code=FORM_CODE.get(o["form"] or "aa","form"); ret=job.get("return")
-    how={"insert":"Use the return envelope in the pack. You do not need a stamp.","label":"The pack shows the Freepost address to write on the envelope. You do not need a stamp.",
-         "own":f"Post it in the envelope DWP sent with your {code}."}.get(ret,"")
+    return {"insert":"Use the return envelope in the pack. You do not need a stamp.","label":"The pack shows the Freepost address to write on the envelope. You do not need a stamp.",
+            "own":f"Post it in the envelope DWP sent with your {code}."}.get(ret,"")
+def sent_email(brand,public,o,job):
+    code=FORM_CODE.get(o["form"] or "aa","form")
     return (f"{brand}: your {code} pack has been posted",
             f"Your printed {code} pack has been posted to you. It usually arrives in 2 to 3 working days.\n\n"
-            f"When it arrives: read it, sign and date the declaration, and post it back. {how}\n\n"
+            f"When it arrives: check it, then {_what_to_do(o)} {_how_back(o,job)}\n\n"
             f"Your documents are also here: {public}/documents/{o['token']}\nKeep this link private.\n\n{brand}")
+def reminders_due(job,now=None):
+    """Reminder days (5, 10) now due for a posted pack and not yet sent."""
+    if not job or job.get("status") not in ("sent","delivered"): return []
+    t0=job.get("sent_at") or job.get("shipped_date")
+    if not t0: return []
+    now=now or time.time(); done=job.get("reminded") or []
+    return [d for d in REMIND_DAYS if d not in done and now-float(t0)>=d*86400]
+def reminder_email(brand,public,o,job,day):
+    code=FORM_CODE.get(o["form"] or "aa","form")
+    when=time.strftime("%-d %B",time.localtime(float(job.get("sent_at") or job.get("shipped_date") or time.time())))
+    keep=dict(psp.steps(o["form"] or "aa")).get("Keep a copy","")
+    start=(" "+keep.split(". ",1)[1]) if (o["form"] or "aa") in ("aa","dla") and ". " in keep else ""   # same words as the guide
+    return (f"{brand}: have you signed and posted your {code}?",
+            f"We posted your printed {code} pack to you on {when}.\n\nIf you haven't yet: {_what_to_do(o)} {_how_back(o,job)}{start}\n\n"
+            f"If you've already posted it, you can ignore this email.\n\nYour documents: {public}/documents/{o['token']}\nKeep this link private.\n\n{brand}")
 def review_email(public,o,job):
     return (f"Print-and-post held: order {o['token'][:8]} ({o['form']})",
             f"A Plus print-and-post job did not go out and is held for review.\n\nOrder: {o['token'][:8]}\nForm: {o['form']}\nProvider: {job.get('provider')}\n"
             f"Reason: {job.get('error') or job.get('status')}\nAttempt: {job.get('attempts')}\n\nReview it at {public}/admin (Print holds).")
+def submitted(o):
+    """True once the pack has gone to the printer (NI / bank details kept for it can then be deleted)."""
+    j=job_of(o); return bool(j and j.get("print_id") and j.get("status") not in ("held",))

@@ -56,3 +56,16 @@ def html_section(form, filled=True, hand_details=False, h="h2"):
     e=html.escape
     li="".join(f"<li><strong>{e(t)}.</strong> {e(x)}</li>" for t,x in steps(form,filled,hand_details))
     return f"<{h}>Print, sign, post: step by step</{h}><p>If you are printing the form yourself:</p><ol class=steps>{li}</ol>"
+# The exact boxes to sign, for the printed cover sheet ('Sign here and post it back').
+SIGN_BOXES={
+ "aa":["Question 20 on page 9: tick one consent option, then sign and date.",
+       "Question 64 on page 30 (Declaration): sign, date and print the name.",
+       "Signing for someone else? Also tick the reason at question 15 on page 5, and enclose the authority papers."],
+ "dla":["Question 39 on page 12: tick Yes or No, then sign and date.",
+        "Declaration on page 38: sign, print your name and date.",
+        "Every extra sheet at the end of the form: sign and date it."],
+ "pip":["The Declaration on the PIP2 DWP sent you: sign and date it.",
+        "Signing for someone else? Put a cross in the reason in the list next to the Declaration."],
+ "pipr":["Section 1 (Read and sign) on the AR1 DWP sent you: sign the Declaration.",
+         "Section 3: sign under “I have read and understood how DWP uses information”."],
+}

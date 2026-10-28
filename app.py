@@ -142,9 +142,16 @@ def checkout(req:Request, tier:str=Form(...), form:str=Form("aa")):
     token=orders.new_token()
     c.execute("insert into orders(token,tier,status,created,form,ip) values(?,?,?,?,?,?)",(token,tier,"free",time.time(),form,ip)); c.commit()
     return RedirectResponse(f"/start/{token}",303)
+def post_addon_pence(o):
+    """Price of 'Post it to me to sign' for this order: 0 for Plus (included), POST_ADDON_PENCE (default 999) for Done for you."""
+    return 0 if is_premium(o["tier"]) else printmail.ADDON_PENCE
 def stripe_session(o):
     form=o["form"] or "aa"; name,price,_=tier_info(form,o["tier"]); token=o["token"]
-    return stripe("POST","/checkout/sessions",{"mode":"payment","line_items[0][quantity]":1,"line_items[0][price_data][currency]":"gbp",
+    extra={}
+    if o["post_pack"] and post_addon_pence(o):   # optional add-on, an inline line item (no Stripe product or price is created)
+        extra={"line_items[1][quantity]":1,"line_items[1][price_data][currency]":"gbp","line_items[1][price_data][unit_amount]":post_addon_pence(o),
+               "line_items[1][price_data][product_data][name]":"Post it to me to sign: printed pack posted to you"}
+    return stripe("POST","/checkout/sessions",{**extra,"mode":"payment","line_items[0][quantity]":1,"line_items[0][price_data][currency]":"gbp",
       "line_items[0][price_data][unit_amount]":price,"line_items[0][price_data][product_data][name]":f"{FORMS[form]['name']}: {name}",
       "client_reference_id":token,"adaptive_pricing[enabled]":"false","locale":"en-GB","allow_promotion_codes":"true","customer_creation":"always","consent_collection[terms_of_service]":"required",
       "success_url":f"{PUBLIC}/success?session_id={{CHECKOUT_SESSION_ID}}","cancel_url":f"{PUBLIC}/preview/{token}"})
@@ -164,15 +171,29 @@ def preview(token:str):
 <p class=lede><strong>We fill in the whole official form for you. You just check it, sign it and post it.</strong> Pay once and we write every section from what you tapped, check each one against what you told us, and you approve it before anything is final.</p>
 <figure class=lockprev><img src="/static/preview-placeholder.svg" alt="Example illustration of a filled-in form (not your answers)" width=520 height=360><figcaption>Illustration only. Your own answers appear after payment.</figcaption></figure>
 <ul class=ticks>{''.join(f'<li>{x}</li>' for x in facts)}</ul>
-<div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
-<form method=post action=/pay/{token}>{KEEP_OPT if is_premium(o["tier"]) else ""}<label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
-<button class="btn btn-wide">Pay £{p//100} to get your completed form</button></form>{TRUST}{f'<p class=change><a href="/intake/{token}?s=about">Change my answers</a></p>' if o["intake"] else ''}
+<div class=total><span>{esc(n)}</span><strong id=tot data-base={p}>£{p//100}</strong></div>
+<form method=post action=/pay/{token}>{post_choice(o)}{KEEP_OPT if is_premium(o["tier"]) else ""}<label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
+<button class="btn btn-wide" id=paybtn>Pay £{p//100} to get your completed form</button></form>{POST_JS if (can_post(o) and post_addon_pence(o)) else ""}{TRUST}{f'<p class=change><a href="/intake/{token}?s=about">Change my answers</a></p>' if o["intake"] else ''}
 <p class=hint>One-off fee. No success fee. If you don't pay, we delete everything you told us after 7 days.</p><p class=hint>{esc(DWP_LINE)}</p></div>""","Your form is ready",minimal=True)
 KEEP_OPT="<label class=cb><input type=checkbox name=keep value=1><span>Keep my answers for 3 years, so you can help with a reconsideration or my renewal without asking again. I can delete them at any time. (Optional. Without this we delete them after 90 days.)</span></label>"
 THREE_YEARS=3*365*86400
+def money(pence): return f"£{pence//100}" if pence%100==0 else f"£{pence/100:.2f}"
+def post_choice(o):
+    """'Post it to me to sign': a choice on every Done for you order (download is always included). Plus: included.
+    Done for you: optional paid add-on. Never pre-ticked. Only shown when print-and-post is switched on."""
+    if not can_post(o): return ""
+    form=o["form"] or "aa"; own=form in printmail.OWN_ENVELOPE; fee=post_addon_pence(o)
+    what=(f"We print your extra sheets and post them to you, to copy onto the {printmail.FORM_CODE[form]} DWP sent you." if own
+          else "We print your completed form and post it to you, with "+("a Freepost return envelope." if printmail.return_envelope(form)[0]=="insert" else "the Freepost address to send it back to."))
+    return (f"<label class=cb><input type=checkbox name=post value=1 id=post_cb data-add={fee}><span><strong>Post it to me to sign ({'included' if not fee else '+'+money(fee)})</strong>. "
+            f"{what} You sign it and send it yourself. You can download it either way. (Optional.)</span></label>")
+POST_JS="""<script>(function(){var c=document.getElementById('post_cb'),t=document.getElementById('tot'),b=document.getElementById('paybtn');if(!c||!t)return;var base=+t.dataset.base,add=+c.dataset.add;
+function f(p){return '£'+(p%100?(p/100).toFixed(2):p/100)}c.addEventListener('change',function(){var p=base+(c.checked?add:0);t.textContent=f(p);if(b)b.textContent='Pay '+f(p)+' to get your completed form'})})();</script>"""
 @app.post("/pay/{token}")
-def pay(token:str, waive:str=Form(...), keep:str=Form("")):
+def pay(token:str, waive:str=Form(...), keep:str=Form(""), post:str=Form("")):
     o=ready(token,paid=False)
+    if o["status"]!="paid" and o["form"]!="bb":   # 'Post it to me to sign' is set on each attempt (unticked = download only)
+        c0=db(); c0.execute("update orders set post_pack=? where token=?",(1 if (post and can_post(o)) else 0,token)); c0.commit(); o=get(token)
     if keep and is_premium(o["tier"]) and o["status"]!="paid": c0=db(); c0.execute("update orders set keep_until=? where token=?",(time.time()+THREE_YEARS,token)); c0.commit()
     if o["status"]=="paid": return RedirectResponse(f"/start/{token}",303)
     if not o["interview_done_at"]: return RedirectResponse(chat_url(o),303)
@@ -519,7 +540,7 @@ def download(token:str,name:str):
         sv=SECURE.get(token)
         if sv:
             data=fill_pdf.overlay(o["form"],data,*SECURE.fields(o["form"],sv))
-            if not o["post_pack"]:
+            if not o["post_pack"] or printmail.submitted(o):
                 from starlette.background import BackgroundTask
                 bg=BackgroundTask(SECURE.wipe,token)   # downloaded: delete them now
     ct={"html":"text/html; charset=utf-8","txt":"text/plain; charset=utf-8","pdf":"application/pdf","docx":"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}[name.rsplit(".",1)[1]]
@@ -546,11 +567,16 @@ def detail_fields(form):
     return DETAIL_FIELDS+(DLA_EXTRA if form=="dla" else [])
 import re as _re
 NI_RE=_re.compile(r"^[A-CEGHJ-PR-TW-Z]{2}\d{6}[A-D]$")
-def post_opt(form):
-    """Plus: printing and posting is on by default (they can untick it). Shown only when print-and-post is switched on."""
-    back="the envelope DWP sent with your form" if form in printmail.OWN_ENVELOPE else ("a return envelope" if printmail.return_envelope(form)[0]=="insert" else "the Freepost address to send it back to")
-    return f"<label class=cb><input type=checkbox name=post_pack value=1 checked><span>Print and post my {'extra sheets' if form in printmail.OWN_ENVELOPE else 'filled-in form'} to the address above, with {back}. You still check, sign and post it yourself.</span></label>"
-def can_post(o): return is_premium(o["tier"]) and printmail.live() and (o["form"] or "aa") in printmail.FORMS_POSTED
+def post_opt(o):
+    """Details step. Posting chosen at checkout: say where it goes. Plus without it: they can still choose it (included, unticked).
+    Done for you without the add-on: nothing (they download). Shown only when print-and-post is switched on."""
+    if not can_post(o): return ""
+    form=o["form"] or "aa"; code=printmail.FORM_CODE[form]
+    if o["post_pack"]: return f"<div class=panel><p><strong>Post it to me to sign:</strong> we will post your printed {code} pack to the address {'above' if not is_wf(o) else 'on your form'}. You can also download it.</p></div>"
+    if not is_premium(o["tier"]): return ""
+    return f"<label class=cb><input type=checkbox name=post_pack value=1><span>Post it to me to sign (included): print my {code} pack and post it to the address {'above' if not is_wf(o) else 'on my form'}. You can download it either way. (Optional.)</span></label>"
+def can_post(o): return is_full(o["tier"]) and printmail.live() and (o["form"] or "aa") in printmail.FORMS_POSTED
+SKIP_DETAILS="""<form method=post action=/details/{token}><input type=hidden name=skip value=1><button class="btn btn-2">Skip. I'll write my details in by hand</button></form>"""
 @app.get("/details/{token}")
 def details_page(token:str, err:str=""):
     o=ready(token)
@@ -563,8 +589,8 @@ def details_page(token:str, err:str=""):
     who="the child" if form=="dla" else "the person claiming"
     rows="".join(f"""<div class=field><label class=q for=d_{k}>{esc(l)}</label><input id=d_{k} name={k} {'type='+t if t else ''} value="{esc(p.get(k,''))}" {'required' if req else ''} autocomplete=off></div>""" for k,l,t,req in detail_fields(form))
     return page(prog(8)+f"""<h1>Your details</h1><p class=lead>We add these to your documents{'' if form=='atw' else f' for {who}'} so you have less to fill in by hand. We only ask now, at the end, so we don't keep them longer than needed.</p>
-{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{post_opt(form) if can_post(o) else ""}<button class=btn>Save and make my documents</button></form>
-<form method=post action=/details/{token}><input type=hidden name=skip value=1><button class="btn btn-2">Skip. I'll write my details in by hand</button></form>
+{f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{post_opt(o)}<button class=btn>Save and make my documents</button></form>
+{'' if (o["post_pack"] and can_post(o)) else SKIP_DETAILS.format(token=token)}
 <p class=small>We delete everything 90 days after your order, or now: <a href=/delete/{token}>delete my information</a>.</p>""","Your details")
 @app.post("/details/{token}")
 async def details_save(token:str, req:Request):
@@ -584,11 +610,12 @@ async def details_save(token:str, req:Request):
             if need and not v: missing=True
             if v: p[k]=v
         if missing: return back("Please fill in every required box, or choose Skip.")
-    c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),1 if (fm.get("post_pack") and can_post(o) and not fm.get("skip")) else 0,token)); c.commit()
+    pp=1 if (can_post(o) and not fm.get("skip") and (o["post_pack"] or (fm.get("post_pack") and is_premium(o["tier"])))) else 0
+    c=db(); c.execute("update orders set personal=?, details_at=?, post_pack=? where token=?",(json.dumps(p),time.time(),pp,token)); c.commit()
     if p and await run_in_threadpool(check_hold,token,"details"):   # names known now: check again before documents are made
         c.execute("update orders set details_at=null where token=?",(token,)); c.commit(); return RedirectResponse(f"/hold/{token}",303)
     o=get(token); files=await run_in_threadpool(build_files,token,o,json.loads(o["draft"]))
-    if o["post_pack"]: start_print(token)   # Plus: print and post automatically once the final form is approved and built
+    if o["post_pack"]: start_print(token)   # 'Post it to me to sign': print and post once the final form is approved and built
     return RedirectResponse(f"/documents/{token}",303)
 
 # ---------- Whole-form orders: NI numbers and bank details, for the PDF only ----------
@@ -615,11 +642,13 @@ def private_page(o, err=""):
     again="<div class=panel><p>For your safety we deleted these details after your download. Type them again to download another filled-in copy.</p></div>" if o["details_at"] else ""
     return page(prog(8,"Last details")+f"""<h1>Last details for the form</h1><p class=lead>The form asks for a National Insurance number and the account to pay into. We write them onto your form and nowhere else.</p>
 <div class=panel><p><strong>How we keep these safe:</strong> we never save them with your answers and never email them. They are held encrypted only until you download your form{', or until we post it' if o['post_pack'] else ''}, then deleted.</p></div>{again}
-{f'<div class=warning role=alert>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{other}<button class=btn>Make my form</button></form>
+{f'<div class=warning role=alert>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{other}{post_opt(o)}<button class=btn>Make my form</button></form>
 <form method=post action=/details/{token}><input type=hidden name=skip value=1><button class="btn btn-2">Skip. I'll write these in by hand</button></form>
 <p class=small>We delete everything 90 days after your order, or now: <a href=/delete/{token}>delete my information</a>.</p>""","Last details",minimal=True)
 async def private_save(o, fm):
     token=o["token"]; form=o["form"]; sv={}
+    if fm.get("post_pack") and can_post(o) and is_premium(o["tier"]) and not o["post_pack"]:   # Plus chose posting here
+        c0=db(); c0.execute("update orders set post_pack=1 where token=?",(token,)); c0.commit(); o=get(token)
     if not fm.get("skip"):
         for k,l,h,kind,req in _priv_fields(o):
             raw=str(fm.get(k,"")).strip()[:60]
@@ -637,22 +666,41 @@ async def private_save(o, fm):
     if await run_in_threadpool(check_hold,token,"details"):
         c.execute("update orders set details_at=null where token=?",(token,)); c.commit(); SECURE.wipe(token); return RedirectResponse(f"/hold/{token}",303)
     o=get(token); await run_in_threadpool(build_files,token,o,json.loads(o["draft"]))
+    if o["post_pack"] and can_post(o): start_print(token)
     return RedirectResponse(f"/documents/{token}",303)
 @app.get("/api/lookup/postcode")
 def lookup_postcode(pc:str=""):
     """Town for a UK postcode (postcodes.io: free, no sign-up). Typed address always works if this is down."""
     r=WF.postcode(pc); return {"ok":bool(r),**(r or {})}
 # ---------- Print and post (Plus). printmail.py; OFF unless PRINT_MAIL_ENABLED=1 ----------
-def _print_form_pdf(o):
-    form=o["form"] or "aa"; F=FORMS[form]
+def _print_parts(o):
+    """[(label, pdf)] for the printed pack: the filled form (PIP2/AR1: our extra sheets only), a copy of their answers,
+    the supporter note and the request letters where the order has them. [] if there is no form to print."""
+    form=o["form"] or "aa"; F=FORMS[form]; t=o["token"]; files=pack_files(o); code=printmail.FORM_CODE[form]
     name="PIP-extra-sheets.pdf" if form in printmail.OWN_ENVELOPE else F.get("pdf_out")
-    return store.read(o["token"],name) if name and name in pack_files(o) else None
+    main=store.read(t,name) if name and name in files else None
+    if not main: return []
+    if is_wf(o) and name==F.get("pdf_out"):
+        sv=SECURE.get(t)
+        if sv: main=fill_pdf.overlay(form,main,*SECURE.fields(form,sv))
+    parts=[(f"Extra sheets for the {code} DWP sent you" if form in printmail.OWN_ENVELOPE else f"Your filled-in {code}",main)]
+    def add(label,fn,html=False):
+        if fn not in files: return
+        b=store.read(t,fn)
+        if not b: return
+        try: parts.append((label,printmail.html_pdf(b.decode("utf-8","replace")) if html else b))
+        except Exception as e: print("print part skipped",fn,str(e)[:120],flush=True)
+    add("Your copy of your answers","answers.html",html=True)
+    add("A note for the person filling in the supporter statement","Note-for-supporter.pdf")
+    add("Request letters for your GP, carer, school or family","supporting-letters.html",html=True)
+    return parts
 def print_now(token,force=False):
     """Create the print job (idempotent per order) and send the emails that go with the result."""
     with printmail.lock(token):
         o=get(token)
         if not o["post_pack"] or FRAUD.held(o) or o["status"]!="paid": return None
-        job=printmail.dispatch(db(),o,_print_form_pdf(o),BRAND,force=force); print("print job",token[:6],job.get("status"),job.get("print_id"),flush=True)
+        job=printmail.dispatch(db(),o,_print_parts(o),BRAND,force=force); print("print job",token[:6],job.get("status"),job.get("print_id"),flush=True)
+        if printmail.submitted(get(token)): SECURE.wipe(token)   # NI / bank details were only kept for the print
         if job.get("status")=="held": _mail_review(*printmail.review_email(PUBLIC,o,job))
         elif job.get("status") in ("sent","delivered"): _print_event(get(token),job,"sent")
         return job
@@ -709,7 +757,18 @@ def cron_print_status(req:Request):
     for r in db().execute("select token, print_job from orders where print_job is not null and status='paid'").fetchall():
         j=printmail.job_of(r)
         if j and j.get("print_id") and j.get("status") in printmail.IN_PROGRESS+("sent",): _quiet(print_refresh,r["token"]); n+=1
-    return {"ok":True,"checked":n}
+    return {"ok":True,"checked":n,"reminded":_quiet(print_reminders) or 0}
+def print_reminders(now=None):
+    """Day 5 and day 10 after the pack was posted: one reminder email each (only while print-and-post is live)."""
+    if not printmail.live(): return 0
+    n=0
+    for r in db().execute("select token from orders where print_job is not null and status='paid' and email is not null").fetchall():
+        with printmail.lock(r["token"]):
+            o=get(r["token"]); j=printmail.job_of(o); due=printmail.reminders_due(j,now)
+            if not due: continue
+            j["reminded"]=sorted(set((j.get("reminded") or [])+due)); printmail.save_job(db(),o["token"],j)
+        _mail_customer(o,*printmail.reminder_email(BRAND,PUBLIC,o,j,max(due))); n+=1
+    return n
 
 # ---------- Intake v3: tap-first questions (AA1, DLA1A, PIP2) ----------
 def _intake_order(token):
@@ -1431,7 +1490,7 @@ def bb_preview(o):
     token=o["token"]; n,p,_=tier_info("bb",o["tier"]); d=bb_data(o); k=len(BB.answers(d))
     return page(bbprog(4)+f"""<div class=summary><p class=caption>Your answers are saved</p><h1>Your Blue Badge answers are ready to prepare</h1>
 <ul class=ticks><li>{k} answers to write up for the online application</li>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS[1:4])}</ul>
-<div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div>
+<div class=total><span>{esc(n)}</span><strong id=tot data-base={p}>£{p//100}</strong></div>
 <form method=post action=/pay/{token}><label class=cb><input type=checkbox name=waive required><span>Please prepare my answers straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
 <button class="btn btn-wide">Pay £{p//100} to get your answers</button></form>{BB_TRUST}<p class=change><a href="/bb/{token}">Change my answers</a></p>
 <p class=hint>{esc(BB.NOT_ELIG)}</p><p class=hint>If you don't pay, we delete everything you told us after 7 days.</p></div>""","Your Blue Badge answers",minimal=True)
