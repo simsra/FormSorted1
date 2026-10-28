@@ -25,7 +25,7 @@ def build_values(personal, draft):
     for c,fs in zip(draft.get("conditions",[]),CONDITION_FIELDS):
         for key,f in zip(("name","since","meds","dose"),fs):
             if c.get(key): v[f]=c[key]
-    # Q49 (box 344) is the supporter's own statement: never our words. It is left blank; a note goes with the pack.
+    # Q56 (box 344, page 28 of the AA1 11/25) is the supporter's own statement: never our words. It is left blank; a note goes with the pack.
     return v
 AA_LABELS={f:f"Question {q} ({t})" for q,t,_,f in CARE_QUESTIONS}
 def fill(personal, draft, out_path, ticks=None, extra=None):
@@ -48,6 +48,10 @@ def _write(form, values, personal, out_path, ticks=None, extra=None):
     import io, ticks as T, contsheet
     pdf={"aa":"aa1.pdf","dla":"dla1a.pdf"}[form]; ov,ovl=OVERFLOW[form]
     values,xticks=merge_extra(form,values,extra)
+    if form=="aa" and not values.get("34-4") and values.get("34-1"):
+        tk={**(xticks or {}),**(T.validate(form,ticks) if ticks else {})}
+        if tk.get("x34-3")=="/Yes":   # 'help to get up after a fall' is Yes: its box is never left empty when we have the fall answer
+            values["34-4"]="Please see my answer about what happens when I fall or stumble, above."
     vals,spill=fit(values,pdf,ov,AA_LABELS if form=="aa" else DLA_LABELS,ovl)
     r=PdfReader(os.path.join(HERE,pdf))
     if r.is_encrypted: r.decrypt("")

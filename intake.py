@@ -231,7 +231,7 @@ def _rowtext(form,r,v,d):
         bits.append(t)
         fx=[FX_T[x] for x in v.get("c",[]) if x in FX_T]
         if fx: bits.append("; ".join(fx))
-        if _ok(v.get("days")): bits.append(f"like this {v['days']} days a week")
+        if _ok(v.get("days")): bits.append(f"on {v['days']} days a week")
     if v.get("hard") and not lv: bits.append("I find this hard" if me else f"{who} finds this hard")
     if v.get("help") and not lv: bits.append("I need help or reminding" if me else "needs help or reminding")
     cm={c[0]:c[1] for c in chips}; cs=[cm[x] for x in v.get("c",[]) if x in cm]
@@ -332,6 +332,105 @@ def history(form,d):
     intro,T=topic_texts(form,d); h=[{"role":"assistant","content":"About the claim"},{"role":"user","content":intro or "(No details given.)"}]
     for t,l,_ in FORMS[form]["topics"]: h+=[{"role":"assistant","content":l},{"role":"user","content":T.get(t) or "Nothing selected for this."}]
     return h
+# ---------- plain sentences straight from the taps (used when the drafter can't be reached, and in local MOCK runs) ----------
+# Every sentence below is a rewording of one tapped answer; nothing is added. The answer check still runs on the result.
+FX_S={"every":("I need help every time.","{w} needs help every time."),
+ "long":("It takes me at least twice as long as normal.","It takes {w} at least twice as long as normal."),
+ "rest":("I have to stop and rest.","{w} has to stop and rest."),
+ "pain":("I have pain or exhaustion afterwards.","{w} has pain or exhaustion afterwards."),
+ "wrong":("I have had a fall or near-miss doing it.","{w} has had a fall or near-miss doing it."),
+ "half":("The result is not good enough (half-done or not clean).","The result is not good enough (half-done or not clean)."),
+ "prompt":("I need reminding, encouraging or watching.","{w} needs reminding, encouraging or watching."),
+ "aid":("I use an aid for it, at least sometimes.","{w} uses an aid for it, at least sometimes."),
+ "nobody":("There is nobody there to help, so it goes without.","There is nobody there to help, so it goes without."),
+ "std_safe":("It is not safe for me to do it alone.","It is not safe for {w} to do it alone."),
+ "burn":("I have had burns, cuts or near-misses doing it.","{w} has had burns, cuts or near-misses doing it.")}
+def _who(d,form):
+    me=is_me(d,form); w=name(d,form)
+    if w in ("you","them","your child"): w={"you":"I","them":"The person I help","your child":"My child"}[w]
+    return me,("I" if me else w)
+def _v3(me,first,third): return first if me else third   # verb for 'I' vs a named person
+def _rowprose(form,r,v,d):
+    rid,topic,label,gate,chips=r; me,w=_who(d,form); lab=label[0].lower()+label[1:]; out=[]
+    if v.get("lvl")=="ok": return ""
+    lv=v.get("lvl")
+    if lab.startswith("needs "): lab=lab[6:]; lv_needs=True   # e.g. DLA 'Needs watching during the day'
+    else: lv_needs=False
+    if lv_needs and lv: out.append(f"{w} {_v3(me,'need','needs')} {lab}.")
+    elif lv=="help": out.append(f"{w} {_v3(me,'need','needs')} help, prompting or watching with {lab}.")
+    elif lv=="slow": out.append(f"{w} {_v3(me,'manage','manages')} {lab}, but it is slow, painful or tiring.")
+    elif lv=="cant": out.append(f"{w} can't manage {lab}, or it isn't safe for {_v3(me,'me','them')} to.")
+    else:
+        if v.get("hard"): out.append(f"{w} {_v3(me,'find','finds')} {lab} hard.")
+        if v.get("help"): out.append(f"{w} {_v3(me,'need','needs')} help or reminding with {lab}.")
+    for x in v.get("c",[]):
+        if x in FX_S: out.append(FX_S[x][0 if me else 1].format(w=w))
+    cm={c[0]:c[1] for c in chips}; cs=[cm[x][0].lower()+cm[x][1:] for x in v.get("c",[]) if x in cm]
+    if cs: out.append(f"{w} {_v3(me,'have','has')} difficulty with: "+"; ".join(cs)+".")
+    if v.get("x"): out.append("Also: "+v["x"].rstrip(".")+".")
+    sm=dict(PIP_STD); st=[sm[x].lower() for x in v.get("std",[]) if x in sm]
+    if st: out.append("It can only be done: "+", ".join(st)+".")
+    if lv and _ok(v.get("days")): out.append(f"This happens {v['days']} days a week.")
+    if _ok(v.get("freq")) and FREQ_T.get(v["freq"]): out.append("This happens "+FREQ_T[v["freq"]].lower()+".")
+    if TIME_T.get(v.get("time","")): out.append("Each time takes "+TIME_T[v["time"]]+".")
+    t=" ".join(out)
+    if me: t=re.sub(r"\bthemselves\b","myself",re.sub(r"\bthey don't\b","I don't",t))
+    return t
+def _conj(items,me):
+    """'gets confused, may wander, not aware of dangers, has ...' -> verbs that match the subject."""
+    out=[]
+    for x in items.split(", "):
+        if x.startswith("not "): x=("am " if me else "is ")+x
+        elif me and x.startswith("gets "): x="get "+x[5:]
+        elif me and x.startswith("has "): x="have "+x[4:]
+        out.append(x)
+    return ", ".join(out)
+def _polish(t,me,w):
+    """Turn the short tapped lines used for the transcript into sentences (same facts, same words where possible)."""
+    obj=_v3(me,"me","them"); S=lambda a,b:_v3(me,a,b)
+    R=[(r"\bNo falls in the last year\.",f"{w} {S('have','has')} had no falls in the last year."),
+       (r"\b(1 to 2|3 to 5|6 or more) falls in the last year\.",lambda m:f"{w} {S('have','has')} had {m[1]} falls in the last year."),
+       (r"\bLast fall: ([^.]+)\.",lambda m:f"{S('My','The')} last fall was {m[1]}."),
+       (r"\bCan't get up after a fall without help\.",f"{w} can't get up after a fall without help."),
+       (r"\bHas been hurt or gone to hospital after a fall\.",f"{w} {S('have','has')} been hurt or gone to hospital after a fall."),
+       (r"\bReferred to a falls clinic\.",f"{w} {S('have','has')} been referred to a falls clinic."),
+       (r"\bHas a pendant alarm\.",f"{w} {S('have','has')} a pendant alarm."),
+       (r"\bNeeds someone to keep an eye on them: ([^.]+)\.",lambda m:f"Someone needs to keep an eye on {_v3(me,'me',w)} during the day, because {w} "+_conj(m[1],me)+"."),
+       (r"\bPeople who know them well: ",f"People who know {obj} well: "),(r"\bOther people who know them well: ",f"Other people who know {obj} well: "),
+       (r"\bBad days: about (\S+) a week\.",lambda m:f"{w} {S('have','has')} bad days about {m[1]} a week."),
+       (r"\bNeeds change a lot from day to day\.",f"{S('My','Their') if w in ('I','My child') else w+chr(39)+'s'} needs change a lot from day to day."),
+       (r"\bNeeds are mostly the same each day\.",f"{S('My','Their') if w in ('I','My child') else w+chr(39)+'s'} needs are mostly the same each day."),
+       (r"\bFits or seizures: ([^.]+)\.",lambda m:f"{w} {S('have','has')} fits or seizures {m[1]}."),
+       (r"\bCan (only )?be left alone",lambda m:f"{w} can {m[1] or ''}be left alone"),(r"\bCan't be left alone",f"{w} can't be left alone"),
+       (r"\bHelp at night with: ",f"{w} {S('need','needs')} help at night with: "),
+       (r"(?<=\. )(\d+|6\+) nights a week\. (\d+|6\+) times a night\.",lambda m:f"This is {m[1]} nights a week, {m[2]} times a night."),
+       (r"(?<=\. )(\d+|6\+) nights a week\.",lambda m:f"This is {m[1]} nights a week."),(r"(?<=\. )(\d+|6\+) times a night\.",lambda m:f"This is {m[1]} times a night."),
+       (r"\bwatch over them\b",f"watch over {obj if me else w}"),
+       (r"\bNeeds help with care (\d) days a week\.",lambda m:f"{w} {S('need','needs')} help with care {m[1]} days a week."),
+       (r"\bAids used: ",f"Aids {S('I use','used')}: "),(r"\bOther aids used: ","Other aids: "),
+       (r"\bKeeping an eye on them, also: ","Keeping an eye on "+obj+", also: "),
+       (r"\bIn my own words: ","In my own words: ")]
+    for a,b in R: t=re.sub(a,b,t)
+    return " ".join(t.split())
+def fallback_draft(form,d):
+    """A complete, grounded draft from the taps alone: no AI. Same shape as llm.draft()."""
+    from forms import FORMS
+    me,w=_who(d,form); T={t:[] for t,_,_ in FORMS[form]["topics"]}; intro,raw=topic_texts(form,d)
+    rowtopics={}
+    for r in rows(form,None,d):
+        v=(d.get("rows") or {}).get(r[0]); p=_rowprose(form,r,v,d) if v else ""
+        if p: T[r[1]].append(p)
+        rowtopics.setdefault(r[1],[]).append(_rowtext(form,r,v,d) if v else "")
+    for t,txt in raw.items():   # the rest of each topic's text (everything that isn't a task row), as sentences
+        rest=txt
+        for rt in rowtopics.get(t,[]):
+            if rt: rest=rest.replace(rt,"",1)
+        rest=" ".join(rest.split())
+        if rest: T[t].append(_polish(rest,me,w))
+    ans={t:" ".join(v).strip() for t,v in T.items()}
+    tick_yes=[t for t,a in ans.items() if a and t.isdigit()] if form=="aa" else []
+    return {"answers":ans,"sources":{t:[raw[t]] for t in ans if raw.get(t)},"tick_yes":tick_yes,"conditions":[],"extra":{},
+            "checklist":[],"notes_for_user":[],"gp_letter":"","carer_statement":"","drafted_from":"taps"}
 def coverage(form,d):
     from forms import FORMS
     _,T=topic_texts(form,d); tops=FORMS[form]["topics"]; return sum(1 for t,_,_ in tops if T.get(t)),len(tops)
@@ -402,6 +501,14 @@ def extra(form,d):
         if d.get("falls") in ("1-2","3-5","6+"): e["falls_year"]=d["falls"].replace("-"," to ")
         lf={"week":"This week","month":"This month","months":"In the last 6 months","year":"Over 6 months ago"}.get(d.get("lastfall"))
         if lf: e["last_fell"]=lf
+        fx=d.get("fallx") or []
+        if "getup" in fx:   # x34-3 'Do you need help to get up after a fall?' is ticked Yes from this tap: its 'Tell us about this' box
+            me,w=_who(d,"aa"); S=lambda a,b:_v3(me,a,b)
+            fd=[f"{w} can't get up after a fall without help."]
+            if "alarm" in fx: fd.append(f"{w} {S('have','has')} a pendant alarm.")
+            if "hurt" in fx: fd.append(f"{w} {S('have','has')} been hurt or gone to hospital after a fall.")
+            if X(d,"fallx"): fd.append("Also: "+X(d,"fallx").rstrip(".")+".")
+            e["fall_detail"]=" ".join(fd)
         al={"hours":"A few hours","lt1":"Less than an hour","never":"Not at all"}.get(d.get("alone"))
         if al: e["safe_alone"]=al
     if form=="dla":

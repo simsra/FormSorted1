@@ -825,10 +825,23 @@ def I_EV(form):
     try:
         import evidence as E; return E.options(form)
     except Exception: return []
+# The statement box for the person who knows them: (question number printed on the form, PDF field name prefix).
+# Pages are read from the form's field map, so a new form version moves them automatically; test_statement_ref.py
+# checks the question number is still printed on those pages of the current PDF (AA1 11/25: Q56 p28; DLA1A 10/25: Q38 pp10-11).
+STATEMENT={"aa":("56",("344",)),"dla":("38",("38_",))}
+def statement_pages(form):
+    import os
+    qn,pre=STATEMENT[form]
+    fm=json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),{"aa":"aa1_fields.json","dla":"dla1a_fields.json"}[form])))
+    return sorted({x["page"] for x in fm if any(x["name"]==p or (p.endswith("_") and x["name"].startswith(p)) for p in pre)})
+def statement_ref(form):
+    qn,_=STATEMENT[form]; pg=statement_pages(form)
+    where=f"page {pg[0]}" if len(pg)==1 else "pages "+", ".join(map(str,pg[:-1]))+f" and {pg[-1]}"
+    return f"question {qn} ({where})"
 def statement_note(form,d,personal):
     """Plain note for the person who knows them: what the statement box is for. Never our wording in their box."""
     w=d.get("wf") or {}; who=w.get("stmt_name") or {"family":"the family member","friend":"the friend","carer":"the carer","prof":"the professional"}.get(w.get("stmt"),"someone who knows them well")
     claimant=" ".join(x for x in (personal.get("other_names"),personal.get("surname")) if x) or ("your child" if form=="dla" else "the person claiming")
-    q="question 49 (page 28)" if form=="aa" else "question 38 (pages 10 and 11)"
+    q=statement_ref(form)
     R=d.get("rows") or {}; topics=[r[2].lower() for r in I.rows(form,None,d) if R.get(r[0]) and R[r[0]].get("lvl")!="ok"]
     return who,claimant,q,topics

@@ -271,7 +271,16 @@ def _draft_now(token):
     if o["draft"]: return
     h=json.loads(o["history"]); I=json.loads(o["intake"] or "{}")
     # Oct 2026: document text is NOT fed to the drafter. Only facts the customer confirmed on /confirm are in the history.
-    t=time.time(); d=llm.draft(h,o["form"] or "aa"); d.setdefault("answers",{}); print(f"timing draft {o['form']} {time.time()-t:.1f}s",flush=True)
+    t=time.time(); form=o["form"] or "aa"; taps=bool(I.get("rows")) and form in INTAKE.FORMS_V3
+    if taps and llm.MOCK: d=INTAKE.fallback_draft(form,I)   # local runs: sentences from the taps (the sample case is someone else's story)
+    else:
+        try: d=llm.draft(h,form)
+        except Exception as e:
+            if not taps: raise
+            # 28 Oct: if every drafting model fails, a tap order still gets plain sentences made only from its taps.
+            # The answer check (grounding) still runs on them before the customer approves.
+            print("draft fell back to taps",form,str(e)[:200],flush=True); d=INTAKE.fallback_draft(form,I)
+    d.setdefault("answers",{}); print(f"timing draft {form} {time.time()-t:.1f}s{' (taps)' if d.get('drafted_from')=='taps' else ''}",flush=True)
     if I: merge_intake(o["form"] or "aa",d,I)
     c=db(); c.execute("update orders set draft=?, approved_at=null where token=? and draft is null",(json.dumps(d),token)); c.commit()
 def _job(token):

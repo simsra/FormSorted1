@@ -20,4 +20,4 @@ FRAUD_MAX_NAMES=2 FRAUD_SIMILAR=0.9 FRAUD_MAX_REFUSED=1 SQLITE_PATH=$EV/orders.d
 WF=${LOGDIR:-/tmp}/wf-test; rm -rf $WF; mkdir -p $WF   # whole-form flow: own SQLite + files, never a remote DB or bucket
 DATABASE_URL= SUPABASE_URL= WHOLE_FORM=1 WF_LOOKUPS=0 SQLITE_PATH=$WF/orders.db OUT_DIR=$WF/out MAIL_LOG=$WF/mail.log $PY/uvicorn app:app --port ${PORT_WF:-8036} >$WF/server.log 2>&1 & X=$!; sleep 3
 DATABASE_URL= SQLITE_PATH=$WF/orders.db OUT_DIR=$WF/out MAIL_LOG=$WF/mail.log WF_COVERAGE=$WF/coverage.json $PY/python test_wholeform.py http://localhost:${PORT_WF:-8036} $WF/orders.db $WF/server.log || R=1; kill $X
-$PY/python test_prefill.py || R=1; $PY/python test_strength.py || R=1; $PY/python test_fill_gaps.py || R=1; exit $R
+$PY/python test_prefill.py || R=1; $PY/python test_strength.py || R=1; $PY/python test_fill_gaps.py || R=1; $PY/python test_statement_ref.py || R=1; DATABASE_URL= SUPABASE_URL= $PY/python test_fallback.py || R=1; exit $R
