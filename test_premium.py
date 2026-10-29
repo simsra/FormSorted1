@@ -19,7 +19,7 @@ body=lambda p: req(p).read().decode(); loc=lambda r: r.headers["location"]
 DWP="You can claim directly from DWP for free; FormSorted is a paid online form-filling service."
 for form in ("aa","dla","pip"):
     h=body(f"/?form={form}")
-    assert "£99" in h and "£199" in h and "Compare packs" in h and "Upgrade to Done for you Plus, £199" in h and "How much should we" not in h and h.count(DWP)==1
+    assert "£99" in h and "£199" in h and "Compare Done for you and Plus" in h and "Upgrade to Done for you Plus, £199" in h and "How much should we" not in h and h.count(DWP)==1
     hp=body(f"/?form={form}&tier=199"); assert "Done for you Plus" in hp and "Switch to Done for you, £99" in hp and "riefing" in hp
     for x in (h,hp):
         low=x.lower().replace(DWP.lower(),"").replace("freepost",""); assert "free" not in low and "stripe" not in low and " ai " not in low and "we claim for you" not in low and "we submit your claim" not in low and "claim pack" not in low and "claims service" not in low and "claims firm" not in low and "claim handling" not in low

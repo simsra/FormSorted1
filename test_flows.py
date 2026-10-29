@@ -79,7 +79,7 @@ for form,f in FORMS.items():
     for t,(n,p,_) in f["tiers"].items():
         h=req(f"/?form={form}&tier={t}").read().decode()   # valid -> single order summary
         assert "Your order" in h and f"£{p//100}" in h and h.count("Start my form")==1 and "Nothing to pay now" in h and "How much should we" not in h, (form,t)
-        assert "We fill in your form. You check, sign and post." in h and 'name=tier value=' in h
+        assert "You check it, sign it and post it." in h and 'name=tier value=' in h and "Start my form" in h and "Step 1 of 4" in h
         assert h.count("You can claim directly from DWP for free; FormSorted is a paid online form-filling service.")==1, (form,t)
         low=h.lower().replace("you can claim directly from dwp for free; formsorted is a paid online form-filling service.","").replace("freepost",""); assert "we claim for you" not in low and "we submit your claim" not in low
         assert "stripe" not in low and " ai " not in low and "free" not in low and "citizens advice" not in low, (form,t)
