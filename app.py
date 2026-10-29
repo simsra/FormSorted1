@@ -37,7 +37,7 @@ BB_STEPS=["Choose","Agree","Your answers","Check and pay","Your Blue Badge answe
 def bbprog(n): return f"<p class=progress>Step {n} of {len(BB_STEPS)}: {BB_STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(BB_STEPS)}%'></span></div>"
 def prog(n,label=None,sub=""):
     """Numbered 4-step indicator: 1 Your answers, 2 Pay, 3 Check, 4 Download. label: what this screen is, within the step."""
-    lis="".join(f'<li class="{"done" if j<n else "now" if j==n else ""}"{" aria-current=step" if j==n else ""}>{esc(t)}</li>' for j,t in enumerate(STEPS,1))
+    lis="".join(f'<li class="{"past" if j<n else "now" if j==n else ""}"{" aria-current=step" if j==n else ""}>{esc(t)}</li>' for j,t in enumerate(STEPS,1))
     return f"""<nav aria-label="Your progress"><ol class=stepper>{lis}</ol></nav><p class=stepnow>Step {n} of {len(STEPS)}: <strong>{esc(label or STEPS[n-1])}</strong>{f" · {sub}" if sub else ""}</p>"""
 def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
     if minimal:  # order summary: no outbound links except Terms/Privacy

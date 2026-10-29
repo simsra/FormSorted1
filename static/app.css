@@ -121,7 +121,7 @@ details.tickall{margin:1rem 0}details.tickall summary{cursor:pointer;font-weight
 .stepper{list-style:none;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:0;margin:0 0 .35rem;counter-reset:st}
 .stepper li{counter-increment:st;margin:0;padding:.45rem 0 0;border-top:6px solid #dde5e8;font-size:.8rem;line-height:1.2;color:var(--muted);text-align:left}
 .stepper li:before{content:counter(st) ". ";font-weight:700}
-.stepper li.done{border-top-color:var(--accent);color:var(--ink)}.stepper li.done:before{content:"✓ "}
+.stepper li.past{border-top-color:var(--accent);color:var(--ink)}.stepper li.past:before{content:"✓ "}
 .stepper li.now{border-top-color:var(--brand);color:var(--ink);font-weight:700}
 .stepnow{font-size:.95rem;color:var(--muted);margin:.2rem 0 1.2rem}.stepnow strong{color:var(--ink)}
 .one{font-size:1.15rem;margin:.1rem 0 1.2rem;max-width:34em}
@@ -145,3 +145,4 @@ details.more[open]>summary:before{content:"–"}details.more>*:not(summary){marg
 .also li a{white-space:nowrap;font-weight:700}
 .extras{margin-top:2rem}.extras>h2{font-size:1.3rem;margin:0 0 .6rem}.extras .panel{border-left-width:5px}
 .deadline{font-size:1.1rem;border-left:6px solid var(--warn);background:#fdf3ef;padding:.6rem .9rem;margin:1rem 0}
+@media (min-width:600px){.choice ul{font-size:1rem}.choice .nm{font-size:1.15rem}.choice .pr{font-size:2rem}.stepper li{font-size:.9rem}}
