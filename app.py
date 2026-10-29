@@ -17,6 +17,7 @@ import psp as PSP
 import bluebadge as BB, printmail
 import evidence as EVID, honesty as HONEST, fraud as FRAUD
 import wholeform as WF, secure as SECURE
+import accounts as ACCT
 BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STRIPE_SECRET_KEY_PLACEHOLDER")
 PUBLIC=os.getenv("PUBLIC_URL","http://localhost:8000"); DEV=STRIPE.endswith("PLACEHOLDER")
 HERE=os.path.dirname(os.path.abspath(__file__)); OUT=store.OUT; DB=store.SQLITE_PATH
@@ -1168,8 +1169,8 @@ async def ticks_save(token:str, req:Request):
     c=db(); c.execute("update orders set draft=? where token=?",(json.dumps(d),token)); c.commit()
     return RedirectResponse(f"/details/{token}",303)
 @app.get("/documents/{token}")
-def documents_page(token:str):
-    o=ready(token)
+def documents_page(token:str, req:Request=None):
+    o=ready(token); _acct_req.set(req)
     if FRAUD.held(o): return _held_redirect(o)
     if not o["approved_at"]: return RedirectResponse(f"/approve/{token}",303)
     if ticks_pending(o): return RedirectResponse(f"/ticks/{token}",303)
@@ -1185,7 +1186,7 @@ def documents_page(token:str):
     return page(prog(8)+f"""<div class=done><h1>{"Your answers are ready" if o["form"]=="atw" else "Your form is done"}</h1><p>You approved every answer. Your documents are ready.</p></div>
 {''.join(f'<div class=dl><span><strong>{lab.get(f,f)}</strong></span><a class=btn href="/download/{token}/{f}" download>Download</a></div>' for f in files)}{gone}
 {f"<div class=tracker><p class=big>Send it back by <strong>{datetime_fmt(res['deadline'])}</strong></p></div>" if res and res.get('deadline') else ''}{saved}
-{bb_addon_box(o)}{ATW_NEXT if o['form']=='atw' else ''}{'' if o['form']=='atw' else PSP.html_section(o['form'] or 'aa',filled=(FORMS[o['form'] or 'aa'].get('pdf_out') in files),hand_details=hand_details(o))}
+{account_box(o)}{bb_addon_box(o)}{ATW_NEXT if o['form']=='atw' else ''}{'' if o['form']=='atw' else PSP.html_section(o['form'] or 'aa',filled=(FORMS[o['form'] or 'aa'].get('pdf_out') in files),hand_details=hand_details(o))}
 <p class=small>We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>.</p>""","Your documents")
 ATW_NEXT=f"""<h2>What to do next</h2><ol class=steps><li><strong>Read it once more</strong> and change anything that isn't right.</li><li><strong>Apply online or by phone</strong> at GOV.UK (search 'Access to Work apply'), or call {facts.v('atw_helpline')} (Mon–Fri 9am–5pm). Paste or read out each answer.</li><li><strong>Add your own details</strong>: workplace address, workplace contact, NI number (or UTR if self-employed).</li><li><strong>Disagree with the decision?</strong> Call the helpline and ask for it to be reconsidered.</li></ol>"""
 NEXT_LABEL={"aa":"Next Attendance Allowance form","dla":"Your child's DLA renewal form","pip":"Your PIP review form","pipr":"Your next PIP review form"}
@@ -1305,13 +1306,139 @@ async def letter_make(req:Request):
 # ---------- 90-day deletion ----------
 # Render free has no always-on loop: an external scheduler calls POST /cron/retention daily with header X-Cron-Secret.
 # The same ping wakes the app and touches the database, which also stops the free Supabase project from pausing.
+# ---------------- Customer accounts (off unless ACCOUNTS_ENABLED=1; see accounts.py) ----------------
+import contextvars as _cv
+_acct_req=_cv.ContextVar("_acct_req",default=None)
+def _https(): return PUBLIC.startswith("https://")
+def _me(req):
+    if not ACCT.ENABLED or req is None: return None
+    return ACCT.session_account(db(),req.cookies.get(ACCT.COOKIE,""))
+def _signed_in(resp,sid):
+    resp.set_cookie(ACCT.COOKIE,sid,max_age=ACCT.SESSION_DAYS*86400,httponly=True,secure=_https(),samesite="lax",path="/"); return resp
+def _need_acct():
+    if not ACCT.ENABLED: raise HTTPException(404)
+def account_box(o):
+    """Documents page: one tap to save the answers to an account with the order's email."""
+    if not ACCT.ENABLED or o["status"]!="paid" or (o["form"] or "aa") not in ("aa","dla","pip","pipr","atw"): return ""
+    me=_me(_acct_req.get())
+    if o["account_id"] and me and me["id"]==o["account_id"]:
+        return "<div class=panel><h2 class=h3>Saved to your account</h2><p>Your answers are saved, so you won't be asked them again for a renewal or another form. <a href=/account>Go to your account</a>.</p></div>"
+    em=ACCT.norm_email(o["email"] or "")
+    if not em: return ""
+    return f"""<div class=panel><h2 class=h3>Save your answers for next time</h2><p>Renewing, or filling in another form? Save your answers to an account with <strong>{esc(em)}</strong> and you won't be asked them again. There is no password: we email you a sign-in link.</p>
+<p class=hint>We never keep your National Insurance number or bank details. You'd type those again.</p>
+<form method=post action=/account/save/{o['token']}><button class="btn btn-2">Save my answers</button></form></div>"""
+CHECK_EMAIL="<h1>Check your email</h1><p class=lead>If there's an account for that email address, we've sent it a sign-in link. It works once and stops working after {m} minutes.</p><p>No email? Check your junk folder, or <a href=/account/signin>ask for another link</a>.</p>"
+SAVED_BOX="<div class=panel><h2 class=h3>Saved to your account</h2><p>Your answers are saved, so you won't be asked them again for a renewal or another form. We've emailed you a sign-in link for next time.</p><p><a href=/account>Go to your account</a></p></div>"
+SAVED_EXISTING="<h1>Saved to your account</h1><p class=lead>There's already an account for this email address, so we've added this order and its answers to it.</p><p>To see them, sign in with the link we've just emailed you. It works once and stops working after {m} minutes.</p><p><a href=/documents/{t}>Back to your documents</a></p>"
+LINK_GONE="<h1>This link has expired</h1><p class=lead>Sign-in links work once and stop working after {m} minutes.</p><p><a class=btn href=/account/signin>Email me a new link</a></p>"
+TOO_MANY="<h1>Please wait a few minutes</h1><p class=lead>We've sent a few sign-in links already. Check your inbox and junk folder, or try again in 15 minutes.</p>"
+def _acct_page(body,title): return page(body,title,minimal=True)
+def _send(to,mail):
+    try: mailer.send(to,*mail); return True
+    except Exception as e: print("account mail failed:",type(e).__name__); return False
+def _link_url(c,email,ip,aid):
+    t=ACCT.new_link(c,email,ip,aid); return f"{PUBLIC}/account/link/{t}" if t else None
+@app.post("/account/save/{token}")
+def account_save(token:str, req:Request):
+    _need_acct(); o=get(token); c=db()
+    if o["status"]!="paid" or not o["approved_at"]: raise HTTPException(400)
+    me=_me(req); em=ACCT.norm_email(o["email"] or "")
+    if me: acct=me
+    else:
+        if not em: raise HTTPException(400)
+        acct=ACCT.by_email(c,em)
+        if acct:   # someone else may hold this order link: add the order, but only a sign-in link opens the account
+            ACCT.link_order(c,acct["id"],token); ACCT.save(c,acct["id"],get(token))
+            if ACCT.can_send(c,em,client_ip(req)):
+                u=_link_url(c,em,client_ip(req),acct["id"]); _send(em,ACCT.added_email(BRAND,u))
+            return _acct_page(SAVED_EXISTING.format(m=ACCT.LINK_MIN,t=token),"Saved to your account")
+        acct=ACCT.create(c,em)
+        _send(em,ACCT.welcome_email(BRAND,f"{PUBLIC}/account/signin"))
+    ACCT.link_order(c,acct["id"],token); ACCT.save(c,acct["id"],get(token))
+    r=RedirectResponse(f"/documents/{token}#account",303)
+    return r if me else _signed_in(r,ACCT.new_session(c,acct["id"]))
+@app.get("/account/signin")
+def account_signin_page(err:str=""):
+    _need_acct()
+    e="<p class=error role=alert>Please type the email address you used when you paid.</p>" if err else ""
+    return _acct_page(f"""<h1>Sign in to your account</h1><p class=lead>Type the email address you used when you paid. We'll email you a link to sign in. There is no password.</p>{e}
+<form method=post action=/account/signin><div class=field><label class=q for=em>Email address</label><input id=em type=email name=email autocomplete=email required></div><button class=btn>Email me a sign-in link</button></form>""","Sign in")
+@app.post("/account/signin")
+def account_signin(req:Request, email:str=Form("")):
+    _need_acct(); em=ACCT.norm_email(email)
+    if not em: return RedirectResponse("/account/signin?err=1",303)
+    c=db(); ip=client_ip(req)
+    if not ACCT.can_send(c,em,ip): return _acct_page(TOO_MANY,"Please wait")
+    a=ACCT.by_email(c,em); u=_link_url(c,em,ip,a["id"] if a else None)
+    if u: _send(em,ACCT.link_email(BRAND,u))
+    return _acct_page(CHECK_EMAIL.format(m=ACCT.LINK_MIN),"Check your email")   # same page whether or not there's an account
+@app.get("/account/link/{t}")
+def account_link_page(t:str):
+    """A button, not an automatic sign-in, so email link scanners can't use up the link."""
+    _need_acct()
+    if not ACCT.link_ok(db(),t): return _acct_page(LINK_GONE.format(m=ACCT.LINK_MIN),"Link expired")
+    return _acct_page(f"<h1>Sign in to your account</h1><form method=post action=/account/link/{esc(t)}><button class=btn>Sign in</button></form>","Sign in")
+@app.post("/account/link/{t}")
+def account_link(t:str):
+    _need_acct(); c=db(); aid=ACCT.use_link(c,t)
+    if not aid or not ACCT.by_id(c,aid): return _acct_page(LINK_GONE.format(m=ACCT.LINK_MIN),"Link expired")
+    return _signed_in(RedirectResponse("/account",303),ACCT.new_session(c,aid))
+ACCT_NEXT={"aa":("aa",),"dla":("dla",),"pip":("pip","pipr"),"pipr":("pipr","pip"),"atw":("atw",)}
+def _when(t): return time.strftime("%d %B %Y",time.localtime(t or 0)).lstrip("0")
+@app.get("/account")
+def account_home(req:Request):
+    _need_acct(); me=_me(req)
+    if not me: return RedirectResponse("/account/signin",303)
+    c=db(); rows=ACCT.orders_of(c,me["id"]); sv=ACCT.saved(c,me["id"])
+    ol="".join(f"<li><strong>{esc(FORMS.get(o['form'] or 'aa',{}).get('name','Form'))}</strong>, {_when(o['created'])}"+(f" · <a href=/documents/{o['token']}>Your documents</a>" if o["status"]=="paid" and o["approved_at"] else "")+"</li>" for o in rows) or "<li>No orders yet.</li>"
+    def card(s):
+        f=s["form"]; nm=esc(FORMS.get(f,{}).get("name",f))
+        starts="".join(f"<form method=post action=/account/start style='display:inline'><input type=hidden name=src value={f}><input type=hidden name=form value={t}><button class=btn>{'Start a new '+nm+' form' if t==f else 'Start a '+esc(FORMS[t]['name'])+' form'}</button></form> " for t in ACCT_NEXT.get(f,(f,)) if t in FORMS)
+        return f"""<div class=panel><h3>{nm}</h3><p>Saved {_when(s['saved_at'])}. Your answers are filled in for you to check and change.</p>{starts}
+<form method=post action=/account/forget/{f} onsubmit="return confirm('Delete these saved answers?')"><button class=linkbtn>Delete these saved answers</button></form></div>"""
+    cards="".join(card(s) for s in sv) or "<p>No saved answers.</p>"
+    return _acct_page(f"""<h1>Your account</h1><p class=lead>Signed in as <strong>{esc(me['email'])}</strong>.</p>
+<h2>Saved answers</h2>{cards}<p class=hint>We never keep your National Insurance number or bank details. You'd type those again.</p>
+<h2>Your orders</h2><ul>{ol}</ul>
+<form method=post action=/account/signout><button class="btn btn-2">Sign out</button></form>
+<h2>Delete your account</h2><p>This deletes your account and every saved answer in it. Each order's documents are still deleted on their usual schedule, or now from that order's page.</p>
+<form method=post action=/account/delete onsubmit="return confirm('Delete your account and all saved answers?')"><label class=cb><input type=checkbox name=sure value=1 required><span>Yes, delete my account</span></label><button class="btn btn-warn">Delete my account</button></form>
+<p class=small>Accounts not used for 3 years are deleted automatically.</p>""","Your account")
+@app.post("/account/start")
+def account_start(req:Request, src:str=Form(""), form:str=Form("")):
+    _need_acct(); me=_me(req)
+    if not me: return RedirectResponse("/account/signin",303)
+    c=db(); s=ACCT.saved_for(c,me["id"],src)
+    if not s or form not in ACCT_NEXT.get(src,()) or form not in FORMS: raise HTTPException(400)
+    I,P=ACCT.carry(json.loads(s["data"] or "{}"),src,form)
+    tier=default_tier(form) if form!="atw" else "49"; token=orders.new_token()
+    c.execute("insert into orders(token,tier,status,created,form,ip,intake,personal,email,account_id) values(?,?,?,?,?,?,?,?,?,?)",
+              (token,tier,"free",time.time(),form,client_ip(req),json.dumps(I) if I else None,json.dumps(P),me["email"],me["id"])); c.commit()
+    ACCT.touch(c,me["id"]); return RedirectResponse(f"/start/{token}",303)
+@app.post("/account/forget/{form}")
+def account_forget(form:str, req:Request):
+    _need_acct(); me=_me(req)
+    if not me: return RedirectResponse("/account/signin",303)
+    ACCT.forget(db(),me["id"],form); return RedirectResponse("/account",303)
+@app.post("/account/signout")
+def account_signout(req:Request):
+    _need_acct(); ACCT.end_session(db(),req.cookies.get(ACCT.COOKIE,""))
+    r=_acct_page("<h1>You're signed out</h1><p><a href=/account/signin>Sign in again</a></p>","Signed out"); r.delete_cookie(ACCT.COOKIE,path="/"); return r
+@app.post("/account/delete")
+def account_delete(req:Request, sure:str=Form("")):
+    _need_acct(); me=_me(req)
+    if not me: return RedirectResponse("/account/signin",303)
+    if sure!="1": return RedirectResponse("/account",303)
+    ACCT.delete_account(db(),me["id"])
+    r=_acct_page("<h1>Your account is deleted</h1><p class=lead>Your account and every saved answer in it have been deleted.</p>","Account deleted"); r.delete_cookie(ACCT.COOKIE,path="/"); return r
 @app.get("/healthz")
 def healthz(): return {"ok":True}
 @app.post("/cron/retention")
 def cron_retention(req:Request):
     got=req.headers.get("x-cron-secret","")
     if not CRON_SECRET or not hmac.compare_digest(got,CRON_SECRET): raise HTTPException(403)
-    return {"ok":True,"purged":orders.purge(db(),OUT),"private":SECURE.purge()}
+    return {"ok":True,"purged":orders.purge(db(),OUT),"private":SECURE.purge(),"accounts":ACCT.purge(db())}
 @app.post("/cron/formwatch")
 def cron_formwatch(req:Request):
     """Weekly: compare GOV.UK's current AA1/DLA1A with the bundled copies; switches pre-fill off if a new version appears."""

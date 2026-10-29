@@ -51,6 +51,7 @@ def purge(c, out_dir, days=None, now=None):
 def erase(c, out_dir, token):
     """Deletion on request: removes every personal field and file but keeps a bare row so the link shows 'deleted'."""
     o=c.execute("select save_code from orders where token=?",(token,)).fetchone()
+    import accounts; accounts.on_order_deleted(c,token)   # answers saved to an account from this order go too (and an account left empty)
     store.delete(token)
     import secure; secure.wipe(token,c)   # NI and bank details, if still held
     if o and o[0]: c.execute("delete from saved where code=?",(o[0],))

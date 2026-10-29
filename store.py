@@ -36,8 +36,13 @@ _local=threading.local()
 SCHEMA=[f"create table if not exists orders(token text primary key, tier text, status text, stripe_session text, email text, consent_at {_REAL}, history text default '[]', personal text default '{{}}', created {_REAL})",
         f"create table if not exists events(id text primary key, received {_REAL})",   # webhook idempotency
         f"create table if not exists saved(code text primary key, form text, answers text, personal text, created {_REAL})",
-        "create table if not exists settings(k text primary key, v text)"]   # e.g. prefill_disabled_aa (form watch)
-COLS=(("form","text default 'aa'"),("draft","text"),("deadline","text default '{}'"),("approved_at",_REAL),("save_code","text"),("review_of","text"),("details_at",_REAL),("paid_at",_REAL),("ip","text"),("interview_done_at",_REAL),("turns","integer default 0"),("intake","text"),("keep_until",_REAL),("post_pack","integer default 0"),("appeal","text"),("hold","text"),("stripe_customer","text"),("card_fp","text"))
+        "create table if not exists settings(k text primary key, v text)",   # e.g. prefill_disabled_aa (form watch)
+        # customer accounts (accounts.py): no NI numbers or bank details are ever stored here
+        f"create table if not exists accounts(id text primary key, email text unique, created {_REAL}, last_seen {_REAL})",
+        f"create table if not exists account_saved(account_id text, form text, data text, from_order text, saved_at {_REAL}, primary key(account_id, form))",
+        f"create table if not exists account_sessions(sid_hash text primary key, account_id text, created {_REAL}, expires {_REAL})",
+        f"create table if not exists account_links(tok_hash text primary key, account_id text, email text, created {_REAL}, expires {_REAL}, used_at {_REAL}, ip text)"]
+COLS=(("form","text default 'aa'"),("draft","text"),("deadline","text default '{}'"),("approved_at",_REAL),("save_code","text"),("review_of","text"),("details_at",_REAL),("paid_at",_REAL),("ip","text"),("interview_done_at",_REAL),("turns","integer default 0"),("intake","text"),("keep_until",_REAL),("post_pack","integer default 0"),("appeal","text"),("hold","text"),("stripe_customer","text"),("card_fp","text"),("account_id","text"))
 _ready=False
 def _migrate(c):
     for s in SCHEMA: c.execute(s)

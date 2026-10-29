@@ -21,4 +21,8 @@ FRAUD_MAX_NAMES=2 FRAUD_SIMILAR=0.9 FRAUD_MAX_REFUSED=1 SQLITE_PATH=$EV/orders.d
 WF=${LOGDIR:-/tmp}/wf-test; rm -rf $WF; mkdir -p $WF   # whole-form flow: own SQLite + files, never a remote DB or bucket
 DATABASE_URL= SUPABASE_URL= WHOLE_FORM=1 WF_LOOKUPS=0 SQLITE_PATH=$WF/orders.db OUT_DIR=$WF/out MAIL_LOG=$WF/mail.log $PY/uvicorn app:app --port ${PORT_WF:-8036} >$WF/server.log 2>&1 & X=$!; sleep 3
 DATABASE_URL= SQLITE_PATH=$WF/orders.db OUT_DIR=$WF/out MAIL_LOG=$WF/mail.log WF_COVERAGE=$WF/coverage.json $PY/python test_wholeform.py http://localhost:${PORT_WF:-8036} $WF/orders.db $WF/server.log || R=1; kill $X
+AC=${LOGDIR:-/tmp}/acct-test; rm -rf $AC; mkdir -p $AC   # customer accounts: own SQLite + console mail, ACCOUNTS_ENABLED only on this server
+DATABASE_URL= SUPABASE_URL= ACCOUNTS_ENABLED=1 SQLITE_PATH=$AC/orders.db OUT_DIR=$AC/out MAIL_LOG=$AC/mail.log $PY/uvicorn app:app --port ${PORT_AC:-8037} >$AC/server.log 2>&1 & AS=$!
+DATABASE_URL= SUPABASE_URL= SQLITE_PATH=$AC/orders.db OUT_DIR=$AC/out MAIL_LOG=$AC/mail.log $PY/uvicorn app:app --port ${PORT_AC0:-8038} >$AC/server-off.log 2>&1 & AO=$!; sleep 3
+DATABASE_URL= $PY/python test_accounts.py http://localhost:${PORT_AC:-8037} $AC/orders.db $AC/mail.log http://localhost:${PORT_AC0:-8038} || R=1; kill $AS $AO
 $PY/python test_prefill.py || R=1; $PY/python test_strength.py || R=1; $PY/python test_fill_gaps.py || R=1; $PY/python test_statement_ref.py || R=1; DATABASE_URL= SUPABASE_URL= $PY/python test_fallback.py || R=1; DATABASE_URL= SUPABASE_URL= $PY/python test_no_supporter_words.py || R=1; DATABASE_URL= SUPABASE_URL= $PY/python test_print_sign_post.py || R=1; exit $R
