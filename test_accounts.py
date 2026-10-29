@@ -107,6 +107,7 @@ c=db(); c.execute("delete from account_links where email=?",(EM,)); c.commit()
 req("/account/signin",{"email":EM}); t5=last_link(EM); assert loc(req(f"/account/link/{t5}",{}))=="/account"
 assert req("/account/delete",{}).status==303 and db().execute("select 1 from accounts where id=?",(a["id"],)).fetchone()   # needs the tick
 r=req("/account/delete",{"sure":"1"}); assert "account is deleted" in r.read().decode()
+assert tuple(db().execute("select status, email from orders where token=?",(tok,)).fetchone())==("deleted",None)   # its orders are erased too
 c=db()
 for tb in ("accounts","account_saved","account_sessions"): assert not c.execute(f"select 1 from {tb} where {'id' if tb=='accounts' else 'account_id'}=?",(a["id"],)).fetchone(), tb
 assert loc(req("/account"))=="/account/signin"

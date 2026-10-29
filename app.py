@@ -1402,8 +1402,8 @@ def account_home(req:Request):
 <h2>Saved answers</h2>{cards}<p class=hint>We never keep your National Insurance number or bank details. You'd type those again.</p>
 <h2>Your orders</h2><ul>{ol}</ul>
 <form method=post action=/account/signout><button class="btn btn-2">Sign out</button></form>
-<h2>Delete your account</h2><p>This deletes your account and every saved answer in it. Each order's documents are still deleted on their usual schedule, or now from that order's page.</p>
-<form method=post action=/account/delete onsubmit="return confirm('Delete your account and all saved answers?')"><label class=cb><input type=checkbox name=sure value=1 required><span>Yes, delete my account</span></label><button class="btn btn-warn">Delete my account</button></form>
+<h2>Delete your account</h2><p>This deletes your account, every saved answer in it and every order in it, with their documents, straight away. Download anything you still need first.</p>
+<form method=post action=/account/delete onsubmit="return confirm('Delete your account, all saved answers and all your orders?')"><label class=cb><input type=checkbox name=sure value=1 required><span>Yes, delete my account</span></label><button class="btn btn-warn">Delete my account</button></form>
 <p class=small>Accounts not used for 3 years are deleted automatically.</p>""","Your account")
 @app.post("/account/start")
 def account_start(req:Request, src:str=Form(""), form:str=Form("")):
@@ -1430,8 +1430,10 @@ def account_delete(req:Request, sure:str=Form("")):
     _need_acct(); me=_me(req)
     if not me: return RedirectResponse("/account/signin",303)
     if sure!="1": return RedirectResponse("/account",303)
-    ACCT.delete_account(db(),me["id"])
-    r=_acct_page("<h1>Your account is deleted</h1><p class=lead>Your account and every saved answer in it have been deleted.</p>","Account deleted"); r.delete_cookie(ACCT.COOKIE,path="/"); return r
+    c=db()
+    for o in ACCT.orders_of(c,me["id"]): orders.erase(c,OUT,o["token"]); SECURE.wipe(o["token"])   # every order in it, with its documents
+    ACCT.delete_account(c,me["id"])
+    r=_acct_page("<h1>Your account is deleted</h1><p class=lead>Your account, every saved answer in it and every order in it have been deleted.</p>","Account deleted"); r.delete_cookie(ACCT.COOKIE,path="/"); return r
 @app.get("/healthz")
 def healthz(): return {"ok":True}
 @app.post("/cron/retention")
