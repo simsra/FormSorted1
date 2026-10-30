@@ -22,7 +22,8 @@ BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STR
 PUBLIC=os.getenv("PUBLIC_URL","http://localhost:8000"); DEV=STRIPE.endswith("PLACEHOLDER")
 HERE=os.path.dirname(os.path.abspath(__file__)); OUT=store.OUT; DB=store.SQLITE_PATH
 import hashlib as _hl; CSS_V=_hl.sha256(open(os.path.join(HERE,"static","app.css"),"rb").read()).hexdigest()[:10]   # cache-bust: browsers keep old app.css otherwise (30 Oct 2026)
-ICON_V=_hl.sha256(open(os.path.join(HERE,"static","logo.svg"),"rb").read()+open(os.path.join(HERE,"static","favicon.svg"),"rb").read()).hexdigest()[:10]   # brand logo/favicon cache-bust
+ICON_V=_hl.sha256(open(os.path.join(HERE,"static","logo-white.svg"),"rb").read()+open(os.path.join(HERE,"static","favicon.svg"),"rb").read()).hexdigest()[:10]   # brand logo/favicon cache-bust
+DOTS='<svg class="dots" aria-hidden="true" focusable="false" viewBox="0 0 240 220" fill="#9db1f9"><circle cx="78" cy="10" r="8"/><circle cx="112" cy="10" r="8"/><circle cx="146" cy="10" r="8"/><circle cx="61" cy="40" r="8"/><circle cx="95" cy="40" r="8"/><circle cx="163" cy="40" r="8"/><circle cx="197" cy="40" r="8"/><circle cx="78" cy="70" r="8"/><circle cx="112" cy="70" r="8"/><circle cx="146" cy="70" r="8"/><circle cx="214" cy="70" r="8"/><circle cx="27" cy="100" r="8"/><circle cx="61" cy="100" r="8"/><circle cx="95" cy="100" r="8"/><circle cx="163" cy="100" r="8"/><circle cx="197" cy="100" r="8"/><circle cx="78" cy="130" r="8"/><circle cx="112" cy="130" r="8"/><circle cx="146" cy="130" r="8"/><circle cx="214" cy="130" r="8"/><circle cx="61" cy="160" r="8"/><circle cx="95" cy="160" r="8"/><circle cx="163" cy="160" r="8"/><circle cx="197" cy="160" r="8"/><circle cx="78" cy="190" r="8"/><circle cx="112" cy="190" r="8"/><circle cx="146" cy="190" r="8"/></svg>'   # decorative brand dot motif (aria-hidden), same as the site's brand_edits.dots()
 os.makedirs(OUT,exist_ok=True)
 CRON_SECRET=os.getenv("CRON_SECRET","")
 def db(): return store.connect()
@@ -63,7 +64,7 @@ def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disabil
         indep=f'<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not affiliated with DWP or GOV.UK.</div></div>'
         ftr='<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent online form-filling service. Not affiliated with DWP, GOV.UK or any government body. We can\'t guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a><a data-contact href="mailto:hello@formsorted.com">Contact</a></p></div></footer>'
     return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg?v={ICON_V} type=image/svg+xml><link rel=icon href=/static/favicon-32.png?v={ICON_V} sizes=32x32 type=image/png><link rel=apple-touch-icon href=/static/apple-touch-icon.png?v={ICON_V}><meta name=theme-color content='#0b1432'><link rel=stylesheet href=/static/app.css?v={CSS_V}><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body><a href="#main" class="skip">Skip to main content</a>
-<header class="hdr"><div class="wrap"><a class="logo" href="/"><img src="/static/logo.svg?v={ICON_V}" alt="FormSorted home" width="249" height="30"></a></div></header>
+<header class="hdr"><div class="wrap"><a class="logo" href="/"><img src="/static/logo-white.svg?v={ICON_V}" alt="FormSorted home" width="232" height="28"></a></div></header>
 {indep}<main id=main><div class=wrap>{body}{need_help()}</div></main>{ftr}</body></html>""")
 def stripe(method,path,data=None):
     req=urllib.request.Request("https://api.stripe.com/v1"+path,urllib.parse.urlencode(data).encode() if data else None,method=method,
@@ -107,7 +108,7 @@ def not_sure():
 def home(form:str="", tier:str=""):
     pv=PREVIEW if DEV else ""
     if form not in FORMS:
-        return page(prog(1)+pv+f"""<h1>Get your benefit form filled in</h1><p class=one>Answer simple questions. We fill in the form. You check it, sign it and send it.</p>
+        return page(prog(1)+pv+f"""<section class=hero>{DOTS}<h1>Get your benefit form filled in</h1><p class=one>Answer simple questions. We fill in the form. You check it, sign it and send it.</p><a class=btn href="#pick">Choose your form</a></section>
 <h2 class=h3 id=pick>Which form do you need?</h2>{form_cards()}{not_sure()}
 <p class=hint>England and Wales only. You only pay at the end, after the questions.</p>""","Choose your form",minimal=True)
     if form=="bb": return bb_summary(pv)
@@ -157,7 +158,7 @@ def order_summary(form,tier="",pv=""):
         cards+=f"""<div class="pkg{' mine' if mine else ''}">{'<p class=pill>Your choice</p>' if mine else ''}<h2>{esc(n)}</h2><p class=pr>£{p//100} <small>one-off</small></p><ul class=ticks>{''.join(f'<li>{esc(x)}</li>' for x in pkg_bullets(form,t))}</ul>{NEED_POST if t=="99" and form in PLUS.PLUS_FORMS else ""}
 <form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={t}><button class="btn btn-big">{'Continue with' if mine else 'Choose'} {esc(n)}</button></form></div>"""
     up=upgrade_box(form,tier or default_tier(form))
-    return page(prog(2)+pv+f"""<p class=caption>{esc(f['short'])}</p><h1>Choose your package</h1><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p>
+    return page(prog(2)+pv+f"""<section class="hero hero-lt">{DOTS}<p class=caption>{esc(f['short'])}</p><h1>Choose your package</h1><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p></section>
 <div class=pkgs>{cards}</div>
 {more("Compare the packages in detail",up) if up else ""}{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}
 <p class=hint>{esc(DWP_LINE)} No success fee.</p><p class=change><a href="/">Choose a different form</a></p>""",f"Choose your package: {f['name']}",minimal=True)
@@ -173,7 +174,7 @@ def change_package(token:str):
         cards+=f"""<div class="pkg{' mine' if mine else ''}">{'<p class=pill>Your choice</p>' if mine else ''}<h2>{esc(n)}</h2><p class=pr>£{p//100} <small>one-off</small></p><ul class=ticks>{''.join(f'<li>{esc(x)}</li>' for x in pkg_bullets(form,t))}</ul>{NEED_POST if t=="99" else ""}
 <form method=post action=/package/{token}><input type=hidden name=tier value={t}><button class="btn btn-big">{'Keep' if mine else 'Choose'} {esc(n)}</button></form></div>"""
     up=upgrade_box(form,o["tier"])
-    return page(prog(2,"Change package")+f"""<p class=caption>{esc(f['short'])}</p><h1>Change your package</h1><p class=one>Your answers are kept. Choose a package, then you go back to pay.</p>
+    return page(prog(2,"Change package")+f"""<section class="hero hero-lt">{DOTS}<p class=caption>{esc(f['short'])}</p><h1>Change your package</h1><p class=one>Your answers are kept. Choose a package, then you go back to pay.</p></section>
 <div class=pkgs>{cards}</div>{more("Compare the packages in detail",up) if up else ""}
 <p class=change><a href="/preview/{token}">Back to pay</a></p>""",f"Change package: {f['name']}",minimal=True)
 @app.post("/package/{token}")
