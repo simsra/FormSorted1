@@ -129,7 +129,7 @@ These plain-English renderings of a level fact are ALWAYS supported by it - neve
 'struggles with' / 'finds it hard' / 'it is slow, painful or tiring' (for 'struggles (slow, painful or tiring ...)'),
 'can't do it safely on my/his/her/their own' (for 'can't do it safely on their own'). A 'No' answer to 'Can X do Y' supports 'X can't do Y'.
 A sentence that turns a ticked label into something more specific (a frequency, duration, person, event, cause, reason, aid or consequence that its facts don't state) is NOT supported. Generic padding that no fact states ('This affects my daily life', 'I rely on others', 'It makes me feel anxious') is NOT supported. A cause or link between facts ('which makes', 'because', 'so', 'due to') is NOT supported unless a cited fact gives it. If in doubt, mark it NOT supported.
-For each sentence write 'problem' FIRST (one short line: what is not supported, or 'none'), THEN 'supported'. Pronoun changes (she -> I) are never a problem. When a carer filled the form in for someone, the carer's 'I' in their own words may be written as 'my family carer', 'my daughter' etc. if a fact names that helper - that is supported.
+For each sentence write 'problem' FIRST (one short line: what is not supported, or 'none'), THEN 'supported'. Pronoun changes (she -> I) are never a problem. When a carer filled the form in for someone, the carer's 'I' in their own words may be written as 'my family carer', 'my daughter' etc. if a fact names that helper - that is supported. 'who_is_filling_in' (if given) tells you who typed the answers: when it shows the helper is family (e.g. 'This form is for my parent'), the helper's own 'I ...' may be written as 'my family ...'. Use it ONLY for whose voice it is, never as support for anything else.
 Return JSON only."""
 VSCHEMA={"type":"object","properties":{"verdicts":{"type":"array","items":{"type":"object","properties":{"n":{"type":"integer"},"problem":{"type":"string"},"supported":{"type":"boolean"}},"required":["n","problem","supported"],"propertyOrdering":["n","problem","supported"]}}},"required":["verdicts"]}
 APPROVED=re.compile(r"help or someone with (me|him|her|them)|struggles? with|finds? it hard|slow, painful or tiring|safely on (my|his|her|their) own",re.I)
@@ -217,8 +217,9 @@ def write(form,d,history=None):
     # second pass: Claude checks each sentence against the facts it cites
     if sents:
         vin=[{"n":i,"sentence":s["text"],"facts":[fx[f]["text"] for f in s["facts"]]} for i,s in enumerate(sents)]
+        who=(fx.get("F1") or {}).get("text","")   # who is filling the form in (for voice only: 'my parent' -> the helper is family)
         try:
-            v=cl.call(cl.VERIFY,VSYS,json.dumps(vin,ensure_ascii=False),VSCHEMA,"verify")
+            v=cl.call(cl.VERIFY,VSYS,json.dumps({"who_is_filling_in":who,"sentences":vin} if who else vin,ensure_ascii=False),VSCHEMA,"verify")
             bad={int(x["n"]):x.get("problem","") for x in v.get("verdicts") or [] if x.get("supported") is False and str(x.get("problem","")).strip().lower().rstrip(".")!="none"}
             for i in list(bad):
                 if not 0<=i<len(sents): bad.pop(i); continue

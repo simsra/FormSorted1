@@ -231,6 +231,9 @@ GROUNDING_PROMPT="""You check a drafted benefit-form answer against the customer
 List every claim in the DRAFT that is not directly supported by the SOURCE (customer's words): new conditions, symptoms, medicines, doses,
 numbers, frequencies, durations, aids or equipment, people, places, or any statement about eligibility or outcome.
 Also list anything stated as more severe, more frequent or more absolute than the SOURCE (e.g. "always" where the source says "most days", "cannot" where it says "struggles", a bad day described as every day).
+The DRAFT is always written as the person claiming, in the first person, even when a relative or helper typed the SOURCE. Changing only who is speaking is NOT a problem:
+"Mum can't lift her legs" may become "I can't lift my legs", and a helper's own "I help her" / "I check the cooker" may become "my family help me" / "my family check the cooker"
+when the SOURCE shows the helper is family (e.g. "this form is for my parent") or names who helps. Flag only a change in WHAT happened, not in whose voice it is told.
 Return JSON only: {"unsupported":[{"phrase":"exact words from the draft","reason":"short reason"}]}. Return {"unsupported":[]} if all supported."""
 def grounding(draft_text, source_text):
     """Mandatory grounding check (raises LLMUnavailable if every checker model fails). Returns list of {phrase,reason}. Empty in MOCK mode (deterministic layer still runs)."""

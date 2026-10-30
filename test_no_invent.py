@@ -40,7 +40,7 @@ def fake(chain,system,user,schema=None,purpose="",**k):
     if purpose=="extras": return {"checklist":["A letter from your GP","Your repeat prescription list, as it relates to your pain"],"notes_for_user":["Keep a copy of the form.","Say it happens every day."],
                                   "gp_letter":"Dear Doctor,\n\nI find it hard to get in or out of the bath. This is due to my arthritis.\n\nYours sincerely,\n"}
     if purpose=="verify":
-        vin=json.loads(user); VER["n"]=len(vin)
+        vin=json.loads(user); vin=vin["sentences"] if isinstance(vin,dict) else vin; VER["n"]=len(vin)
         return {"verdicts":[{"n":x["n"],"problem":"feeling not in the facts" if "worried" in x["sentence"] else "none","supported":"worried" not in x["sentence"]} for x in vin if "a hand" not in x["sentence"]]}
     raise AssertionError(purpose)
 real=cl.call; cl.call=fake

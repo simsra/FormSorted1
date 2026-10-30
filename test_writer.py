@@ -26,7 +26,7 @@ def fake(chain,system,user,schema=None,purpose="",**k):
         {"topic":"zz","sentences":[{"text":"Not a box.","facts":a1}]}]}
     if purpose=="extras": return {"checklist":["Your repeat prescription list","Made with AI"],"gp_letter":"Dear Dr,","notes_for_user":["Checked by our team","Keep a copy"],"call_prep":["Think about bad days"]}
     if purpose=="verify":
-        v=json.loads(user); return {"verdicts":[{"n":x["n"],"supported":"daughter" not in x["sentence"],"problem":"no daughter in answers"} for x in v]}
+        v=json.loads(user); v=v["sentences"] if isinstance(v,dict) else v; return {"verdicts":[{"n":x["n"],"supported":"daughter" not in x["sentence"],"problem":"no daughter in answers"} for x in v]}
     raise AssertionError(purpose)
 if not LIVE:
     real=cl.call; cl.call=fake
