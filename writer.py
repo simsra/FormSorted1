@@ -51,6 +51,7 @@ def facts(form,d,history=None):
         if I._ok(v.get("freq")): add(t,f"{lab}: like this {I.FREQ_T[v['freq']].lower()}.")
         if I.TIME_T.get(v.get("time","")): add(t,f"{lab}: each time takes {I.TIME_T[v['time']]}.")
         if v.get("x"): add(t,f"{lab}, in the customer's own words: {v['x']}")
+        for cl,x in I.typed(r,v): add(t,f"{lab}"+(f", {I.pw(cl,me,form).lower()}" if cl else "")+f", typed detail in the customer's own words: {x}")
     if d.get("words"): add("*","In the customer's own words: "+d["words"])
     for t,_,_ in FORMS[form]["topics"]:
         for s in re.split(r"(?<=\.)\s+(?=[A-Z])",T.get(t) or ""):
@@ -77,10 +78,12 @@ FACTS are numbered (F1, F2...). Each belongs to a box (topic) or '*' (any box). 
 RULES (all must hold):
 - Every sentence must cite the fact IDs it is based on. A sentence may only say what those facts say. Never add a condition, symptom, medicine, dose, number, frequency, duration, aid, person, place or incident that is not in the cited facts.
 - When a fact lists options joined by 'or' (e.g. 'help, prompting or watching', 'pain, breathlessness or exhaustion'), it means one or more of them applies: write it so it stays true (e.g. 'I need help or prompting'), never pick one, never claim all.
+- 'Typed detail' facts are the customer's own description of a task. They are the best evidence: build the box around them, keep their specifics (who helps, what happens, when, examples, how long), and use the tap facts only to add what the typed detail doesn't say. Don't repeat a tap fact the typed detail already says better. If a typed detail and a tap disagree, follow the typed detail.
 - Keep the customer's own words where they gave them, just clearer. Never make anything sound worse, more often or more certain than the facts ('struggles' stays 'struggles'; no 'always', 'never', 'constantly', 'completely', 'every day' unless a fact says so).
-- If the facts for a box are thin, write less. One or two true sentences beat a padded paragraph. If a box has no facts, return no sentences for it.
-- For each box, in this order where the facts allow: what I can't do or find hard; how often; how long it takes; what could go wrong without help (safety); good days and bad days; aids used and who helps; a real example from the facts.
-- Sound like a real person talking about their own day, not a form. Lead with the specifics in the facts: WHO helps, WHAT they do, WHEN ('My husband helps me get out of bed and onto my feet'). Use the level wording ('need help or someone with me', 'struggle') at most once per box, and only when no specific fact says it better.
+- NEVER ADD ANYTHING. Write only what the facts say. If the facts for a box are thin, write less: one plain true sentence beats a padded paragraph. If a box has no facts, return no sentences for it. Never pad a box to make it look complete.
+- Never generalise from a ticked label into new facts. A tick like 'Getting in or out of the bath' supports only 'I have difficulty getting in or out of the bath': not how often, how long, who helps, why, what happened once, what aid is used, or what could go wrong. Add each of those only when its own fact says it.
+- For each box, in this order, using ONLY the parts the facts actually give (skip any part with no fact): what I can't do or find hard; how often; how long it takes; what could go wrong without help; good days and bad days; aids used and who helps; a real example.
+- Sound like a real person talking about their own day, not a form, but never by adding detail. Lead with the specifics in the facts: WHO helps, WHAT they do, WHEN ('My husband helps me get out of bed and onto my feet'). Use the level wording ('need help or someone with me', 'struggle') at most once per box, and only when no specific fact says it better.
 - Never write 'I am like this N days a week', 'X is hard', 'what's hard' or other label-shaped phrases. Say it plainly: 'This happens on 5 days a week', '7 days a week' -> 'every day', 'I find buttons and zips difficult'.
 - Write a consequence ('Without help, I could fall') ONLY when a fact says that consequence; otherwise leave it out.
 - The facts come from tap answers, so they read like form labels. Write the way the person would say it, naturally, without copying labels word for word and without meta phrases ('In my own words', 'The aid I use is', 'is a professional who knows me', 'the hard part is', 'what's hard').
@@ -88,7 +91,7 @@ RULES (all must hold):
 - Own-words facts can be used in every box they are about (e.g. who helps with cooking goes in the cooking box). Quote them lightly: fix grammar and make them first person, keep the meaning.
 - Where a general fact ('needs help, prompting or watching') sits with a more specific one ('needs reminding'), say the specific one; use the general one only if there is nothing more specific, and then keep it vague ('I need help or someone with me').
 - State ticked answers plainly, without hedges like 'may', 'might' or 'sometimes' that the facts don't use (a tick 'Runs off or no road sense' becomes 'He runs off or has no road sense', not 'He may run off'). Say each thing once per box: don't repeat a frequency or detail in other words.
-- Don't join two facts with 'because', 'so' or 'due to' unless a fact gives that reason. For 'needs help or someone there' always keep both halves ('help or someone with him'), never just 'someone there' or just 'help'.
+- Don't join two facts with 'because', 'so', 'due to', 'which makes', 'which means' or any other cause or link unless a fact gives that reason: state each fact as its own sentence. For 'needs help or someone there' always keep both halves ('help or someone with him'), never just 'someone there' or just 'help'.
 - 'Checked with you' facts are the customer's own answers about what could happen without help: always include each one in its box, as the last sentence ('Without help, I could fall.').
 - Put each fact in the box it belongs to. Only use '*' facts where they really matter for that box. Don't list doctors or other professionals in the boxes.
 - 'Checked with you:' facts are the customer's later answers and win over earlier ones.
@@ -97,9 +100,10 @@ RULES (all must hold):
 Return JSON matching the schema: boxes = [{{topic, sentences:[{{text, facts:[ids]}}]}}] for these topics only: {topics}."""
 SCHEMA={"type":"object","properties":{"boxes":{"type":"array","items":{"type":"object","properties":{"topic":{"type":"string"},
   "sentences":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"facts":{"type":"array","items":{"type":"string"}}},"required":["text","facts"]}}},"required":["topic","sentences"]}}},"required":["boxes"]}
-XSYS="""From the customer's FACTS for a UK benefit form ({short}), write short helpful extras for the customer. Use only the facts.
+XSYS="""From the customer's FACTS for a UK benefit form ({short}), write short helpful extras for the customer. Use only the facts: never add a condition, symptom, cause, frequency, person, event or feeling they didn't give. Where a fact lists options with 'at least one, not said which', keep the whole 'or' list; never pick one.
+Speak to the customer about 'your answers', never 'the facts'.
 - checklist: up to 6 kinds of evidence they could include that relate to the facts (e.g. 'A copy of your repeat prescription list'). Never invent a document they have.
-- gp_letter: a short polite letter FROM the customer to their GP asking for a letter that confirms their condition and how it affects them. Only facts given. Sign off 'Yours sincerely,' then a blank line for their name.
+- gp_letter: a short polite letter FROM the customer to their GP asking for a letter that confirms their condition and how it affects them. Restate only what the facts say, in the facts' own terms: no causes or links between facts ('which makes', 'because', 'due to'), nothing more specific than the facts. Sign off 'Yours sincerely,' then a blank line for their name.
 - notes_for_user: up to 3 short tips about completing or sending the form (no outcomes, no advice on eligibility).
 {extra}Never mention AI, models, software, Claude, Anthropic or that anyone has checked the form. Return JSON."""
 XSCHEMA={"type":"object","properties":{"checklist":{"type":"array","items":{"type":"string"}},"gp_letter":{"type":"string"},"notes_for_user":{"type":"array","items":{"type":"string"}},
@@ -112,6 +116,7 @@ These plain-English renderings of a level fact are ALWAYS supported by it - neve
 'needs help or someone with me/him/her/them' (for 'needs help or someone there (help, prompting or watching ...)'),
 'struggles with' / 'finds it hard' / 'it is slow, painful or tiring' (for 'struggles (slow, painful or tiring ...)'),
 'can't do it safely on my/his/her/their own' (for 'can't do it safely on their own'). A 'No' answer to 'Can X do Y' supports 'X can't do Y'.
+A sentence that turns a ticked label into something more specific (a frequency, duration, person, event, cause, reason, aid or consequence that its facts don't state) is NOT supported. Generic padding that no fact states ('This affects my daily life', 'I rely on others', 'It makes me feel anxious') is NOT supported. A cause or link between facts ('which makes', 'because', 'so', 'due to') is NOT supported unless a cited fact gives it. If in doubt, mark it NOT supported.
 For each sentence write 'problem' FIRST (one short line: what is not supported, or 'none'), THEN 'supported'. Pronoun changes (she -> I) are never a problem. When a carer filled the form in for someone, the carer's 'I' in their own words may be written as 'my family carer', 'my daughter' etc. if a fact names that helper - that is supported.
 Return JSON only."""
 VSCHEMA={"type":"object","properties":{"verdicts":{"type":"array","items":{"type":"object","properties":{"n":{"type":"integer"},"problem":{"type":"string"},"supported":{"type":"boolean"}},"required":["n","problem","supported"],"propertyOrdering":["n","problem","supported"]}}},"required":["verdicts"]}
@@ -120,6 +125,21 @@ STRONG=("always","never","constantly","completely","every day","every night","at
 BANNED_COPY=re.compile(r"\b(AI|A\.I\.|artificial intelligence|Gemini|Claude|Anthropic|OpenAI|ChatGPT|Google|language model|chatbot|algorithm|our team|reviewed by|checked by)\b",re.I)
 NUMW={"once":"1","one":"1","twice":"2","two":"2","three":"3","four":"4","five":"5","six":"6","seven":"7","eight":"8","nine":"9","ten":"10","half":"2"}
 def _nums(s): return set(re.findall(r"\d+",s))|{NUMW[w] for w in re.findall(r"\b("+"|".join(NUMW)+r")\b",s.lower())}
+CAUSE=re.compile(r"\b(because|due to|caused by|as a result|which (makes|means|causes|leads)|that (makes|means|causes)|this (makes|means|causes)|leads? to|so that|so I|so he|so she|so they|so it|therefore)\b",re.I)
+_STOP=set("this that with when what which they them their there have from into about each time times more most very much also just only some other others usually often been being does doing makes means causes leads myself himself herself themselves yourself once twice three four five seven eight nine every".split())
+def cut_cause(text,cited):
+    """(text, removed clause): a cause or link ('..., which makes dressing difficult') the cited facts don't give is cut;
+    if the sentence can't stand without it, text is ''."""
+    m=CAUSE.search(text)
+    if not m or CAUSE.search(" ".join(cited)): return text,""
+    import grounding as G
+    src=G._stems(" ".join(cited)); clause=text[m.end():]
+    new=[w for w in re.findall(r"[a-z]+",clause.lower()) if len(w)>=4 and w not in _STOP and " "+G.stem(w)+" " not in src]
+    if not new: return text,""   # the link only joins things the cited facts say ('because he wanders' when a fact is 'help at night with: wandering'); the checker judges the link
+    head=text[:m.start()].rstrip(" ,;-")
+    if len(head.split())>=3 and m.start()>0 and text[m.start()-2:m.start()].strip() in (",",""):   # '..., which makes X' / '... because X'
+        return head+".",text[len(text[:m.start()]):].strip()
+    return "",text
 def rule_check(text,cited):
     """Problems a model isn't needed for: numbers or strong words the cited facts don't have."""
     src=" ".join(cited).lower(); t=text.lower(); p=[]
@@ -136,6 +156,7 @@ META=re.compile(r"^(what's hard is that|what is hard is that|the hard part is th
 def tidy(form,d,txt):
     """Cheap fixes a small model sometimes needs: meta openers ('What's hard is that ...') and, on DLA (parent's voice),
     'I struggle with / I need help or someone' that should be about the child."""
+    txt=LABEL_NOTE.sub("",txt)
     if re.search(r"\bnot (discussed|mentioned|stated|said|known)\b|\bno information\b|\bwasn't asked\b",txt,re.I): return ""   # never 'Not discussed'
     m=META.match(txt)
     if m and len(txt)>m.end(): txt=txt[m.end()].upper()+txt[m.end()+1:]
@@ -167,6 +188,7 @@ def write(form,d,history=None):
         try: xo=j2.result()
         except Exception as e: print("extras failed:",str(e)[:150],flush=True); xo={}
     sents=[]; removed=[]
+    xo=ground_extras(xo,F,removed)
     for b in out.get("boxes") or []:
         t=str(b.get("topic"))
         if t not in tops: continue
@@ -174,6 +196,9 @@ def write(form,d,history=None):
             txt=tidy(form,d," ".join(str(s.get("text","")).split())); ids=[i for i in (s.get("facts") or []) if i in fx and fx[i]["topic"] in (t,"*")]
             if not txt: continue
             if not ids: removed.append({"topic":t,"text":txt,"why":"no matching answer"}); continue
+            txt,cut=cut_cause(txt,[fx[i]["text"] for i in ids])
+            if cut: removed.append({"topic":t,"text":cut,"why":"a cause or link not in your answers"})
+            if not txt: continue
             pr=rule_check(txt,[fx[i]["text"] for i in ids])
             if pr: removed.append({"topic":t,"text":txt,"why":"; ".join(pr)}); continue
             sents.append({"topic":t,"text":txt,"facts":ids})
@@ -187,11 +212,18 @@ def write(form,d,history=None):
                 if not 0<=i<len(sents): bad.pop(i); continue
                 why=(bad[i] or "").lower()
                 if APPROVED.search(sents[i]["text"]) and re.search(r"at least one|not said which|picks? a specific|prompting or watching",why) and not re.search(r"also|addition|not mention|omit|extra",why): bad.pop(i)
+            seen={int(x["n"]) for x in v.get("verdicts") or [] if str(x.get("n","")).lstrip("-").isdigit()}
+            for i in range(len(sents)):
+                if i not in seen: bad[i]="no verdict from the checker"   # unchecked = not kept
             for i in sorted(bad,reverse=True): removed.append({"topic":sents[i]["topic"],"text":sents[i]["text"],"why":"verifier: "+(bad[i] or "not supported")}); sents.pop(i)
             vstat="checked"
         except cl.Unavailable as e:
             print("verifier unavailable:",str(e)[:150],flush=True); vstat="unavailable (grounding check still runs)"
     else: vstat="nothing to check"
+    # third pass: the grounding check (deterministic word lists + the separate grounding model) against the customer's answers;
+    # any sentence it flags is removed before the customer sees the draft
+    gstat=ground_sentences(sents,F,removed)
+    if removed: print(f"writer {form}: removed {len(removed)} sentence(s): "+"; ".join(f"{r['topic']}: {r['why'][:80]}" for r in removed),flush=True)
     base=I.fallback_draft(form,d) if d and form!="pipr" else {"answers":{},"sources":{},"tick_yes":[],"conditions":[],"extra":{},"checklist":[],"notes_for_user":[],"gp_letter":""}
     ans={t:" ".join(s["text"] for s in sents if s["topic"]==t) for t in tops}
     base["answers"]={t:ans.get(t,"") for t,_,_ in FORMS[form]["topics"]}
@@ -203,8 +235,57 @@ def write(form,d,history=None):
     if form in ("pip","pipr"): base["call_prep"]=clean(xo.get("call_prep"))[:5]
     if form=="pipr": base["changes"]="" if BANNED_COPY.search(xo.get("changes") or "") else (xo.get("changes") or "")
     base["facts"]={f["id"]:f["text"] for f in F}; base["cites"]=[{"topic":s["topic"],"text":s["text"],"facts":s["facts"]} for s in sents]
-    base["verifier"]={"status":vstat,"removed":removed}; base["drafted_from"]="claude"
+    base["verifier"]={"status":vstat,"grounding":gstat,"removed":removed}; base["drafted_from"]="claude"
     return llm._strip(base)
+XKINDS=("condition or symptom","medicine","number or frequency","frequency","stronger than your words","dose","outcome claim (never state eligibility or amounts)")
+LABEL_NOTE=re.compile(r"\s*\((?:[^()]*\bat least one\b[^()]*|[^()]*\bnot said which\b[^()]*)\)",re.I)   # our fact labels, never customer copy
+def ground_extras(xo,F,removed):
+    """Word-list grounding of the extras (checklist, notes, call prep, GP letter): drop any item or letter sentence that names a
+    condition, medicine, number, frequency or stronger wording the customer didn't give. Each removal is logged."""
+    import grounding as G
+    src="\n".join(f["text"] for f in F)
+    bad=lambda t:[f for f in G.check_answer(t,src) if f["kind"] in XKINDS or (f["kind"]=="person" and f["phrase"] not in ("doctor","gp"))]
+    out=dict(xo or {})
+    for k in ("checklist","notes_for_user","call_prep"):
+        keep=[]
+        for it in out.get(k) or []:
+            fl=bad(str(it)) if k!="checklist" else [f for f in bad(str(it)) if f["kind"]!="person"]   # a checklist may suggest a letter from a carer or teacher
+            if fl: removed.append({"topic":"extras:"+k,"text":str(it),"why":"grounding: "+", ".join(f"{f['kind']}: {f['phrase']}" for f in fl)})
+            else: keep.append(it)
+        if k in out: out[k]=keep
+    gl=LABEL_NOTE.sub("",str(out.get("gp_letter") or ""))
+    for k in ("checklist","notes_for_user","call_prep"):
+        if k in out: out[k]=[LABEL_NOTE.sub("",str(x)) for x in out[k]]
+    if gl:
+        lines=[]
+        for ln in gl.split("\n"):
+            ss=G.sentences(ln) if ln.strip() else []
+            kept=[]
+            for snt in ss:
+                fl=bad(snt)
+                if fl: removed.append({"topic":"extras:gp_letter","text":snt,"why":"grounding: "+", ".join(f"{f['kind']}: {f['phrase']}" for f in fl)})
+                else: kept.append(snt)
+            lines.append(" ".join(kept) if ss else ln)
+        out["gp_letter"]="\n".join(lines)
+    return out
+def ground_sentences(sents,F,removed):
+    """Remove (in place) every sentence the grounding check can't trace to the customer's answers; log each in removed."""
+    import grounding as G
+    if os.getenv("WRITER_GROUND","1")=="0" or not sents: return "skipped"
+    src="\n".join(f["text"] for f in F); tops=list(dict.fromkeys(s["topic"] for s in sents))
+    try: flags=G.check({t:" ".join(s["text"] for s in sents if s["topic"]==t) for t in tops},src)
+    except G.GroundingUnavailable as e:   # the word-list layer still runs; the model layer runs again before approval
+        print("grounding model unavailable in writer:",str(e)[:150],flush=True)
+        flags=G.check({t:" ".join(s["text"] for s in sents if s["topic"]==t) for t in tops},src,use_llm=False); st="word lists only (model checked again before approval)"
+    else: st="checked"
+    norm=lambda x:" ".join(str(x).lower().split())
+    for t,fl in flags.items():
+        for x in fl:
+            ph=norm(x.get("phrase",""))
+            if not ph: continue
+            for s in [s for s in sents if s["topic"]==t and ph in norm(s["text"])]:
+                removed.append({"topic":t,"text":s["text"],"why":f"grounding: {x.get('kind','not in your answers')}: {x.get('phrase')}"}); sents.remove(s)
+    return st
 def on(): return os.getenv("WRITER","claude")=="claude" and not llm.MOCK and not cl.mock()
 def on_mock(): return os.getenv("WRITER","claude")=="claude" and os.getenv("WRITER_MOCK_FACTS","0")=="1"
 def mock_write(form,d,history=None):

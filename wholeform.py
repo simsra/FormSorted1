@@ -797,7 +797,9 @@ def pdf_values(form,d,uploads=None):
             t("47",g)
         R=d.get("rows") or {}
         if (R.get("walk") or {}).get("lvl") not in (None,"ok"): t("44","/Yes")
-        elif (R.get("walk") or {}).get("lvl")=="ok": t("44","/No")
+        elif (R.get("walk") or {}).get("lvl")=="ok":
+            t("44","/No")
+            if not w.get("canwalk"): t("43",yn("yes"))   # no difficulty walking: they can walk (Q43 Yes, then Q44 No -> go to Q49)
         for f in [f"49_{i}" for i in range(1,9)]+["50_2","50_3","61_2","61_3","61_4","61_5","61_6"]+[f"62_{i}" for i in range(1,7)]+[f"63_{i}" for i in range(1,6)]+["64_3","64_4","65_5","65_6","65_11"]+[f"66_{i}" for i in range(1,11)]+[f"67_{i}" for i in range(1,9)]+[f"68_{i}" for i in range(1,7)]:
             if w.get(f) in ("yes","no"): t(f,yn(w[f]))
         for g_,l in [("out_g","Outdoors"),("falls_g","Falls"),("see_g","Seeing"),("hear_g","Hearing"),("speak_g","Speaking"),("comm_g","Communicating"),("fit_g","Fits"),("superv_g","Supervision"),("dev_g","Development"),("school_g","At school")]: other(l,g_)

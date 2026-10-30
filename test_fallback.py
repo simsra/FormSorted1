@@ -35,5 +35,5 @@ def boom(*a,**k): raise llm.LLMUnavailable("all drafting models down (test)")
 try:
     llm.MOCK=False; llm.draft=boom; app._draft_now(tok)
 finally: llm.MOCK,llm.draft=mock,real
-d=json.loads(app.get(tok)["draft"]); assert d["drafted_from"]=="taps" and d["answers"]["30"].startswith("Margaret needs help") and d["extra"]["fall_detail"] and d["intake_ticks"]["x29"]=="/No", d
+d=json.loads(app.get(tok)["draft"]); assert d["drafted_from"]=="taps" and d["answers"]["30"].startswith("I need help") and d["extra"]["fall_detail"] and d["intake_ticks"]["x29"]=="/No", d
 print("draft fallback ok")

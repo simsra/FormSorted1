@@ -72,4 +72,23 @@ check(writer.tidy("dla",{},"I need help or someone with me with dressing.").star
 check(writer.tidy("pip",{},"I struggle with cooking.").startswith("I struggle"),"tidy: PIP first person kept")
 check(writer.tidy("aa",{},"Not discussed.")=="","no 'Not discussed'")
 check(writer.APPROVED.search("Leo needs help or someone with him with dressing."),"approved level wording")
+# 30 Oct: typed details per tapped chip (inline intake follow-ups) reach the writer as own-words facts, the fallback and the answer check
+import intake as _I
+_d={"wf_v":1,"who":"me","rows":{"a1":{"lvl":"help","c":["hob"],"cx":{"hob":"I left a pan on and it caught fire in May"},"detail":"My partner cooks most nights"}}}
+_F=[f["text"] for f in writer.facts("pip",_d)]
+check(any("typed detail in the customer's own words: I left a pan on and it caught fire in May" in x for x in _F),"per-chip typed detail is a fact")
+check(any("My partner cooks most nights" in x for x in _F),"whole-task typed detail is a fact")
+_src="\n".join(m["content"] for m in _I.history("pip",_d) if m["role"]=="user")
+check("caught fire in May" in _src,"typed detail is in the answer-check source")
+check("caught fire in May" in _I.fallback_draft("pip",_d)["answers"]["a1"],"typed detail is in the fallback draft")
+check("Typed detail" in writer.SYS,"writer told to prefer typed details")
+# 30 Oct: long answers are wrapped by us and the box font shrinks to fit (DLA Q72 ran off the right edge)
+import fill_pdf as _F
+_sz,_tx=_F.layout("dla1a.pdf","72","Leo needs help every time he uses the toilet, every day. "*60)
+_w,_h=_F._rects("dla1a.pdf")["72"]
+check(7<=_sz<=10 and all(_F._sw(l,_sz)<=_w-8 for l in _tx.split("\n")),"Q72: every line fits the box width")
+check(len(_tx.split("\n"))*_sz*1.17<=_h,"Q72: all lines fit the box height")
+check(_F.layout("dla1a.pdf","72","Short.")[0]==10,"short answers keep 10pt")
+check(_F.layout("dla1a.pdf","72","It\u2019s 2\u20133 times \u201cbad\u201d days \u2265 week \U0001F600")[0]==10,"non-Latin-1 text measures")
 print("writer:", "FAIL "+str(len(FAILS)) if FAILS else "OK"); sys.exit(1 if FAILS else 0)
+

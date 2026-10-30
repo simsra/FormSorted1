@@ -33,14 +33,21 @@ def _stems(text): return " "+" ".join(stem(w) for w in re.sub(r"[^a-z0-9&-]"," "
 def terms(text, vocab):
     low=_stems(text)
     return {t for t in vocab if _stems(t) in low}
+def _norm_src(source):
+    """Form-style answers ('times a day (for each part): 3', 'Days a month with fits: 1') also read as '3 times a day', '1 days a month'."""
+    add=[f"{m.group(3)} {m.group(1)} a {m.group(2)}" for m in re.finditer(r"\b(times|days|nights) a (day|night|week|month|year)\b[^:\n]*:\s*(\d+)",source,re.I)]
+    return source+("\n"+"\n".join(add) if add else "")
 def check_answer(draft, source):
     """Deterministic: returns list of {phrase, kind}."""
-    flags=[]; src=source.lower()
+    source=_norm_src(source); flags=[]; src=source.lower()
     sq=quantities(source); src_nums={(n,u) for n,u,_ in sq}; src_numbers={n for n,_,_ in sq}|{float(x) for x in re.findall(r"\d+(?:\.\d+)?",source)}|{float(v) for k,v in NUMW.items() if re.search(rf"\b{k}\b",src)}
     for n,u,ph in quantities(draft):
         if (n,u) not in src_nums: flags.append({"phrase":ph,"kind":"number or frequency"})
     for m in FREQW.finditer(draft):
-        if m.group(0).lower() not in src: flags.append({"phrase":m.group(0),"kind":"frequency"})
+        w=m.group(0).lower()
+        if w in ("every day","daily") and re.search(r"\b(7|seven) days\b|\bevery day\b|\bdaily\b",src): continue   # '7 days a week' said plainly
+        if w in ("every night","nightly") and re.search(r"\b(7|seven) nights\b|\bevery night\b",src): continue
+        if w not in src: flags.append({"phrase":m.group(0),"kind":"frequency"})
     for kind,vocab in (("condition or symptom",CONDITIONS),("medicine",MEDS),("aid or equipment",AIDS),("person",PEOPLE),("place",PLACES)):
         for t in terms(draft,vocab)-terms(source,vocab): flags.append({"phrase":t,"kind":kind})
     for m in EXAGG.finditer(draft):   # stronger than the customer's words (Oct 2026: never exaggerate)
