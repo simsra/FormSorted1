@@ -1,15 +1,15 @@
-"""Form writer (30 Oct 2026, Gemini): writes each box from the customer's own answers and nothing else.
+"""Form writer (30 Oct 2026, Claude): writes each box from the customer's own answers and nothing else.
 1. facts(): every answer becomes a short numbered fact (F1, F2...) tied to a form box. Taps, the whole-form questions,
    quick checks and the customer's own words all count; nothing else does (no documents unless confirmed, no guesses).
-2. Gemini writes each box as sentences, and every sentence must name the facts it comes from.
+2. Claude writes each box as sentences, and every sentence must name the facts it comes from.
 3. Any sentence with no valid fact, or with a number, frequency or strong word ('always', 'never'...) that its facts
    don't have, is dropped (no model needed).
-4. A second Gemini pass (the verifier) checks each sentence against its facts and removes anything unsupported.
+4. A second Claude pass (the verifier) checks each sentence against its facts and removes anything unsupported.
 5. The usual answer check (grounding.py) still runs before the customer approves, with these facts in its source.
 Voice: the claimant's own first person ('I'), as DWP asks even when someone else fills it in; DLA in the parent's voice
-about the child. If Gemini can't be reached the tap sentences (intake.fallback_draft) are used, as before."""
+about the child. If Claude can't be reached the tap sentences (intake.fallback_draft) are used, as before."""
 import json, re, os
-import intake as I, gem, llm
+import intake as I, claude as cl, llm
 from forms import FORMS
 NOT_DRAFTED={"dla":{"statement"}}   # the statement box is for the person who knows the child; we only say who could write it (left blank)
 TOPIC_OF={"aa":[("bed_enc","29"),("pr_indoors","33"),("comm2","37"),("falls_m","34"),("fall_what","34"),("stum_","34"),("eye","40"),("w_","44"),("n_","42"),("aid_","33")],
@@ -98,7 +98,7 @@ XSYS="""From the customer's FACTS for a UK benefit form ({short}), write short h
 - checklist: up to 6 kinds of evidence they could include that relate to the facts (e.g. 'A copy of your repeat prescription list'). Never invent a document they have.
 - gp_letter: a short polite letter FROM the customer to their GP asking for a letter that confirms their condition and how it affects them. Only facts given. Sign off 'Yours sincerely,' then a blank line for their name.
 - notes_for_user: up to 3 short tips about completing or sending the form (no outcomes, no advice on eligibility).
-{extra}Never mention AI, models, software, Google or that anyone has checked the form. Return JSON."""
+{extra}Never mention AI, models, software, Claude, Anthropic or that anyone has checked the form. Return JSON."""
 XSCHEMA={"type":"object","properties":{"checklist":{"type":"array","items":{"type":"string"}},"gp_letter":{"type":"string"},"notes_for_user":{"type":"array","items":{"type":"string"}},
   "call_prep":{"type":"array","items":{"type":"string"}},"changes":{"type":"string"}},"required":["checklist","gp_letter","notes_for_user"]}
 VSYS="""You check sentences written for a UK benefit form. For each sentence you get the facts it cites (the customer's own answers).
@@ -114,7 +114,7 @@ Return JSON only."""
 VSCHEMA={"type":"object","properties":{"verdicts":{"type":"array","items":{"type":"object","properties":{"n":{"type":"integer"},"problem":{"type":"string"},"supported":{"type":"boolean"}},"required":["n","problem","supported"],"propertyOrdering":["n","problem","supported"]}}},"required":["verdicts"]}
 APPROVED=re.compile(r"help or someone with (me|him|her|them)|struggles? with|finds? it hard|slow, painful or tiring|safely on (my|his|her|their) own",re.I)
 STRONG=("always","never","constantly","completely","every day","every night","at all","impossible","cannot","can't","unable")
-BANNED_COPY=re.compile(r"\b(AI|A\.I\.|artificial intelligence|Gemini|Google|language model|chatbot|algorithm|our team|reviewed by|checked by)\b",re.I)
+BANNED_COPY=re.compile(r"\b(AI|A\.I\.|artificial intelligence|Gemini|Claude|Anthropic|OpenAI|ChatGPT|Google|language model|chatbot|algorithm|our team|reviewed by|checked by)\b",re.I)
 NUMW={"once":"1","one":"1","twice":"2","two":"2","three":"3","four":"4","five":"5","six":"6","seven":"7","eight":"8","nine":"9","ten":"10","half":"2"}
 def _nums(s): return set(re.findall(r"\d+",s))|{NUMW[w] for w in re.findall(r"\b("+"|".join(NUMW)+r")\b",s.lower())}
 def rule_check(text,cited):
@@ -133,6 +133,7 @@ META=re.compile(r"^(what's hard is that|what is hard is that|the hard part is th
 def tidy(form,d,txt):
     """Cheap fixes a small model sometimes needs: meta openers ('What's hard is that ...') and, on DLA (parent's voice),
     'I struggle with / I need help or someone' that should be about the child."""
+    if re.search(r"\bnot (discussed|mentioned|stated|said|known)\b|\bno information\b|\bwasn't asked\b",txt,re.I): return ""   # never 'Not discussed'
     m=META.match(txt)
     if m and len(txt)>m.end(): txt=txt[m.end()].upper()+txt[m.end()+1:]
     if form=="dla":
@@ -147,7 +148,7 @@ def tidy(form,d,txt):
     return txt
 def write(form,d,history=None):
     """Draft dict in the usual shape (answers, sources, tick_yes, extra, checklist, gp_letter, notes_for_user...) plus
-    'facts', 'verifier' (what was removed and why) and 'drafted_from'. Raises gem.Unavailable if Gemini can't be reached."""
+    'facts', 'verifier' (what was removed and why) and 'drafted_from'. Raises cl.Unavailable if Claude can't be reached."""
     F=facts(form,d,history); fx={f["id"]:f for f in F}
     tops=[t for t,_,_ in FORMS[form]["topics"] if t not in NOT_DRAFTED.get(form,())]
     has={t for f in F for t in ([f["topic"]] if f["topic"]!="*" else tops)}
@@ -156,9 +157,9 @@ def write(form,d,history=None):
     short=FORMS[form]["short"]
     import concurrent.futures as cf
     with cf.ThreadPoolExecutor(2) as ex:
-        j1=ex.submit(gem.call,gem.WRITER,SYS.format(short=short,voice=VOICE.get(form,VOICE["pip"]),topics=", ".join(tops)),user,SCHEMA,"draft")
+        j1=ex.submit(cl.call,cl.WRITER,SYS.format(short=short,voice=VOICE.get(form,VOICE["pip"]),topics=", ".join(tops)),user,SCHEMA,"draft")
         xe=("- call_prep: up to 5 short points to prepare for a phone assessment, from the facts.\n" if form in ("pip","pipr") else "")+("- changes: one short plain summary of what the facts say has changed.\n" if form=="pipr" else "")
-        j2=ex.submit(gem.call,gem.VERIFY,XSYS.format(short=short,extra=xe),json.dumps({"facts":F},ensure_ascii=False),XSCHEMA,"extras")
+        j2=ex.submit(cl.call,cl.VERIFY,XSYS.format(short=short,extra=xe),json.dumps({"facts":F},ensure_ascii=False),XSCHEMA,"extras")
         out=j1.result()
         try: xo=j2.result()
         except Exception as e: print("extras failed:",str(e)[:150],flush=True); xo={}
@@ -173,11 +174,11 @@ def write(form,d,history=None):
             pr=rule_check(txt,[fx[i]["text"] for i in ids])
             if pr: removed.append({"topic":t,"text":txt,"why":"; ".join(pr)}); continue
             sents.append({"topic":t,"text":txt,"facts":ids})
-    # second pass: Gemini checks each sentence against the facts it cites
+    # second pass: Claude checks each sentence against the facts it cites
     if sents:
         vin=[{"n":i,"sentence":s["text"],"facts":[fx[f]["text"] for f in s["facts"]]} for i,s in enumerate(sents)]
         try:
-            v=gem.call(gem.VERIFY,VSYS,json.dumps(vin,ensure_ascii=False),VSCHEMA,"verify")
+            v=cl.call(cl.VERIFY,VSYS,json.dumps(vin,ensure_ascii=False),VSCHEMA,"verify")
             bad={int(x["n"]):x.get("problem","") for x in v.get("verdicts") or [] if x.get("supported") is False and str(x.get("problem","")).strip().lower().rstrip(".")!="none"}
             for i in list(bad):
                 if not 0<=i<len(sents): bad.pop(i); continue
@@ -185,7 +186,7 @@ def write(form,d,history=None):
                 if APPROVED.search(sents[i]["text"]) and re.search(r"at least one|not said which|picks? a specific|prompting or watching",why) and not re.search(r"also|addition|not mention|omit|extra",why): bad.pop(i)
             for i in sorted(bad,reverse=True): removed.append({"topic":sents[i]["topic"],"text":sents[i]["text"],"why":"verifier: "+(bad[i] or "not supported")}); sents.pop(i)
             vstat="checked"
-        except gem.Unavailable as e:
+        except cl.Unavailable as e:
             print("verifier unavailable:",str(e)[:150],flush=True); vstat="unavailable (grounding check still runs)"
     else: vstat="nothing to check"
     base=I.fallback_draft(form,d) if d and form!="pipr" else {"answers":{},"sources":{},"tick_yes":[],"conditions":[],"extra":{},"checklist":[],"notes_for_user":[],"gp_letter":""}
@@ -199,10 +200,10 @@ def write(form,d,history=None):
     if form in ("pip","pipr"): base["call_prep"]=clean(xo.get("call_prep"))[:5]
     if form=="pipr": base["changes"]="" if BANNED_COPY.search(xo.get("changes") or "") else (xo.get("changes") or "")
     base["facts"]={f["id"]:f["text"] for f in F}; base["cites"]=[{"topic":s["topic"],"text":s["text"],"facts":s["facts"]} for s in sents]
-    base["verifier"]={"status":vstat,"removed":removed}; base["drafted_from"]="gemini"
+    base["verifier"]={"status":vstat,"removed":removed}; base["drafted_from"]="claude"
     return llm._strip(base)
-def on(): return os.getenv("WRITER","gemini")=="gemini" and not llm.MOCK and not gem.mock()
-def on_mock(): return os.getenv("WRITER","gemini")=="gemini" and os.getenv("WRITER_MOCK_FACTS","0")=="1"
+def on(): return os.getenv("WRITER","claude")=="claude" and not llm.MOCK and not cl.mock()
+def on_mock(): return os.getenv("WRITER","claude")=="claude" and os.getenv("WRITER_MOCK_FACTS","0")=="1"
 def mock_write(form,d,history=None):
     """Tests without a key: the same facts and checks, sentences taken straight from the facts (no model)."""
     F=facts(form,d,history); dd=I.fallback_draft(form,d) if d and form!="pipr" else {"answers":{},"sources":{}}

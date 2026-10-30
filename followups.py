@@ -1,8 +1,8 @@
 """Quick checks (30 Oct 2026): a completeness check per DWP descriptor before anything is written.
 For every task the customer said is hard we look at what we already know about the six things DWP decides on:
 how often, how long, who helps, aids, what could go wrong (safety) and a real example. Anything we can work out
-from earlier answers counts as known and is never asked again. Gemini picks which gaps matter most for that
-descriptor (at most 2 per task, a small total per form); if Gemini can't be reached the same rules pick them.
+from earlier answers counts as known and is never asked again. Claude picks which gaps matter most for that
+descriptor (at most 2 per task, a small total per form); if Claude can't be reached the same rules pick them.
 Every check is ONE short line with tap answers plus 'Something else', and every check can be skipped.
 The answers go into the customer's facts as 'Checked with you: ...' so the writer and the answer check use them."""
 import json, os
@@ -52,7 +52,7 @@ def gaps(form,d):
     return out
 PRI={"risk":0,"often":1,"who":2,"long":3,"aids":4,"example":5}
 def pick_rules(form,d,G):
-    """No-Gemini fallback: the most important gap per task (safety first), worst tasks first, up to the cap."""
+    """No-Claude fallback: the most important gap per task (safety first), worst tasks first, up to the cap."""
     R=d.get("rows") or {}; order={"cant":0,"help":1,"slow":2}
     G=sorted(G,key=lambda g:order.get((R.get(g[0]) or {}).get("lvl"),3))
     out=[]; used={}
@@ -70,12 +70,12 @@ def pick(form,d):
     """Choose the checks for this order: [(rid, dim)], stored with the reason it came from."""
     G=gaps(form,d)
     if not G: return [],"no gaps"
-    import gem
-    if gem.mock(): return pick_rules(form,d,G),"rules"
+    import claude as cl
+    if cl.mock(): return pick_rules(form,d,G),"rules"
     intro,T=I.topic_texts(form,d); R=d.get("rows") or {}
     tasks=[{"task":rid,"name":lab,"level":(R.get(rid) or {}).get("lvl"),"known":T.get(top,""),"missing":m} for rid,lab,top,m in G]
     try:
-        out=gem.call(gem.FOLLOW,SYS.replace("CAP",str(CAP[form])),json.dumps({"form":form,"about":intro,"own_words":d.get("words",""),"tasks":tasks},ensure_ascii=False),SCHEMA,purpose="followups",timeout=int(os.getenv("FOLLOWUP_TIMEOUT","10")),retries=0)
+        out=cl.call(cl.FOLLOW,SYS.replace("CAP",str(CAP[form])),json.dumps({"form":form,"about":intro,"own_words":d.get("words",""),"tasks":tasks},ensure_ascii=False),SCHEMA,purpose="followups",timeout=int(os.getenv("FOLLOWUP_TIMEOUT","10")),retries=0)
     except Exception as e:
         print("FOLLOWUPS fallback:",str(e)[:160],flush=True); return pick_rules(form,d,G),"rules"
     ok={rid:set(m) for rid,_,_,m in G}; seen=set(); per={}; P=[]
@@ -83,7 +83,7 @@ def pick(form,d):
         rid,dim=str(p.get("task")),str(p.get("need"))
         if dim in ok.get(rid,()) and (rid,dim) not in seen and per.get(rid,0)<PER_TOPIC:
             seen.add((rid,dim)); per[rid]=per.get(rid,0)+1; P.append((rid,dim))
-    return P[:CAP[form]],"gemini"
+    return P[:CAP[form]],"claude"
 def _task(lab,me):
     return lab
 def question(form,d,rid,dim):

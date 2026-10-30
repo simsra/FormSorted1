@@ -236,7 +236,7 @@ def save(form,sec,d,fm):
         import followups   # completeness check per hard task before anything is written (asked once; answered checks count as known)
         keep=[tuple(x) for x in d.get("fu_qs") or [] if f"{x[0]}_{x[1]}" not in (d.get("fu") or {})]
         if os.getenv("FOLLOWUPS","1")=="0": d["fu_qs"],d["fu_how"]=[],"off"
-        elif keep: d["fu_qs"]=keep   # coming back through: same checks, no new Gemini call
+        elif keep: d["fu_qs"]=keep   # coming back through: same checks, no new model call
         else: d["fu_qs"],d["fu_how"]=followups.pick(form,d)
         d["coverage"]=followups.coverage(form,d)
     return d

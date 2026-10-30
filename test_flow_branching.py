@@ -2,7 +2,7 @@
 'For myself' must never see other-person questions or 'they/them' about the claimant; 'someone else' gets their name;
 quick checks: at most 2 per task, never ask what we already know, every list has 'Something else', all skippable."""
 import os, re, sys, html
-os.environ["GEMINI_MOCK"]="1"; os.environ["WF_LOOKUPS"]="0"; os.environ["FOLLOWUPS"]="1"
+os.environ["CLAUDE_MOCK"]="1"; os.environ["WF_LOOKUPS"]="0"; os.environ["FOLLOWUPS"]="1"
 import intake as I, wholeform as W, followups as FU
 from test_personas import FM, rows, walk, AA_STEPS, PIP_STEPS, DLA_STEPS
 FAILS=[]

@@ -362,7 +362,7 @@ def _draft_now(token):
     t=time.time(); form=o["form"] or "aa"; taps=bool(I.get("rows")) and form in INTAKE.FORMS_V3
     if taps and llm.MOCK: d=WRITER.mock_write(form,I) if WRITER.on_mock() else INTAKE.fallback_draft(form,I)   # local runs: sentences from the taps (the sample case is someone else's story)
     elif WRITER.on() and (taps or form=="pipr"):
-        # 30 Oct: Gemini writer (writer.py): every sentence cites the customer's answers, then a verifier pass. Grounding still runs after.
+        # 30 Oct: Claude writer (writer.py): every sentence cites the customer's answers, then a verifier pass. Grounding still runs after.
         try: d=WRITER.write(form,I if taps else {},h)
         except Exception as e:
             print("writer fell back",form,str(e)[:200],flush=True)
