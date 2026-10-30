@@ -1,9 +1,9 @@
 """Branching and wording tests for the tap intake (30 Oct 2026). No server, no AI (quick checks use the no-AI rules).
 'For myself' must never see other-person questions or 'they/them' about the claimant; 'someone else' gets their name;
-(quick checks live on the writer branch and are not tested here)."""
+quick checks: at most 2 per task, never ask what we already know, every list has 'Something else', all skippable."""
 import os, re, sys, html
-os.environ["WF_LOOKUPS"]="0"
-import intake as I, wholeform as W
+os.environ["CLAUDE_MOCK"]="1"; os.environ["WF_LOOKUPS"]="0"; os.environ["FOLLOWUPS"]="1"
+import intake as I, wholeform as W, followups as FU
 from test_personas import FM, rows, walk, AA_STEPS, PIP_STEPS, DLA_STEPS
 FAILS=[]
 def check(ok,msg):
@@ -54,4 +54,36 @@ check(re.search(r'value="Pendant alarm" checked',b) is not None,"pendant alarm p
 d,L=walk("aa",{"who":"me"},AA_STEPS,stop="finish")
 b=[x[4] for x in L if x[0]=="often"]
 check(b and "<legend>Different for some" not in b[0] and "diffopt" in b[0],"diff merged into its question")
+# 7. quick checks: cap, per-task limit, never re-ask, Something else, skippable, answers become facts
+for form,about,steps in (("aa",{"who":"me"},AA_STEPS),("pip",{"who":"me"},PIP_STEPS),("dla",DLA_STEPS["about"],DLA_STEPS)):
+    d,L=walk(form,about,steps,stop="more")
+    qs=d.get("fu_qs") or []
+    check(len(qs)<=FU.CAP[form],f"{form}: quick checks within cap ({len(qs)})")
+    per={}
+    for rid,dim in qs: per[rid]=per.get(rid,0)+1
+    check(all(v<=2 for v in per.values()),f"{form}: at most 2 per task")
+    for rid,dim in qs:
+        v=(d.get("rows") or {}).get(rid) or {}
+        if dim=="often": check(not I._ok(v.get("days")),f"{form}: never ask how often when days were given ({rid})")
+        if form=="dla": check(dim!="who",f"dla: never ask who helps (the parent does)")
+    for q in FU.questions(form,d):
+        if q["kind"] in("radio","checks"): check(q["other"],f"{form}: {q['id']} has Something else")
+        check(len(q["label"])<=70,f"{form}: one short line: {q['label']}")
+    if qs:
+        check("more" in [k for k,_ in I.sections(form,d)],f"{form}: quick checks part shown")
+        # skip all: nothing stored as a fact, marked skipped, and not asked again when they come back through
+        d=I.save(form,"more",d,FM({})); check(all(st=="skipped" for st in d["fu"].values()),f"{form}: skipped")
+        check(not any(k.startswith("fu_") for k in d.get("clarify",{})),f"{form}: skipped adds no facts")
+        before=list(qs); d=I.save(form,"finish",d,FM(steps.get("finish",{})))
+        check(not set(map(tuple,d.get("fu_qs") or []))&set(map(tuple,before)),f"{form}: never re-asks a skipped check")
+    # answer one: becomes a 'Checked with you' fact in the right box
+    d,_=walk(form,about,steps,stop="more"); qs=d.get("fu_qs") or []
+    if qs:
+        q=FU.questions(form,d)[0]; val=q["opts"][0][0] if q["opts"] else "Last week I needed help"
+        d=I.save(form,"more",d,FM({q["id"]:[val] if q["kind"]=="checks" else val}))
+        _,T=I.topic_texts(form,d); topic=dict((r[0],r[1]) for r in I.rows(form,None,d))[qs[0][0]]
+        check("Checked with you:" in T.get(topic,""),f"{form}: answer goes into box {topic}")
+        check(d["coverage"] and any("asked: answered" in v.values() for v in d["coverage"].values()),f"{form}: coverage map records it")
+# 8. FOLLOWUPS=0 switches them off
+os.environ["FOLLOWUPS"]="0"; d,_=walk("pip",{"who":"me"},PIP_STEPS); check("more" not in [k for k,_ in I.sections("pip",d)],"FOLLOWUPS=0 off"); os.environ.pop("FOLLOWUPS")
 print("flow branching:", "FAIL "+str(len(FAILS)) if FAILS else "OK"); sys.exit(1 if FAILS else 0)

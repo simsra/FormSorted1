@@ -56,7 +56,10 @@ def _write(form, values, personal, out_path, ticks=None, extra=None):
     r=PdfReader(os.path.join(HERE,pdf))
     if r.is_encrypted: r.decrypt("")
     w=PdfWriter(); w.append(r)
-    for p in w.pages: w.update_page_form_field_values(p,vals,auto_regenerate=False)
+    wv={k:v for k,v in vals.items() if not k.startswith("_")}
+    try: wv=set_layout(w,pdf,wv)
+    except Exception as e: print("pdf layout skipped:",type(e).__name__,e)   # never lose the form over line-wrapping
+    for p in w.pages: w.update_page_form_field_values(p,wv,auto_regenerate=False)
     if ticks: T.apply(w,T.validate(form,ticks))
     if xticks:   # whole-form ticks: each state was read off the PDF itself, so check it is still offered there
         opts=T.options(form); T.apply(w,{f:s for f,s in xticks.items() if f in opts and s in opts[f][1]})
@@ -103,6 +106,55 @@ def overlay(form, pdf_bytes, fields, tick=None):
         import ticks as T; opts=T.options(form); T.apply(w,{f:s for f,s in tk.items() if f in opts and s in opts[f][1]})
     w.set_need_appearances_writer(True); b=io.BytesIO(); w.write(b); return b.getvalue()
 
+# ---- Wrap multi-line boxes ourselves, so every viewer shows the same lines inside the box ----
+_FP=None
+def _sw(t,size):
+    """Width in pt of t in Helvetica (same metrics as the form's ArialMT)."""
+    global _FP
+    if _FP is None:
+        from fpdf import FPDF
+        _FP=FPDF(unit="pt"); _FP.add_page()
+    _FP.set_font("Helvetica",size=size)
+    t="".join(c if ord(c)<256 else "n" for c in t)   # core font is Latin-1 only: measure dashes, curly quotes etc. as an 'n'
+    return _FP.get_string_width(t)
+PAD=4.0; SAFE=0.93   # inner padding each side (pt) and slack for viewers whose text is a little wider than Helvetica
+def wrap(text,width,size):
+    """Lines of text broken at spaces so each fits width at size (very long words are split)."""
+    lim=(width-2*PAD)*SAFE; out=[]
+    for para in str(text).replace("\r","").split("\n"):
+        line=""
+        for wd in para.split(" "):
+            cand=(line+" "+wd) if line else wd
+            if _sw(cand,size)<=lim: line=cand; continue
+            if line: out.append(line)
+            while _sw(wd,size)>lim and len(wd)>1:   # split a word too long for the box
+                k=len(wd)
+                while k>1 and _sw(wd[:k],size)>lim: k-=1
+                out.append(wd[:k]); wd=wd[k:]
+            line=wd
+        out.append(line)
+    return out
+SIZES=(10,9,8,7)
+def layout(pdf,name,text):
+    """(size, wrapped text) for a multi-line box: the largest of SIZES at which all lines fit its height."""
+    if pdf not in _RC: _RC[pdf]=_rects(pdf)
+    w,h=_RC[pdf].get(name,(0,0))
+    for size in SIZES:
+        lines=wrap(text,w,size)
+        if len(lines)*size*1.17<=h-2*PAD/2: return size,"\n".join(lines)
+    return SIZES[-1],"\n".join(wrap(text,w,SIZES[-1]))
+def set_layout(w,pdf,vals):
+    """Pre-wrap each multi-line value and set its box's font size (DA) to match. Returns the new values."""
+    if pdf not in _RC: _RC[pdf]=_rects(pdf)
+    from pypdf.generic import NameObject, TextStringObject
+    sizes={}; vals=dict(vals)
+    for n in _ML.get(pdf,()):
+        if isinstance(vals.get(n),str) and vals[n].strip(): sizes[n],vals[n]=layout(pdf,n,vals[n])
+    for p in w.pages:
+        for a in p.get("/Annots") or []:
+            a=a.get_object(); n=a.get("/T")
+            if n in sizes: a[NameObject("/DA")]=TextStringObject(f"/ArialMT {sizes[n]} Tf 0 g")
+    return vals
 # ---- Fit long answers into boxes; overflow goes to the additional-information box ----
 import re as _re
 FS=8.0  # assumed font size (pt) for capacity estimate; conservative
@@ -116,8 +168,10 @@ def _rects(pdf):
             a=a.get_object(); par=a.get("/Parent"); n=a.get("/T") or (par.get_object().get("/T") if par else None)
             if n and "/Rect" in a:
                 x0,y0,x1,y1=[float(v) for v in a["/Rect"]]; out[str(n)]=(abs(x1-x0),abs(y1-y0))
+                ff=int(a.get("/Ff") or (par.get_object().get("/Ff") if par else 0) or 0)
+                if ff & 4096: _ML.setdefault(pdf,set()).add(str(n))
     return out
-_RC={}
+_RC={}; _ML={}
 def capacity(pdf,name):
     if pdf not in _RC: _RC[pdf]=_rects(pdf)
     w,h=_RC[pdf].get(name,(0,0))

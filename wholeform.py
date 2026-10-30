@@ -18,12 +18,15 @@ MINS=[("5","5 min"),("10","10 min"),("15","15 min"),("20","20 min"),("30","30 mi
 SECTIONS={"aa":[("you","Personal details"),("helper","About you, the person helping"),("health","Doctors and treatment"),("home","Home and a few checks")],
           "dla":[("child","Your child's details"),("parent","Your details"),("health","Doctors, school and treatment"),("home","Home and a few checks")]}
 OFTEN=("often","How often and how long")
+MORE=("more","A few quick checks")
 # minutes per section for 'about N minutes left' (measured on the walk-through; see test_wholeform.py)
-WEIGHT={"about":.4,"conds":.8,"daily":1.6,"safety":.9,"often":1.3,"finish":.5,"you":1.0,"child":1.0,"helper":.5,"parent":.8,"health":1.2,"home":.8,"evidence":.5}
+WEIGHT={"more":.4,"about":.4,"conds":.8,"daily":1.6,"safety":.9,"often":1.3,"finish":.5,"you":1.0,"child":1.0,"helper":.5,"parent":.8,"health":1.2,"home":.8,"evidence":.5}
 def on(): import os; return os.getenv("WHOLE_FORM","1")!="0"
 def sections(form,d):
     """Section list for intake.py. Whole-form orders get the extra sections; the 'often' one goes after nights."""
     base=list(I.SECTIONS[form])
+    if (d or {}).get("fu_qs"):   # quick checks straight after 'Aids and anything else' (followups.py)
+        j=[k for k,_ in base].index("finish")+1; base=base[:j]+[MORE]+base[j:]
     if form not in SECTIONS or not (d or {}).get("wf_v"): return base
     ids=[k for k,_ in base]; out=base[:ids.index("finish")]+[OFTEN]+base[ids.index("finish"):]+SECTIONS[form]
     return [(k,l) for k,l in out if applies(form,k,d)]
@@ -49,7 +52,7 @@ def minutes_left(form,d,sec):
             except Exception: left+=60*WEIGHT.get(k,.8)
         else: left+=60*WEIGHT.get(k,.8)
     n=max(1,round(left/60)); d["left_min"]=n; return n
-def WF_IDS(form): return {"often"}|{k for k,_ in SECTIONS.get(form,[])}
+def WF_IDS(form): return {"often","more"}|{k for k,_ in SECTIONS.get(form,[])}
 # ---------- question model ----------
 def Q(id,label,kind="radio",opts=(),hint="",dep=None,ac="off",ph="",cls="",maxlen=120,rows=None,other=True,pre=None):
     """dep: (name, values) or a list of them (all must hold). pre: options the customer already told us about earlier;
@@ -170,6 +173,7 @@ ACT_OFTEN=[("daily","Every day"),("few","A few times a week"),("weekly","Once a 
 ACT_LONG=[("30","30 minutes"),("1h","1 hour"),("2h","2 hours"),("half","Half a day or more")]
 # ---------- the questions ----------
 def questions(form,sec,d):
+    if sec=="more": import followups; return followups.questions(form,d)
     w=d.get("wf") or {}; you=_you(d,form); do=_do(d,form); your=_your(d,form); qs=[]; P=PR(d,form)
     if sec in ("you","child"):
         child=form=="dla"; who="your child" if child else you
@@ -437,7 +441,7 @@ def rep(pre,n,base,make,more_label):
         out+=make(i,dp)
         if i<n: out.append(Q(f"{pre}_more{i}",more_label,"radio",YN,dep=dp,other=False)); dp=(f"{pre}_more{i}",["yes"])
     return out
-def is_wf_section(sec): return sec in {"you","child","helper","parent","health","home","often"}
+def is_wf_section(sec): return sec in {"you","child","helper","parent","health","home","often","more"}
 def section_body(form,sec,d):
     w=W(d); pre=prefill(form,d)
     for k,v in pre.items(): w.setdefault(k,v)
@@ -456,6 +460,7 @@ def save(form,sec,d,fm):
             w.pop(q["id"],None); w.pop(q["id"]+"_x",None)
             for r in (q["rows"] if q["kind"]=="tap" else []): w.pop(r[0],None)
     if sec=="home" and "none" in (w.get("checks") or []): w["checks"]=["none"]
+    if sec=="more": import followups; followups.absorb(form,d); return d
     normalise(form,sec,d)
     if sec in ("you","child") and w.get("pc"): pc_meta(w,"pc")
     if sec=="you" or sec=="parent" or sec=="child" or sec=="health":
@@ -754,7 +759,7 @@ def pdf_values(form,d,uploads=None):
         v("24_1",", ".join(dict.fromkeys(x for x in docs if x)))
         p=prof(form,d)
         if p:
-            t("25","/Yes"); v("25_1",w.get("pr_name") or f"Their {p.lower()}"); v("25_2",p); addr(["25_3","25_4","25_5"],[w.get("pr_where"),w.get("pr_town")]); v("25_6",w.get("pr_pc"))
+            t("25","/Yes"); v("25_1",w.get("pr_name") or f"My {p.lower()}"); v("25_2",p); addr(["25_3","25_4","25_5"],[w.get("pr_where"),w.get("pr_town")]); v("25_6",w.get("pr_pc"))
             v("25_7",w.get("pr_tel")); v("25_8",w.get("pr_hosp")); v("25_9",w.get("pr_cond_x") or w.get("pr_cond")); v("25_10",seen_txt(w.get("pr_seen"),w.get("pr_seen_x")))
             t("89_3","/You have included")
         elif w.get("pr_any"): t("25",yn(w["pr_any"]))
@@ -792,7 +797,9 @@ def pdf_values(form,d,uploads=None):
             t("47",g)
         R=d.get("rows") or {}
         if (R.get("walk") or {}).get("lvl") not in (None,"ok"): t("44","/Yes")
-        elif (R.get("walk") or {}).get("lvl")=="ok": t("44","/No")
+        elif (R.get("walk") or {}).get("lvl")=="ok":
+            t("44","/No")
+            if not w.get("canwalk"): t("43",yn("yes"))   # no difficulty walking: they can walk (Q43 Yes, then Q44 No -> go to Q49)
         for f in [f"49_{i}" for i in range(1,9)]+["50_2","50_3","61_2","61_3","61_4","61_5","61_6"]+[f"62_{i}" for i in range(1,7)]+[f"63_{i}" for i in range(1,6)]+["64_3","64_4","65_5","65_6","65_11"]+[f"66_{i}" for i in range(1,11)]+[f"67_{i}" for i in range(1,9)]+[f"68_{i}" for i in range(1,7)]:
             if w.get(f) in ("yes","no"): t(f,yn(w[f]))
         for g_,l in [("out_g","Outdoors"),("falls_g","Falls"),("see_g","Seeing"),("hear_g","Hearing"),("speak_g","Speaking"),("comm_g","Communicating"),("fit_g","Fits"),("superv_g","Supervision"),("dev_g","Development"),("school_g","At school")]: other(l,g_)

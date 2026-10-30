@@ -11,10 +11,10 @@ PROVIDERS={"openai":(os.getenv("OPENAI_BASE_URL","https://api.openai.com/v1"),os
  "anthropic":(os.getenv("ANTHROPIC_BASE_URL","https://api.anthropic.com/v1"),os.getenv("ANTHROPIC_API_KEY","")),
  "custom":(os.getenv("LLM_BASE_URL",""),os.getenv("LLM_API_KEY",""))}
 def _chain(s): return [tuple(x.strip().split(":",1)) for x in s.split(",") if ":" in x]
-_dp=os.getenv("LLM_PROVIDER") or ("custom" if os.getenv("LLM_BASE_URL") and os.getenv("LLM_API_KEY") else "openai" if os.getenv("OPENAI_API_KEY") else "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "gemini")
+_dp=os.getenv("LLM_PROVIDER") or ("custom" if os.getenv("LLM_BASE_URL") and os.getenv("LLM_API_KEY") else "openai" if os.getenv("OPENAI_API_KEY") else "gemini")   # 30 Oct: Anthropic no longer a default (set LLM_PROVIDER=anthropic to use it)
 MODEL=os.getenv("LLM_MODEL") or {"anthropic":"claude-opus-5-5","openai":"gpt-5.5","gemini":"gemini-3.8-flash"}.get(_dp,"")
-DRAFT_CHAIN=[(_dp,MODEL)]+_chain(os.getenv("LLM_FALLBACKS","openai:gpt-5.4,gemini:gemini-3.8-flash,anthropic:claude-sonnet-5-5"))
-GROUND_CHAIN=[(os.getenv("GROUNDING_PROVIDER","openai"),os.getenv("GROUNDING_MODEL","gpt-5.4-mini"))]+_chain(os.getenv("GROUNDING_FALLBACKS","openai:gpt-5.5,gemini:gemini-3.8-flash,anthropic:claude-haiku-5-5"))
+DRAFT_CHAIN=[(_dp,MODEL)]+_chain(os.getenv("LLM_FALLBACKS","openai:gpt-5.4,gemini:gemini-3.8-flash"))
+GROUND_CHAIN=[(os.getenv("GROUNDING_PROVIDER","openai"),os.getenv("GROUNDING_MODEL","gpt-5.4-mini"))]+_chain(os.getenv("GROUNDING_FALLBACKS","openai:gpt-5.5,gemini:gemini-3.8-flash"))
 # grounding: prefer a different model family than the drafter; same family only as last resort
 if not os.getenv("GROUNDING_PROVIDER"): GROUND_CHAIN=[x for x in GROUND_CHAIN if x[0]!=_dp]+[x for x in GROUND_CHAIN if x[0]==_dp]
 # An explicitly chosen checker always goes first (28 Oct: reordering put out-of-credit/overloaded providers first, adding seconds to every approve)

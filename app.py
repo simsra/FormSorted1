@@ -5,6 +5,7 @@ import threading, os, json, sqlite3, secrets, urllib.request, urllib.parse, base
 from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 import orders, mailer, asyncio, hmac, store
+import writer as WRITER
 from fastapi.responses import Response, PlainTextResponse
 import intake as INTAKE
 from starlette.concurrency import run_in_threadpool
@@ -370,7 +371,14 @@ def _draft_now(token):
     h=json.loads(o["history"]); I=json.loads(o["intake"] or "{}")
     # Oct 2026: document text is NOT fed to the drafter. Only facts the customer confirmed on /confirm are in the history.
     t=time.time(); form=o["form"] or "aa"; taps=bool(I.get("rows")) and form in INTAKE.FORMS_V3
-    if taps and llm.MOCK: d=INTAKE.fallback_draft(form,I)   # local runs: sentences from the taps (the sample case is someone else's story)
+    if taps and llm.MOCK: d=WRITER.mock_write(form,I) if WRITER.on_mock() else INTAKE.fallback_draft(form,I)   # local runs: sentences from the taps (the sample case is someone else's story)
+    elif WRITER.on() and (taps or form=="pipr"):
+        # 30 Oct: Claude writer (writer.py): every sentence cites the customer's answers, then a verifier pass. Grounding still runs after.
+        try: d=WRITER.write(form,I if taps else {},h)
+        except Exception as e:
+            print("writer fell back",form,str(e)[:200],flush=True)
+            if taps: d=INTAKE.fallback_draft(form,I)
+            else: d=llm.draft(h,form)
     else:
         try: d=llm.draft(h,form)
         except Exception as e:
@@ -749,6 +757,8 @@ def _intake_closed(o):
     return o["status"]=="paid" and o["draft"]
 HONEST_LINE="<p class=honest><strong>We only write what you tell us, so please answer honestly about a typical day.</strong></p>"
 REFUSED_BOX=f"<div class=warning role=alert>{esc(HONEST.REFUSE_MSG)}</div>"
+def _cue(sec):
+    import followups; c=followups.CUES.get(sec); return f"<p class=cue>{esc(c)}</p>" if c else ""
 @app.get("/intake/{token}")
 def intake_page(token:str, s:str="", r:str=""):
     o=_intake_order(token)
@@ -763,7 +773,7 @@ def intake_page(token:str, s:str="", r:str=""):
     reassure="<p class=reassure>It's normal for this to feel hard. Tap what fits and add a few words where you can. We do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
     first=(f'<p class=one>About {left} minutes. Tap what fits and add a few words where you can. We do the writing.</p>'+HONEST_LINE) if i==0 else ''
     return page(prog(3,f"Part {i+1} of {len(secs)}: {secs[i][1]}",f"About {left} minute{'s' if left!=1 else ''} left")+f"""<div class=intake>
-{refused}{'<h1>We\'ll fill in your whole form for you</h1>' if i==0 else f'<h1>{esc(secs[i][1])}</h1>'}{first}<p class=qcount id=qcount aria-live=polite hidden></p>
+{refused}{'<h1>We\'ll fill in your whole form for you</h1>' if i==0 else f'<h1>{esc(secs[i][1])}</h1>'}{first}{_cue(sec)}<p class=qcount id=qcount aria-live=polite hidden></p>
 <form method=post action=/intake/{token}><input type=hidden name=sec value={sec}><div class=qs id=qs>{INTAKE.section_body(form,sec,d)}</div>
 {QHELP}<div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==len(ids)-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
 <p class=saved>Your answers are saved each time you finish a part.</p><button class="linkbtn" name=nav value=save>Save and finish later</button></form></div>{QS_JS}""",secs[i][1],minimal=True)
@@ -1103,6 +1113,7 @@ def BUSY(token):
 def source_text(o,d):
     h=json.loads(o["history"] or "[]"); parts=[m["content"] for m in h if m["role"]=="user"]
     parts+=list((d.get("user_added") or {}).values())+[v for v in (d.get("said") or {}).values()]
+    parts+=list((d.get("facts") or {}).values())   # 30 Oct: the writer's facts (incl. whole-form answers) are the customer's answers too
     return "\n".join(parts)
 def ground(o,d):
     if os.getenv("MOCK_GROUND_SLOW"): time.sleep(float(os.getenv("MOCK_GROUND_SLOW")))   # test hook: simulate a slow AI provider

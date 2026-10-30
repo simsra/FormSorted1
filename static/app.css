@@ -354,3 +354,4 @@ main{padding:18px 0 48px}
 label.chip:has(input:checked)+.fu{display:block}
 .card:has(.lvl input[value=slow]:checked) .fu-lvl-slow,.card:has(.lvl input[value=help]:checked) .fu-lvl-help,.card:has(.lvl input[value=cant]:checked) .fu-lvl-cant{display:block}
 .card:has(.lvl input[value=cant]:checked) label.fx-every+.fu,.card:has(.lvl input[value=slow]:checked) label.fx-every+.fu,.card:has(.lvl input[value=slow]:checked) label.fx-nobody+.fu{display:none}}
+.cue{font-weight:700;color:var(--accent);margin:.1rem 0 .8rem}.diffopt{margin-top:.8rem}.diffopt .chips{margin:0}

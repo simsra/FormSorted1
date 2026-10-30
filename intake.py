@@ -2,7 +2,7 @@
 Each fact is asked once. Taps map straight to form tick boxes and number boxes; we also turn the taps into plain
 sentences (the customer's own answers) that the drafter and the grounding check use as the source.
 Before payment we only collect answers: nothing here shows advice, answer text or drafts."""
-import re
+import re, os
 from html import escape as esc
 FORMS_V3=("aa","dla","pip")
 FREQ=[("rarely","Rarely"),("some","Some days"),("most","Most days"),("every","Every day"),("ns","Not sure")]
@@ -387,6 +387,13 @@ def save(form,sec,d,fm):
     elif sec=="finish":
         for k in ("aids","school","people"): d[k]=gl(k); d.setdefault("else",{})[k]=other_txt(fm,k)
         d["words"]=str(fm.get("words") or "").strip()[:3000]
+        import followups   # completeness check per hard task before anything is written (asked once; answered checks count as known)
+        keep=[tuple(x) for x in d.get("fu_qs") or [] if f"{x[0]}_{x[1]}" not in (d.get("fu") or {})]
+        # 30 Oct (claude-live): off by default now the inline follow-ups (6504e73) ask the same things on each task card; FOLLOWUPS=1 turns the extra "quick checks" page back on
+        if os.getenv("FOLLOWUPS","0")=="0": d["fu_qs"],d["fu_how"]=[],"off"
+        elif keep: d["fu_qs"]=keep   # coming back through: same checks, no new model call
+        else: d["fu_qs"],d["fu_how"]=followups.pick(form,d)
+        d["coverage"]=followups.coverage(form,d)
     return d
 # ---------- turning taps into the customer's own answers ----------
 def _ok(v): return v not in (None,"","ns")
@@ -548,7 +555,14 @@ def _rowprose(form,r,v,d):
     for x in v.get("c",[]):
         if x in FX_S: out.append(FX_S[x][0 if me else 1].format(w=w))
     cm={c[0]:c[1] for c in chips}; cs=[cm[x][0].lower()+cm[x][1:] for x in v.get("c",[]) if x in cm]
+    if me: cs=[c.replace("with them","with me").replace("themselves","myself") for c in cs]
+    VB={"needs":"need","has":"have","forgets":"forget","mixes":"mix","gets":"get","runs":"run","acts":"act","becomes":"become","wanders":"wander","screams":"scream"}
+    nd=[c for c in cs if c.split(" ")[0] in VB]; cs=[c for c in cs if c.split(" ")[0] not in VB]   # 'forgets medicines' reads as its own sentence
     if cs: out.append(f"{w} {_v3(me,'have','has')} difficulty with: "+"; ".join(cs)+".")
+    for c in nd:
+        v0,rest=(c.split(" ",1)+[""])[:2]
+        rest=rest.replace(" or no "," or "+_v3(me,"have","has")+" no ")   # 'runs off or no road sense'
+        out.append(f"{w} {VB[v0] if me else v0} {rest}".rstrip()+".")
     if v.get("x"): out.append("Also: "+v["x"].rstrip(".")+".")
     sm=dict(PIP_STD); st=[sm[x].lower() for x in v.get("std",[]) if x in sm]
     if st: out.append("It can only be done: "+", ".join(st)+".")
@@ -559,7 +573,9 @@ def _rowprose(form,r,v,d):
     words,taps=fu_lines(form,r,v,d)
     if v.get("lvl_x"): words.insert(0,'"'+v["lvl_x"]+'"')
     out+=taps
-    if words: out.insert(0,"In my own words: "+"; ".join(words)+".")
+    tw=[(f.get("w") or "").strip() for k,f in (v.get("fu") or {}).items() if f.get("w") and ((k[4:]==v.get("lvl")) if k.startswith("lvl:") else k in (v.get("c") or []))]
+    tw=([v["lvl_x"].strip()] if v.get("lvl_x") else [])+tw
+    out=["In my own words: \u00ab"+x.rstrip(".")+"\u00bb." for x in tw]+out   # their typed words first, one sentence each
     t=" ".join(out)
     if me: t=re.sub(r"\bthemselves\b","myself",re.sub(r"\bthey don't\b","I don't",t))
     return t
@@ -599,9 +615,58 @@ def _polish(t,me,w):
        (r"\bIn my own words: ","In my own words: ")]
     for a,b in R: t=re.sub(a,b,t)
     return " ".join(t.split())
+RISK_S={"Could fall":"could fall","Could get hurt or burnt":"could get hurt or burnt","Could choke":"could choke","Would forget or miss it":"would forget or miss it"}
+SAYS='The person helping me with this form says: "{}"'
+def _fb_voice(t,form,me,w,carer):
+    """Fallback text in the claimant's voice: 'Checked with you' answers as plain sentences, no 'In my own words:' labels,
+    and (AA filled in by someone else) the helper's own words quoted as theirs, because the rest is in the claimant's first person."""
+    S=lambda a,b:_v3(me,a,b); obj=_v3(me,"me",w)
+    def chk(m):
+        dim,ans=m[2],m[3].strip().rstrip(".")
+        if dim=="what could happen without help":
+            out=[]
+            for a in ans.split("; "):
+                if a=="Wouldn't get done properly": out.append("Without help, it wouldn't get done properly.")
+                elif a in RISK_S: out.append(f"Without help, {w} {RISK_S[a]}.")
+                elif a: out.append(f"Without help: {a}.")
+            return " ".join(out)
+        if dim=="how often": return f"This happens {ans[0].lower()+ans[1:]}."
+        if dim=="how long it takes": return "Each time takes "+ans.lower().replace(" min"," minutes")+"."
+        if dim=="who helps":
+            out=[]
+            for a in ans.split("; "):
+                if a=="No one, so it goes undone": out.append(f"No one helps {obj}, so it goes undone.")
+                elif a=="Me, the parent": out.append(f"I help {w} with this.")
+                elif a=="No one": out.append(f"No one helps {obj} with this.")
+                elif a: out.append(f"{a[0].upper()+a[1:]} helps {obj}.")
+            return " ".join(out)
+        if dim=="what's used to help":
+            return w+" "+S("don't","doesn't")+" use anything to help with this." if ans=="Nothing" else f"{w} {S('use','uses')}: {ans}."
+        if dim=="example": return SAYS.format(ans+".") if carer else ans+"."
+        return f"{dim[0].upper()+dim[1:]}: {ans}."
+    t=re.sub(r"Checked with you: ([^,.]+), (how often|how long it takes|who helps|what's used to help|what could happen without help|example): (.+?\.)(?=\s|$)",chk,t)
+    t=t.replace("Checked with you: ","")
+    cap=lambda x:x[:1].upper()+x[1:]
+    t=re.sub(r"In my own words: \u00ab(.+?)\u00bb\.",(lambda m:SAYS.format(m[1].strip()+".")) if carer else (lambda m:cap(m[1].strip())+"."),t)
+    t=re.sub(r"In my own words: (.+?)(?=$)",(lambda m:SAYS.format(m[1].strip())) if carer else (lambda m:m[1]),t)
+    # inline follow-up taps (FU_P lines) as plain sentences
+    WHO={"partner":"My partner helps "+obj+".","family":"Family helps "+obj+".","carer":"A carer helps "+obj+"."}
+    t=re.sub(r"Who helps: (partner|family|carer)\.",lambda m:WHO[m[1]],t)
+    t=re.sub(r"Who helps: no one, but (?:I|they) need it\.",f"No one helps {obj}, but {w} {S('need','needs')} it.",t)
+    t=re.sub(r"What could happen: (.+?)\.",lambda m:{"a fall or getting hurt":"It could lead to a fall or getting hurt.","it doesn't get done":"It doesn't get done.","distress or panic":"It can cause distress or panic."}.get(m[1],f"What could happen: {m[1]}."),t)
+    t=re.sub(r"Last time: (.+?)\.",lambda m:f"The last time was {m[1]}.",t)
+    t=re.sub(r"Compared with other children the same age: (far more|more) help than them\.",lambda m:f"{w} {S('need','needs')} {m[1]} help than other children the same age.",t)
+    t=re.sub(r"Compared with other children the same age: about the same\.",f"{w} {S('need','needs')} about the same help as other children the same age.",t)
+    if carer: t=re.sub(r"Also: (.+?\.)(?=\s|$)",lambda m:SAYS.format(m[1]) if re.search(r"\b(she|he|her|him|his|they|them|mum|dad|my (mum|dad|mother|father|wife|husband))\b",m[1],re.I) else m[1],t)
+    else: t=re.sub(r"\bAlso: ","",t)
+    return " ".join(t.split())
 def fallback_draft(form,d):
-    """A complete, grounded draft from the taps alone: no AI. Same shape as llm.draft()."""
+    """A complete, grounded draft from the taps alone: no AI. Same shape as llm.draft().
+    Written in the claimant's first person (AA and PIP: 'I'; child DLA: the parent is 'I' and the child is named)."""
     from forms import FORMS
+    carer=form=="aa" and not is_me(d,form)
+    said=topic_texts(form,d)[1]   # 'what you told us' stays in the words of whoever filled in the form
+    if form=="aa": d={**d,"who":"me"}   # the AA1 is the claimant's own form: always 'I', even when someone else fills it in
     me,w=_who(d,form); T={t:[] for t,_,_ in FORMS[form]["topics"]}; intro,raw=topic_texts(form,d)
     rowtopics={}
     for r in rows(form,None,d):
@@ -614,9 +679,10 @@ def fallback_draft(form,d):
             if rt: rest=rest.replace(rt,"",1)
         rest=" ".join(rest.split())
         if rest: T[t].append(_polish(rest,me,w))
-    ans={t:" ".join(v).strip() for t,v in T.items()}
+    ans={t:_fb_voice(" ".join(v).strip(),form,me,w,carer) for t,v in T.items()}
+    if form=="dla": ans["statement"]=""   # the statement box is for someone who knows the child: never our words
     tick_yes=[t for t,a in ans.items() if a and t.isdigit()] if form=="aa" else []
-    return {"answers":ans,"sources":{t:[raw[t]] for t in ans if raw.get(t)},"tick_yes":tick_yes,"conditions":[],"extra":{},
+    return {"answers":ans,"sources":{t:[said[t]] for t in ans if said.get(t)},"tick_yes":tick_yes,"conditions":[],"extra":{},
             "checklist":[],"notes_for_user":[],"gp_letter":"","drafted_from":"taps"}
 def coverage(form,d):
     from forms import FORMS
@@ -690,7 +756,7 @@ def extra(form,d):
         if lf: e["last_fell"]=lf
         fx=d.get("fallx") or []
         if "getup" in fx:   # x34-3 'Do you need help to get up after a fall?' is ticked Yes from this tap: its 'Tell us about this' box
-            me,w=_who(d,"aa"); S=lambda a,b:_v3(me,a,b)
+            me,w=True,"I"; S=lambda a,b:_v3(me,a,b)   # the AA1 is in the claimant's own voice (first person), even when a carer fills it in
             fd=[f"{w} can't get up after a fall without help."]
             if "alarm" in fx: fd.append(f"{w} {S('have','has')} a pendant alarm.")
             if "hurt" in fx: fd.append(f"{w} {S('have','has')} been hurt or gone to hospital after a fall.")
