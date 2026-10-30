@@ -54,7 +54,7 @@ def facts(form,d,history=None):
     if d.get("words"): add("*","In the customer's own words: "+d["words"])
     for t,_,_ in FORMS[form]["topics"]:
         for s in re.split(r"(?<=\.)\s+(?=[A-Z])",T.get(t) or ""):
-            if not s.startswith("In my own words:"): add(t,s)
+            if not s.startswith("In my own words:"): add("*" if t=="other" else t,s)   # PIP 'other' (own words, aids) can back any box
     if d.get("wf_v") and form in TOPIC_OF:
         import wholeform as W
         w=d.get("wf") or {}; row_topic={r[0]:r[1] for r in I.rows(form,None,d)}
@@ -87,6 +87,9 @@ RULES (all must hold):
 - Level facts: write 'struggles' as "I struggle with ..." (add slow/painful/tiring only if another fact says which), 'needs help or someone there' as "I need help or someone with me" (or the specific kind of help if another fact says), and 'can't do it safely on their own' as "I can't do this safely on my own".
 - Own-words facts can be used in every box they are about (e.g. who helps with cooking goes in the cooking box). Quote them lightly: fix grammar and make them first person, keep the meaning.
 - Where a general fact ('needs help, prompting or watching') sits with a more specific one ('needs reminding'), say the specific one; use the general one only if there is nothing more specific, and then keep it vague ('I need help or someone with me').
+- State ticked answers plainly, without hedges like 'may', 'might' or 'sometimes' that the facts don't use (a tick 'Runs off or no road sense' becomes 'He runs off or has no road sense', not 'He may run off'). Say each thing once per box: don't repeat a frequency or detail in other words.
+- Don't join two facts with 'because', 'so' or 'due to' unless a fact gives that reason. For 'needs help or someone there' always keep both halves ('help or someone with him'), never just 'someone there' or just 'help'.
+- 'Checked with you' facts are the customer's own answers about what could happen without help: always include each one in its box, as the last sentence ('Without help, I could fall.').
 - Put each fact in the box it belongs to. Only use '*' facts where they really matter for that box. Don't list doctors or other professionals in the boxes.
 - 'Checked with you:' facts are the customer's later answers and win over earlier ones.
 - Plain English, short sentences, UK spelling. No medical or legal advice, no points, descriptors, rates or likely outcomes. Never write a statement for anyone else (e.g. a carer or teacher).
@@ -109,7 +112,7 @@ These plain-English renderings of a level fact are ALWAYS supported by it - neve
 'needs help or someone with me/him/her/them' (for 'needs help or someone there (help, prompting or watching ...)'),
 'struggles with' / 'finds it hard' / 'it is slow, painful or tiring' (for 'struggles (slow, painful or tiring ...)'),
 'can't do it safely on my/his/her/their own' (for 'can't do it safely on their own'). A 'No' answer to 'Can X do Y' supports 'X can't do Y'.
-For each sentence write 'problem' FIRST (one short line: what is not supported, or 'none'), THEN 'supported'. Pronoun changes (she -> I) are never a problem.
+For each sentence write 'problem' FIRST (one short line: what is not supported, or 'none'), THEN 'supported'. Pronoun changes (she -> I) are never a problem. When a carer filled the form in for someone, the carer's 'I' in their own words may be written as 'my family carer', 'my daughter' etc. if a fact names that helper - that is supported.
 Return JSON only."""
 VSCHEMA={"type":"object","properties":{"verdicts":{"type":"array","items":{"type":"object","properties":{"n":{"type":"integer"},"problem":{"type":"string"},"supported":{"type":"boolean"}},"required":["n","problem","supported"],"propertyOrdering":["n","problem","supported"]}}},"required":["verdicts"]}
 APPROVED=re.compile(r"help or someone with (me|him|her|them)|struggles? with|finds? it hard|slow, painful or tiring|safely on (my|his|her|their) own",re.I)

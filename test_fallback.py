@@ -16,7 +16,7 @@ for form,d in (("aa",AA),("aa",dict(AA,who="me")),("dla",DLA)):
     if form=="aa": assert fd["answers"]["29"]=="" and "bad" not in fd["answers"]["30"].lower()
 print("fallback sentences grounded ok")
 me=I.fallback_draft("aa",dict(AA,who="me"))["answers"]; assert me["30"].startswith("I need help") and "Someone needs to keep an eye on me" in me["40"], me
-assert I.extra("aa",AA)["fall_detail"]=="Margaret can't get up after a fall without help. Margaret has a pendant alarm."
+assert I.extra("aa",AA)["fall_detail"]=="I can't get up after a fall without help. I have a pendant alarm."
 assert "fall_detail" not in I.extra("aa",dict(AA,fallx=["alarm"]))   # x34-3 not ticked: box left alone
 assert I.ticks("aa",AA).get("x34-3")=="/Yes"
 print("34-4 from taps ok")

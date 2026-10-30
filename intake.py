@@ -523,7 +523,7 @@ def extra(form,d):
         if lf: e["last_fell"]=lf
         fx=d.get("fallx") or []
         if "getup" in fx:   # x34-3 'Do you need help to get up after a fall?' is ticked Yes from this tap: its 'Tell us about this' box
-            me,w=_who(d,"aa"); S=lambda a,b:_v3(me,a,b)
+            me,w=True,"I"; S=lambda a,b:_v3(me,a,b)   # the AA1 is in the claimant's own voice (first person), even when a carer fills it in
             fd=[f"{w} can't get up after a fall without help."]
             if "alarm" in fx: fd.append(f"{w} {S('have','has')} a pendant alarm.")
             if "hurt" in fx: fd.append(f"{w} {S('have','has')} been hurt or gone to hospital after a fall.")
