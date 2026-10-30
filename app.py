@@ -22,6 +22,7 @@ BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STR
 PUBLIC=os.getenv("PUBLIC_URL","http://localhost:8000"); DEV=STRIPE.endswith("PLACEHOLDER")
 HERE=os.path.dirname(os.path.abspath(__file__)); OUT=store.OUT; DB=store.SQLITE_PATH
 import hashlib as _hl; CSS_V=_hl.sha256(open(os.path.join(HERE,"static","app.css"),"rb").read()).hexdigest()[:10]   # cache-bust: browsers keep old app.css otherwise (30 Oct 2026)
+ICON_V=_hl.sha256(open(os.path.join(HERE,"static","logo.svg"),"rb").read()+open(os.path.join(HERE,"static","favicon.svg"),"rb").read()).hexdigest()[:10]   # brand logo/favicon cache-bust
 os.makedirs(OUT,exist_ok=True)
 CRON_SECRET=os.getenv("CRON_SECRET","")
 def db(): return store.connect()
@@ -61,8 +62,8 @@ def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disabil
     else:
         indep=f'<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not affiliated with DWP or GOV.UK.</div></div>'
         ftr='<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent online form-filling service. Not affiliated with DWP, GOV.UK or any government body. We can\'t guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a><a data-contact href="mailto:hello@formsorted.com">Contact</a></p></div></footer>'
-    return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg><link rel=stylesheet href=/static/app.css?v={CSS_V}><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body><a href="#main" class="skip">Skip to main content</a>
-<header class="hdr"><div class="wrap"><a class="logo" href="/"><img src="/static/logo.svg" alt="FormSorted home" width="170" height="36"></a></div></header>
+    return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg?v={ICON_V} type=image/svg+xml><link rel=icon href=/static/favicon-32.png?v={ICON_V} sizes=32x32 type=image/png><link rel=apple-touch-icon href=/static/apple-touch-icon.png?v={ICON_V}><meta name=theme-color content='#0b1432'><link rel=stylesheet href=/static/app.css?v={CSS_V}><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body><a href="#main" class="skip">Skip to main content</a>
+<header class="hdr"><div class="wrap"><a class="logo" href="/"><img src="/static/logo.svg?v={ICON_V}" alt="FormSorted home" width="249" height="30"></a></div></header>
 {indep}<main id=main><div class=wrap>{body}{need_help()}</div></main>{ftr}</body></html>""")
 def stripe(method,path,data=None):
     req=urllib.request.Request("https://api.stripe.com/v1"+path,urllib.parse.urlencode(data).encode() if data else None,method=method,
