@@ -211,6 +211,10 @@ def compare_table_rows(form):
     return "".join(f"<tr><td>{esc(l)}{f'<small>{esc(d)}</small>' if d else ''}</td><td>{cell(b)}</td><td>{cell(p)}</td></tr>" for l,d,b,p in PLUS.compare_rows(form) if l not in PLUS.POST_ON.values())
 def plus_notes(form): return "".join(f"<p class=hint>{esc(x)}</p>" for x in ui_notes(form)+[PLUS.FOOT])
 FREE_PER_IP_DAY=int(os.getenv("FREE_PER_IP_DAY","5")); MAX_TURNS=int(os.getenv("MAX_TURNS","40")); FREE_PER_DAY_TOTAL=int(os.getenv("FREE_PER_DAY_TOTAL","500"))
+# 30 Oct: connections listed in RATE_LIMIT_ALLOW_IPS (comma-separated, e.g. the owner's) skip the per-connection daily start limit.
+# The site-wide daily total still applies. The list itself is never logged or shown.
+RATE_LIMIT_ALLOW_IPS=frozenset(x.strip() for x in os.getenv("RATE_LIMIT_ALLOW_IPS","").split(",") if x.strip())
+def ip_allowed(ip): return bool(ip) and ip in RATE_LIMIT_ALLOW_IPS
 def client_ip(req):
     """Real visitor IP. Render sits behind Cloudflare: True-Client-IP / CF-Connecting-IP are set by Cloudflare and can't be spoofed.
     Render only appends to X-Forwarded-For (leftmost entries are client-controlled), so the fallback is the entry Cloudflare added
@@ -229,7 +233,7 @@ def checkout(req:Request, tier:str=Form(...), form:str=Form("aa")):
     day=time.time()-86400
     n=c.execute("select count(*) from orders where ip=? and created>?",(ip,day)).fetchone()[0]
     tot=c.execute("select count(*) from orders where status='free' and created>?",(day,)).fetchone()[0]
-    if (ip and n>=FREE_PER_IP_DAY) or tot>=FREE_PER_DAY_TOTAL:
+    if (ip and n>=FREE_PER_IP_DAY and not ip_allowed(ip)) or tot>=FREE_PER_DAY_TOTAL:
         return page("<h1>You've started a few already today</h1><p class=lead>To keep things fair we limit how many new forms can be started from one connection each day. Please come back tomorrow, or use the link to a form you've already started.</p>","Please try tomorrow")
     token=orders.new_token()
     c.execute("insert into orders(token,tier,status,created,form,ip) values(?,?,?,?,?,?)",(token,tier,"free",time.time(),form,ip)); c.commit()
