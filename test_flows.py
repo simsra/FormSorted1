@@ -75,11 +75,11 @@ codes={}; atw_tokens={}
 for form,f in FORMS.items():
     if form=="bb": continue   # Blue Badge has its own flow: test_bluebadge.py
     assert req(f"/?form={form}").status==200
-    assert ("How much should we do for you?" if form=="atw" else "Your order") in req(f"/?form={form}&tier=bogus").read().decode()   # invalid tier -> chooser (atw) or the one product
+    hb=req(f"/?form={form}&tier=bogus").read().decode(); assert "Choose your package" in hb and "Your choice" not in hb   # invalid tier -> package step, nothing preselected
     for t,(n,p,_) in f["tiers"].items():
         h=req(f"/?form={form}&tier={t}").read().decode()   # valid -> single order summary
-        assert "Your order" in h and f"£{p//100}" in h and h.count("Start my form")==1 and "Nothing to pay now" in h and "How much should we" not in h, (form,t)
-        assert "You check it, sign it and post it." in h and 'name=tier value=' in h and "Start my form" in h and "Step 1 of 4" in h
+        assert "Choose your package" in h and f"£{p//100}" in h and h.count(f"Continue with {n}")==1 and h.count("<form method=post action=/checkout>")==len(f["tiers"]) and "Nothing to pay now" in h, (form,t)
+        assert f'name=tier value={t}>' in h and "Step 2 of 5: <strong>Choose your package</strong>" in h and "Your choice" in h
         assert h.count("You can claim directly from DWP for free; FormSorted is a paid online form-filling service.")==1, (form,t)
         low=h.lower().replace("you can claim directly from dwp for free; formsorted is a paid online form-filling service.","").replace("freepost",""); assert "we claim for you" not in low and "we submit your claim" not in low
         assert "stripe" not in low and " ai " not in low and "free" not in low and "citizens advice" not in low, (form,t)
@@ -188,7 +188,7 @@ link=re.search(r"https?://\S+/start/(\S+)",txt); tok=link.group(1); assert len(t
 assert req("/start/"+tok[:-2]+"xx").status if False else True
 try: op.open(B+"/start/"+orders.new_token()); raise SystemExit("guessed token worked")
 except urllib.error.HTTPError as e: assert e.code==404
-assert "Before we start" in body(f"/start/{tok}")
+assert "Before you start" in body(f"/start/{tok}")
 assert req(f"/details/{tok}").status==403                                    # nothing before consent
 req(f"/consent/{tok}",{"health":"on","digital":"on","truth":"on"})
 assert req(f"/details/{tok}").headers["location"]==f"/approve/{tok}"          # details only after approval

@@ -39,11 +39,11 @@ assert req("/checkout",{"form":"bb","tier":"15"}).status==400
 tok=loc(req("/checkout",{"form":"bb","tier":"29"})).split("/")[-1]
 assert "Blue Badge application is an offence" in body(f"/start/{tok}")
 req(f"/consent/{tok}",{"health":"on","truth":"on"}); assert loc(req(f"/start/{tok}"))==f"/bb/{tok}"
-f=body(f"/bb/{tok}"); clean(f); assert "Step 3 of 5: Your answers" in f;
+f=body(f"/bb/{tok}"); clean(f); assert "Step 3 of 5: <strong>Answer the questions</strong>" in f;
 for u in (f"/bb/{tok}/documents",f"/bb/{tok}/file/blue-badge-answers.html"): assert req(u).status==402, u
 assert req(f"/bb/{tok}/letter",{"decision_date":"2026-10-01"}).status==402
 assert loc(req(f"/bb/{tok}",{"who":"me","conds":"MS","dist":"lt20","time":"5p","eff":["pain","falls"],"hidden":["panic"],"hfreq":"most","docs":["pip"]}))==f"/preview/{tok}"
-pv=body(f"/preview/{tok}"); clean(pv); assert "Step 4 of 5: Check and pay" in pv and "Only your words" in pv and "award" not in pv.split("<footer")[0].lower() and "review" not in pv.split("<footer")[0].lower() and "Pay £29" in pv and "I can walk" not in pv and "MS" not in pv
+pv=body(f"/preview/{tok}"); clean(pv); assert "Step 4 of 5: <strong>Pay</strong>" in pv and "Only your words" in pv and "award" not in pv.split("<footer")[0].lower() and "review" not in pv.split("<footer")[0].lower() and "Pay £29" in pv and "I can walk" not in pv and "MS" not in pv
 assert req(f"/bb/{tok}/file/blue-badge-answers.html").status==402
 assert loc(req(f"/pay/{tok}",{"waive":"on"}))==f"/start/{tok}"; assert loc(req(f"/start/{tok}"))==f"/bb/{tok}/documents"
 dc=body(f"/bb/{tok}/documents"); clean(dc); assert "Turned down?" in dc

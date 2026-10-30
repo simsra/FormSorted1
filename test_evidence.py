@@ -125,7 +125,7 @@ assert "We only write what you tell us" not in clean(body(f"/intake/{tok}?s=dail
 r=req(f"/intake/{tok}",{"sec":"finish","nav":"next","words":"Mum gets muddled in the evenings."}); assert loc(r)==f"/preview/{tok}"
 assert loc(req(f"/pay/{tok}",{"waive":"on"}))==f"/start/{tok}"
 # 1: one evidence screen (taps + photo), after payment only; "Nothing yet" -> what to ask the GP surgery for
-up=clean(body(f"/uploads/{tok}")); assert "of 4: <strong>Your evidence</strong>" in up and "Step 4 of 8" not in up and "What do you have that shows this?" in up and up.count('name="evidence"')==len(E.options("aa")) and "Something else" in up and 'type=file' in up and "Nothing yet" in up
+up=clean(body(f"/uploads/{tok}")); assert "Step 5 of 5: <strong>Get your form: Your evidence</strong>" in up and "Step 4 of 8" not in up and "What do you have that shows this?" in up and up.count('name="evidence"')==len(E.options("aa")) and "Something else" in up and 'type=file' in up and "Nothing yet" in up
 no_links(up); no_words(up)
 raw,ct=multipart([("evidence","none"),("nav","next")]); r=req(f"/uploads/{tok}/done",raw=raw,ctype=ct); assert loc(r)==f"/prepare/{tok}"
 assert loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"                                   # nothing to cross-check, no contradictions: straight on
@@ -162,7 +162,7 @@ secs=AA("Margaret",falls="0",lastfall="week"); secs[-1]=("finish",{"words":"She 
 tok=order("Margaret","10.0.0.3",secs)
 raw,ct=multipart([("nav","next")]); assert loc(req(f"/uploads/{tok}/done",raw=raw,ctype=ct))==f"/prepare/{tok}"
 assert loc(req(f"/prepare/{tok}"))==f"/confirm/{tok}"
-cf=clean(body(f"/confirm/{tok}")); assert "You said no falls in the last year, but also told us about a recent fall" in cf and cf.count("<fieldset")<=3 and "Step 3 of 4: <strong>Quick check</strong>" in cf
+cf=clean(body(f"/confirm/{tok}")); assert "You said no falls in the last year, but also told us about a recent fall" in cf and cf.count("<fieldset")<=3 and "Step 5 of 5: <strong>Get your form: Quick check</strong>" in cf
 assert cf.count('_xon')==cf.count("<fieldset") and 'name="q_falls_xon"' in cf and 'name="q_falls_x"' in cf   # every quick-check question has Something else
 e=req(f"/confirm/{tok}",{}); assert "err=" in loc(e)                                                # must answer
 assert loc(req(f"/confirm/{tok}",{"q_falls":"1-2"}))==f"/prepare/{tok}" and loc(req(f"/prepare/{tok}"))==f"/deadline/{tok}"

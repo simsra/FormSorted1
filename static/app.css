@@ -146,3 +146,49 @@ details.more[open]>summary:before{content:"–"}details.more>*:not(summary){marg
 .extras{margin-top:2rem}.extras>h2{font-size:1.3rem;margin:0 0 .6rem}.extras .panel{border-left-width:5px}
 .deadline{font-size:1.1rem;border-left:6px solid var(--warn);background:#fdf3ef;padding:.6rem .9rem;margin:1rem 0}
 @media (min-width:600px){.choice ul{font-size:1rem}.choice .nm{font-size:1.15rem}.choice .pr{font-size:2rem}.stepper li{font-size:.9rem}}
+/* Oct 2026 simple journey: 5 steps (form, package, questions, pay, get your form), bigger text and targets for all ages, 200% zoom safe */
+body{font-size:20px}@media(max-width:640px){body{font-size:19px}}
+.indep{font-size:.95rem}.ftr{font-size:1rem}.ftr a{display:inline-block;padding:.5rem 0;margin-right:1.4em}.small{font-size:.95rem}.hint{font-size:.95rem}
+.btn{min-height:48px}.linkbtn{font-size:1rem;min-height:48px}
+.chip span,.chips.two .chip span,.lvl .chip span{min-height:48px;font-size:1rem}.chips.nums .chip span{min-width:48px;font-size:1rem}
+.cb input{width:34px;height:34px;flex-basis:34px}
+.stepper{grid-template-columns:repeat(5,1fr);gap:4px}
+.stepper li:before{content:none}
+.stepper li{font-size:.78rem;display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
+.stepper .n{font-weight:800;font-size:1rem}.stepper li.past .n{color:var(--accent)}.stepper li.past .n:after{content:" ✓"}
+.stepper .l{display:none}
+@media(min-width:760px){.stepper li{font-size:.9rem}.stepper .s{display:none}.stepper .l{display:block}}
+.stepnow{font-size:1rem}
+/* step 1: big form cards */
+.fcards{display:grid;gap:12px;margin:.6rem 0 1rem}@media(min-width:700px){.fcards{grid-template-columns:1fr 1fr}}
+.fcard{display:flex;flex-direction:column;gap:.25rem;border:2px solid var(--line);border-radius:12px;padding:1rem 1.1rem;text-decoration:none;color:var(--ink);background:#fff;min-height:48px}
+.fcard:hover{border-color:var(--brand);background:#f3f8fa;color:var(--ink)}
+.fcard .fn{font-size:1.35rem;font-weight:800;color:var(--brand)}.fcard .fw{font-size:1rem;color:var(--muted)}.fcard .fp{font-weight:700;color:var(--brand)}.fcard .fp:after{content:" →"}
+.fcard:focus-visible .fn,.fcard:focus-visible .fw,.fcard:focus-visible .fp{color:var(--ink)}
+.alsoform{font-size:1rem}.notsure{padding-left:1.1em}.notsure li{margin:.5em 0}
+/* step 2: package cards */
+.pkgs{display:grid;gap:14px;margin:.8rem 0 1.2rem}@media(min-width:700px){.pkgs{grid-template-columns:1fr 1fr}.pkgs .pkg.one{max-width:30rem}}
+.pkg{border:2px solid var(--line);border-radius:12px;padding:1rem 1.1rem;display:flex;flex-direction:column;background:#fff}
+.pkg.mine{border:3px solid var(--brand);background:#f3f8fa}
+.pkg h2{margin:0;font-size:1.4rem}.pkg .pr{font-size:2.2rem;font-weight:800;margin:.1rem 0 .3rem}.pkg .pr small{font-size:1rem;font-weight:400;color:var(--muted)}
+.pkg ul{flex:1;margin:.2rem 0 .4rem}.pkg form{margin:0}.pkg .btn-big{width:100%;min-width:0;margin:.4rem 0 0}.pkg .pill{align-self:flex-start;font-size:.9rem}
+.ticks{list-style:none;padding:0}.ticks li{position:relative;padding-left:1.5em}.ticks li:before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:800}
+/* step 3: one question per screen */
+.qoff{display:none!important}
+.qcount{font-weight:700;color:var(--brand);font-size:1.05rem;margin:.4rem 0 .6rem;scroll-margin-top:12px}
+.qs fieldset.iq legend,.qs .card h3{font-size:1.25rem}
+.saved{font-size:.95rem;color:var(--muted);margin:.6rem 0 0}
+ul.tips li{margin:.4em 0}
+/* step 4: order summary */
+dl.order{margin:.6rem 0 1rem;border-top:1px solid var(--line)}dl.order>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.2rem 1rem;border-bottom:1px solid var(--line);padding:.6rem 0}
+dl.order dt{font-weight:700}dl.order dd{margin:0;text-align:right}
+.pkfs{border:0;padding:0;margin:.4rem 0}.pkfs legend{font-weight:700;font-size:1.15rem;padding:0}
+.choice{grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))}.choice .ch{font-size:.95rem;color:var(--muted)}.choice label:has(input:checked) .ch{color:var(--brand);font-weight:700}
+.total{display:flex;justify-content:space-between;align-items:baseline;font-size:1.3em;border-top:3px solid var(--ink);padding-top:.5em;margin-top:1rem}.total strong{font-size:1.4em}
+/* every screen: need help */
+.needhelp{margin-top:2.5rem;border-top:3px solid var(--alt);padding-top:1rem}.needhelp h2{font-size:1.25rem;margin:0 0 .3rem}
+.needhelp details.qa{margin:.3rem 0}.needhelp details.qa summary{cursor:pointer;font-weight:600;padding:.5rem 0;min-height:44px}.needhelp details.qa p{margin:.2rem 0 .6rem}
+.needhelp>p{margin:.6rem 0 0}
+[hidden]{display:none!important}
+.stepper li.past:before{content:none}
+.intake .navrow{flex-wrap:nowrap;gap:.5rem}.intake .navrow .btn{margin:0}.intake .navrow .btn-start{flex:1;text-align:center}

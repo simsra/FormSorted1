@@ -43,7 +43,7 @@ def intake_order(tier,form="aa",who="parent"):
         req(f"/intake/{tok}",{"sec":s,"nav":"next",**d})
     return tok
 t9=intake_order("99"); pv=body(f"/preview/{t9}"); low=pv.lower()
-assert "How would you like it finished?" in pv and pv.count(DWP)==1 and "Pay £99" in pv
+assert "Check your order and pay" in pv and "Your package" in pv and pv.count(DWP)==1 and "Pay £99" in pv
 assert re.search(r"name=pack value=99 [^>]*checked",pv) and not re.search(r"name=pack value=199 [^>]*checked",pv)
 assert not re.search(r"type=checkbox[^>]*checked",pv)   # nothing ticked for them
 for b in BANNED[:10]: assert b not in low, b

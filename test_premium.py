@@ -19,12 +19,12 @@ body=lambda p: req(p).read().decode(); loc=lambda r: r.headers["location"]
 DWP="You can claim directly from DWP for free; FormSorted is a paid online form-filling service."
 for form in ("aa","dla","pip"):
     h=body(f"/?form={form}")
-    assert "£99" in h and "£199" in h and "Compare Done for you and Plus" in h and "Upgrade to Done for you Plus, £199" in h and "How much should we" not in h and h.count(DWP)==1
-    hp=body(f"/?form={form}&tier=199"); assert "Done for you Plus" in hp and "Switch to Done for you, £99" in hp and "riefing" in hp
+    assert "£99" in h and "£199" in h and "Compare the packages in detail" in h and "Choose Done for you Plus" in h and "Choose Done for you<" in h and h.count(DWP)==1
+    hp=body(f"/?form={form}&tier=199"); assert "Continue with Done for you Plus" in hp and "Choose Done for you<" in hp and "riefing" in hp
     for x in (h,hp):
         low=x.lower().replace(DWP.lower(),"").replace("freepost",""); assert "free" not in low and "stripe" not in low and " ai " not in low and "we claim for you" not in low and "we submit your claim" not in low and "claim pack" not in low and "claims service" not in low and "claims firm" not in low and "claim handling" not in low
         assert not set(re.findall(r'href="?(https?://[^" >]+)',x))-{"https://formsorted.com/privacy.html","https://formsorted.com/terms.html","https://formsorted.com/#prices"}
-assert "How much should we do for you?" in body("/?form=atw")
+assert "Choose your package" in body("/?form=atw")
 # ---- Plus AA order through the intake
 tok=loc(req("/checkout",{"tier":"199","form":"aa"})).split("/")[-1]; req(f"/consent/{tok}",{"health":"on","truth":"on"})
 for s,d in [("about",{"who":"parent","name":"Margaret","signer":"poa"}),("conds",{"cond_0":"1","cond_0_since":"2015"}),("daily",{"bad":"3","r_bed_hard":"1","r_bed_help":"1","r_bed_freq":"every"}),("safety",{"falls":"3-5"}),("finish",{"people":["GP","Family carer"]})]:
@@ -71,7 +71,7 @@ rv=body(f"/review/{code}"); assert "What has changed?" in rv and "Last time you 
 # ---- £99 order: no Plus extras, appeal not available
 t9=loc(req("/checkout",{"tier":"99","form":"pip"})).split("/")[-1]; req(f"/consent/{t9}",{"health":"on","truth":"on"})
 for s in ("about","conds","daily","out","finish"): req(f"/intake/{t9}",{"sec":s,"nav":"next","who":"me"})
-p9=body(f"/preview/{t9}"); assert "How would you like it finished?" in p9 and "name=pack value=99 data-price=99 checked" in p9 and "name=pack value=199 data-price=199  required" in p9 and p9.index("Keep my answers for 3 years")>p9.index("<div class=keepopt>")   # only shown for Plus
+p9=body(f"/preview/{t9}"); assert "Check your order and pay" in p9 and "name=pack value=99 data-price=99 checked" in p9 and "name=pack value=199 data-price=199  required" in p9 and p9.index("Keep my answers for 3 years")>p9.index("<div class=keepopt>")   # only shown for Plus
 req(f"/pay/{t9}",{"waive":"on","keep":"1"}); assert A.get(t9)["keep_until"] is None
 # ---- retention: opted-in Plus answers survive the 90-day purge; erase removes them
 import orders

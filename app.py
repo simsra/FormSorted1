@@ -32,13 +32,27 @@ def get(token):
     r=db().execute("select * from orders where token=?",(token,)).fetchone()
     if not r: raise HTTPException(404)
     return r
-STEPS=["Your answers","Pay","Check","Download"]   # Oct 2026 clean steps: what the customer sees (answers -> pay -> check -> download)
-BB_STEPS=["Choose","Agree","Your answers","Check and pay","Your Blue Badge answers"]
-def bbprog(n): return f"<p class=progress>Step {n} of {len(BB_STEPS)}: {BB_STEPS[n-1]}</p><div class=bar><span style='width:{n*100//len(BB_STEPS)}%'></span></div>"
+STEPS=["Choose your form","Choose your package","Answer the questions","Pay","Get your form"]   # Oct 2026 simple journey: form -> package -> questions -> pay -> get your form
+STEPS_SHORT=["Form","Package","Questions","Pay","Get form"]
+def bbprog(n):
+    """Blue Badge uses the same 5 steps. Old BB step numbers: 1 summary, 2 agree, 3 answers, 4 check and pay, 5 answers ready."""
+    return prog({1:2,2:3,3:3,4:4,5:5}.get(n,n),{2:"Before you start"}.get(n))
 def prog(n,label=None,sub=""):
-    """Numbered 4-step indicator: 1 Your answers, 2 Pay, 3 Check, 4 Download. label: what this screen is, within the step."""
-    lis="".join(f'<li class="{"past" if j<n else "now" if j==n else ""}"{" aria-current=step" if j==n else ""}>{esc(t)}</li>' for j,t in enumerate(STEPS,1))
-    return f"""<nav aria-label="Your progress"><ol class=stepper>{lis}</ol></nav><p class=stepnow>Step {n} of {len(STEPS)}: <strong>{esc(label or STEPS[n-1])}</strong>{f" · {sub}" if sub else ""}</p>"""
+    """5-step bar shown on every screen: 1 Choose your form, 2 Choose your package, 3 Answer the questions, 4 Pay, 5 Get your form.
+    label: what this screen is, within the step."""
+    lis="".join(f'<li class="{"past" if j<n else "now" if j==n else ""}"{" aria-current=step" if j==n else ""}><span class=n>{j}</span><span class=s>{esc(STEPS_SHORT[j-1])}</span><span class=l>{esc(t)}</span></li>' for j,t in enumerate(STEPS,1))
+    lab=STEPS[n-1]+(f": {label}" if label and label!=STEPS[n-1] else "")
+    return f"""<nav aria-label="Your progress"><ol class=stepper>{lis}</ol></nav><p class=stepnow>Step {n} of {len(STEPS)}: <strong>{esc(lab)}</strong>{f" · {sub}" if sub else ""}</p>"""
+HELP_FAQ=[("When do I pay?","Only at the end, after the questions. You see the price before you start, and you can change package before you pay."),
+ ("Can I stop and come back?","Yes. Tap \u201cSave and finish later\u201d to get your private link. If you don't pay, we delete your answers after 7 days."),
+ ("I'm filling this in for someone else","That's fine. Answer about them. They sign the form, or you sign it if you have the right to act for them."),
+ ("I'm not sure what to answer","Pick the answer closest to a normal day. Skip anything you're not sure about. You check every answer before anything is final."),
+ ("Is this part of the government?","No. FormSorted is an independent online form-filling service. It isn't part of DWP, GOV.UK or your council."),
+ ("Who sends the form?","You do. You check it, sign it and send it yourself.")]
+def need_help():
+    """Small help area at the bottom of every screen: common questions behind a toggle, plus the email address. No promise that a person checks anything."""
+    qa="".join(f"<details class=qa><summary>{esc(q)}</summary><p>{esc(a)}</p></details>" for q,a in HELP_FAQ)
+    return f"""<section class=needhelp aria-labelledby=nh><h2 id=nh>Need help?</h2><details class=more><summary>Questions people ask</summary>{qa}</details><p>Or email <a href="mailto:hello@formsorted.com">hello@formsorted.com</a></p></section>"""
 def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
     if minimal:  # order summary: no outbound links except Terms/Privacy
         indep='<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not affiliated with DWP or GOV.UK.</div></div>'
@@ -48,7 +62,7 @@ def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disabil
         ftr='<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent online form-filling service. Not affiliated with DWP, GOV.UK or any government body. We can\'t guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a><a data-contact href="mailto:hello@formsorted.com">Contact</a></p></div></footer>'
     return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg><link rel=stylesheet href=/static/app.css><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body><a href="#main" class="skip">Skip to main content</a>
 <header class="hdr"><div class="wrap"><a class="logo" href="/"><img src="/static/logo.svg" alt="FormSorted home" width="170" height="36"></a></div></header>
-{indep}<main id=main><div class=wrap>{body}</div></main>{ftr}</body></html>""")
+{indep}<main id=main><div class=wrap>{body}{need_help()}</div></main>{ftr}</body></html>""")
 def stripe(method,path,data=None):
     req=urllib.request.Request("https://api.stripe.com/v1"+path,urllib.parse.urlencode(data).encode() if data else None,method=method,
         headers={"Authorization":"Basic "+base64.b64encode((STRIPE+":").encode()).decode()})
@@ -71,22 +85,35 @@ async def _canonical_host(request:Request, call_next):
 from fastapi.staticfiles import StaticFiles
 app.mount("/static",StaticFiles(directory=os.path.join(HERE,"static")),name="static")
 PREVIEW="<div class=panel><p><strong>Preview mode:</strong> no payment is taken and answers are sample drafts.</p></div>"
+FORM_CARDS=[("aa","Attendance Allowance","For people over State Pension age who need help with care, day or night."),
+ ("pip","PIP","For people aged 16 to State Pension age with a health condition or disability."),
+ ("pipr","PIP review","Already get PIP and DWP has sent a review form (AR1)."),
+ ("dla","DLA for a child","For a child under 16 who needs more care or watching than other children their age."),
+ ("bb","Blue Badge","For a parking badge if walking or getting around is hard."),
+ ("atw","Access to Work","For help at work, for people in or starting a job.")]
+NOT_SURE=[("Is it for a child under 16?","DLA for a child","dla"),("Are they State Pension age or over, and need help with care?","Attendance Allowance","aa"),
+ ("Aged 16 to State Pension age, with a health condition or disability?","PIP","pip"),("Already get PIP, and got a review form?","PIP review","pipr"),
+ ("Need a parking badge?","Blue Badge (you can also get one of the forms above)","bb")]
+def price_line(form):
+    ts=FORMS[form]["tiers"]
+    if form=="bb": return f"£{ts[BB.SOLO_TIER][1]//100}"
+    ps=sorted({p//100 for n,p,_ in ts.values()}); return " or ".join(f"£{p}" for p in ps)
+def form_cards():
+    main="".join(f"""<a class=fcard href="/?form={k}"><span class=fn>{esc(t)}</span><span class=fw>{esc(w)}</span><span class=fp>{price_line(k)} · Choose</span></a>""" for k,t,w in FORM_CARDS if k!="atw")
+    k,t,w=FORM_CARDS[-1]
+    return f"""<div class=fcards>{main}</div><p class=alsoform>Also: <a href="/?form={k}">{esc(t)}</a>. {esc(w)}</p>"""
+def not_sure():
+    li="".join(f"<li><strong>{esc(q)}</strong> Choose <a href=\"/?form={k}\">{esc(a)}</a>.</li>" for q,a,k in NOT_SURE)
+    return more("Not sure which form?",f"<p>Answer yes to one of these:</p><ul class=notsure>{li}</ul><p>Still not sure? Look at the letter or form DWP sent you. The form's name is on the first page.</p>")
 @app.get("/")
 def home(form:str="", tier:str=""):
     pv=PREVIEW if DEV else ""
     if form not in FORMS:
-        opts="".join(f"""<label class=radio><input type=radio name=form value={k} {'checked' if i==0 else ''} required><span><strong>{f['short']}</strong><span class=hint>For {f['who']}. England &amp; Wales.</span></span></label>""" for i,(k,f) in enumerate(FORMS.items()))
-        return page(prog(1)+pv+f"""<form method=get action=/><fieldset style="border:0;padding:0;margin:0"><legend><h1>Which form should we do for you?</h1></legend>{opts}</fieldset>
-<div class=inset>Live in Scotland? We don't cover Scotland yet.</div>
-<button class=btn>Continue</button></form>""","Choose your form")
+        return page(prog(1)+pv+f"""<h1>Get your benefit form filled in</h1><p class=one>Answer simple questions. We fill in the form. You check it, sign it and send it.</p>
+<h2 class=h3 id=pick>Which form do you need?</h2>{form_cards()}{not_sure()}
+<p class=hint>England and Wales only. You only pay at the end, after the questions.</p>""","Choose your form",minimal=True)
     if form=="bb": return bb_summary(pv)
-    f=FORMS[form]; ts=list(f["tiers"].items())
-    if tier in f["tiers"]: return order_summary(form,tier,pv)
-    if len(ts)<=2 and form!="atw": return order_summary(form,default_tier(form),pv)   # one product (+ optional upgrade shown on the summary)
-    opts="".join(f"""<label class=radio><input type=radio name=tier value={t} {'checked' if (t==tier if tier in f['tiers'] else i==len(ts)-1) else ''} required><span><strong>{n} – £{p//100}</strong><span class=hint>{d}</span></span></label>""" for i,(t,(n,p,d)) in enumerate(ts))
-    return page(prog(1)+pv+f"""<p class=caption>{f['short']}</p><form method=post action=/checkout><input type=hidden name=form value={form}><fieldset style="border:0;padding:0;margin:0"><legend><h1>How much should we do for you?</h1></legend>{opts}</fieldset>
-<div class=promise><strong>Done for you, in your words.</strong> We write the answers and fill in the form; you check, sign and post it.</div><div class=inset>One-off fee. No success fee. Secure card payment. 14-day cancellation rights until your conversation starts.</div>
-<button class="btn">Continue to payment</button></form><p><a href=/>Choose a different form</a></p>""","Choose your service",f["gov"])
+    return order_summary(form,tier if tier in FORMS[form]["tiers"] else "",pv)
 PRICING_URL="https://formsorted.com/#prices"
 DWP_LINE="You can claim directly from DWP for free; FormSorted is a paid online form-filling service."
 TAPLINE="<div class=promise><strong>About 10 minutes. You only tap, we do the writing.</strong> Skip anything you're not sure about, and save your progress to finish later.</div>"
@@ -110,18 +137,28 @@ def how_it_works(form,price):
     pay=f"Choose your pack and pay £{price}" if (form in PLUS.PLUS_FORMS) else f"Pay £{price}"
     return f"""<ol class=howit><li><strong>Answer simple questions.</strong> {"Mostly taps, about 10 minutes." if form in INTAKE.FORMS_V3 else "In plain English, at your own pace."}</li><li><strong>{pay}.</strong> Only at the end, if you want your form.</li>
 <li><strong>Check every answer</strong> and change anything that isn't right.</li><li><strong>Download your form</strong>, then print, sign and post it.</li></ol>"""
-def order_summary(form,tier,pv=""):
-    f=FORMS[form]; n,p,_=f["tiers"][tier]
-    if is_premium(tier): items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,default_tier(form))+PREMIUM.plus_items(form)+["You check and approve every word before anything is final"])+"".join(f"<li class=note>{esc(x)}</li>" for x in ui_notes(form))
-    else: items="".join(f"<li>{esc(i)}</li>" for i in pack_items(form,tier)+["You check and approve every word before anything is final"])
-    up=upgrade_box(form,tier)
-    return page(prog(1,"Start")+pv+f"""<div class=summary><p class=caption>{esc(f['short'])}</p><h1>We fill in your form for you</h1>
-<p class=one>You answer simple questions. We fill in the official form. You check it, sign it and post it.</p>{how_it_works(form,p//100)}
-<form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={tier}><button class="btn btn-big">Start my form</button></form>
-<p class=hint>Nothing to pay now. {esc(n)}: £{p//100}, paid once at the end. No success fee.</p>
-{more("What's included",f"<ul class=ticks>{items}</ul>")}{more("Compare Done for you and Plus",up) if up else ""}
-{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}
-<p class=hint>{esc(DWP_LINE)}</p><p class=change><a href="{PRICING_URL}">Change form or pack</a></p></div>""",f"Your order: {n}",minimal=True)
+def pkg_bullets(form,t):
+    """3-4 short bullets per package for the package cards."""
+    ts=FORMS[form]["tiers"]
+    if form in PLUS.PLUS_FORMS:
+        if t=="99": return [l for l,d,b,p_ in PLUS.compare_rows(form) if b==1][:3]+["You check every answer before it's final"]
+        return ["Everything in "+ts["99"][0]]+[l for l,d in PLUS.items(form) if l not in PLUS.POST_ON.values()][:3]
+    items=pack_items(form,t); names=list(ts); k=names.index(t)
+    return items[:1] if k==0 else ["Everything in "+ts[names[k-1]][0]]+items[k:]
+def order_summary(form,tier="",pv=""):
+    """Step 2, choose your package: one big card per package, each with its own Choose button (POST /checkout). Nothing to pay yet.
+    tier: the package they picked on the website, marked 'Your choice'."""
+    f=FORMS[form]; ts=list(f["tiers"].items())
+    cards=""
+    for t,(n,p,_) in ts:
+        mine=(t==tier)
+        cards+=f"""<div class="pkg{' mine' if mine else ''}">{'<p class=pill>Your choice</p>' if mine else ''}<h2>{esc(n)}</h2><p class=pr>£{p//100} <small>one-off</small></p><ul class=ticks>{''.join(f'<li>{esc(x)}</li>' for x in pkg_bullets(form,t))}</ul>
+<form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={t}><button class="btn btn-big">{'Continue with' if mine else 'Choose'} {esc(n)}</button></form></div>"""
+    up=upgrade_box(form,tier or default_tier(form))
+    return page(prog(2)+pv+f"""<p class=caption>{esc(f['short'])}</p><h1>Choose your package</h1><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p>
+<div class=pkgs>{cards}</div>
+{more("Compare the packages in detail",up) if up else ""}{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}
+<p class=hint>{esc(DWP_LINE)} No success fee.</p><p class=change><a href="/">Choose a different form</a></p>""",f"Choose your package: {f['name']}",minimal=True)
 def upgrade_box(form,tier):
     """Clear side-by-side comparison of the two packs, with a button to switch."""
     ts=FORMS[form]["tiers"]
@@ -131,8 +168,7 @@ def upgrade_box(form,tier):
     plus=plus[0]; (bn,bp,_),(pn,pp,_)=ts[base],ts[plus]
     tr=compare_table_rows(form)
     other=plus if tier==base else base; on,op,_=ts[other]
-    return f"""<div class=compare><table><thead><tr><th></th><th>{esc(bn)}<br>£{bp//100}</th><th>{esc(pn)}<br>£{pp//100}</th></tr></thead><tbody>{tr}</tbody></table>{plus_notes(form)}
-<form method=get action=/><input type=hidden name=form value={form}><input type=hidden name=tier value={other}><button class="btn btn-2">{'Upgrade to' if other==plus else 'Switch to'} {esc(on)}, £{op//100}</button></form></div>"""
+    return f"""<div class=compare><table><thead><tr><th></th><th>{esc(bn)}<br>£{bp//100}</th><th>{esc(pn)}<br>£{pp//100}</th></tr></thead><tbody>{tr}</tbody></table>{plus_notes(form)}</div>"""
 def compare_table_rows(form):
     """£99 vs Plus rows from plus.py. No 'bought separately' or saving line (Simon, 28 Oct 2026: none until SSCS1 and posting are live)."""
     cell=lambda v: "✓" if v==1 else ("–" if not v else esc(v))
@@ -181,31 +217,29 @@ def preview(token:str):
     f=FORMS[o["form"] or "aa"]; n,p,_=tier_info(o["form"] or "aa",o["tier"]); got,total=INTAKE.coverage(o["form"],json.loads(o["intake"])) if o["intake"] else covered(o)
     choose=(o["form"] or "aa") in PLUS.PLUS_FORMS and o["tier"] in ("99","199")
     facts=[f"Your details cover {got} of {total} sections of the form" if o["intake"] else f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa","99" if choose else o["tier"])]
-    extra=more("More about what happens next",f"""<ul class=ticks>{''.join(f'<li>{x}</li>' for x in facts)}</ul>
-<figure class=lockprev><img src="/static/preview-placeholder.svg" alt="Example illustration of a filled-in form (not your answers)" width=520 height=360><figcaption>Illustration only. Your own answers appear after payment.</figcaption></figure>
-<p>Pay once and we write every section from what you tapped, check each one against what you told us, and you approve it before anything is final.</p>{TRUST}
+    extra=more("What happens after you pay",f"""<ol class=howit><li>We write every section from what you told us and check each one against your answers.</li><li>You check every answer and change anything that isn't right.</li><li>You download your form, then sign it and send it yourself.</li></ol>
+<figure class=lockprev><img src="/static/preview-placeholder.svg" alt="Example illustration of a filled-in form (not your answers)" width=520 height=360><figcaption>Illustration only. Your own answers appear after payment.</figcaption></figure>{TRUST}
 <p class=hint>One-off fee. No success fee. If you don't pay, we delete everything you told us after 7 days.</p>""")
-    cov=f"Your answers cover {got} of {total} {'sections of the form' if o['intake'] else 'topics'}."
-    head=(f"<h1>How would you like it finished?</h1><p class=one>{cov} Choose a pack, then pay once.</p>" if choose
-          else f"<h1>Your form is ready to fill in</h1><p class=one>{cov} Pay once and we fill it in.</p>")
-    return page(prog(2,"Choose and pay")+f"""<div class=summary>{head}
-{pack_choice(o) if choose else f'<div class=total><span>{esc(n)}</span><strong>£{p//100}</strong></div><form method=post action=/pay/{token}>'+(KEEP_OPT if is_premium(o["tier"]) else "")}<div class=paybox><label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
+    rows=f"""<dl class=order><div><dt>Form</dt><dd>{esc(f['short'])}</dd></div><div><dt>Your answers</dt><dd>{got} of {total} {'sections of the form' if o['intake'] else 'topics'}{f' · <a href="/intake/{token}?s=about">Change</a>' if o['intake'] else ''}</dd></div>{'' if choose else f'<div><dt>Package</dt><dd>{esc(n)}</dd></div>'}</dl>"""
+    head="<h1>Check your order and pay</h1><p class=one>Nothing is filled in until you pay. Then you check every answer.</p>"
+    return page(prog(4)+f"""<div class=summary>{head}{rows}
+{pack_choice(o) if choose else f'<form method=post action=/pay/{token}>'+(KEEP_OPT if is_premium(o["tier"]) else "")}<div class=total><span>Total to pay</span><strong id=paytotal>£{p//100}</strong></div><div class=paybox><label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
 <button class="btn btn-big" id=paybtn>Pay £{p//100} and get my form</button><p class=hint>Have a discount code? You can enter it on the next screen, when you add your card.</p></div></form>
-{extra}{f'<p class=change><a href="/intake/{token}?s=about">Change my answers</a></p>' if o["intake"] else ''}<p class=hint>{esc(DWP_LINE)}</p></div>""","Your form is ready",minimal=True)
+{extra}<p class=hint>{esc(DWP_LINE)}</p></div>""","Check your order and pay",minimal=True)
 def pack_choice(o):
-    """'How would you like it finished?': £99 or Plus side by side, chosen at the end, before paying. £99 is the default unless they picked Plus at the start.
-    No countdown, nothing ticked for them, no saving line. The keep-answers option only shows (and only counts) for Plus. Detail table behind 'More info'."""
+    """Package on the pay screen: what they chose at step 2, with the other one beside it to switch. £99 unless they chose Plus.
+    No countdown, nothing ticked for them, no saving line. The keep-answers option only shows (and only counts) for Plus. Detail behind a toggle."""
     form=o["form"] or "aa"; ts=FORMS[form]["tiers"]; cur="199" if o["tier"]=="199" else "99"
     (bn,bp,_),(pn,pp,_)=ts["99"],ts["199"]
     base=[l for l,d,b,p_ in PLUS.compare_rows(form) if b==1]
     plus=["Everything in "+bn]+[l for l,d in PLUS.items(form) if l not in PLUS.POST_ON.values()]   # posting hidden in this UI (decision pending)
-    card=lambda t,n,pr,lst: f"""<label><input type=radio name=pack value={t} data-price={pr//100} {'checked' if t==cur else ''} required><span class=nm>{esc(n)}</span><span class=pr>£{pr//100}</span><ul>{''.join(f'<li>{esc(x)}</li>' for x in lst)}</ul></label>"""
+    card=lambda t,n,pr,lst: f"""<label><input type=radio name=pack value={t} data-price={pr//100} {'checked' if t==cur else ''} required><span class=nm>{esc(n)}</span><span class=pr>£{pr//100}</span><span class=ch>{'Your choice' if t==cur else 'Switch to this'}</span></label>"""
     detail=f"""<div class=compare><table><thead><tr><th></th><th>{esc(bn)}<br>£{bp//100}</th><th>{esc(pn)}<br>£{pp//100}</th></tr></thead><tbody>{compare_table_rows(form)}</tbody></table>{''.join(f"<p class=hint>{esc(x)}</p>" for x in ui_notes(form))}<p class=hint>{esc(PLUS.FOOT)}</p></div>"""
-    return f"""<style>.pk .keepopt{{display:none}}.pk:has(input[value="199"]:checked) .keepopt{{display:block}}.compare small{{display:block;color:#5a6a72;font-size:.85em}}</style>
-<form method=post action=/pay/{o['token']} class=pk><fieldset style="border:0;padding:0;margin:0"><legend class=sr>Choose your pack</legend><div class=choice>
+    return f"""<style>.pk .keepopt{{display:none}}.pk:has(input[value="199"]:checked) .keepopt{{display:block}}.compare small{{display:block;color:#3d4f58;font-size:.85em}}</style>
+<form method=post action=/pay/{o['token']} class=pk><fieldset class=pkfs><legend>Your package <span class=hint>(you can still change it)</span></legend><div class=choice>
 {card("99",bn,bp,base)}{card("199",pn,pp,plus)}</div></fieldset>
-{more("Compare the packs in detail",detail)}<div class=keepopt>{KEEP_OPT}</div>
-<script>document.querySelectorAll('.pk input[name=pack]').forEach(function(r){{r.addEventListener('change',function(){{var b=document.getElementById('paybtn');if(b)b.textContent='Pay £'+r.dataset.price+' and get my form'}})}})</script>"""
+{more("What's in each package",detail)}<div class=keepopt>{KEEP_OPT}</div>
+<script>document.querySelectorAll('.pk input[name=pack]').forEach(function(r){{r.addEventListener('change',function(){{var b=document.getElementById('paybtn'),t=document.getElementById('paytotal');if(b)b.textContent='Pay £'+r.dataset.price+' and get my form';if(t)t.textContent='£'+r.dataset.price;document.querySelectorAll('.pk .ch').forEach(function(c){{c.textContent=c.parentNode.querySelector('input').checked?'Your choice':'Switch to this'}})}})}})</script>"""
 KEEP_OPT="<label class=cb><input type=checkbox name=keep value=1><span>Keep my answers for 3 years, so you can help with a reconsideration or my renewal without asking again. I can delete them at any time. (Optional. Without this we delete them after 90 days.)</span></label>"
 THREE_YEARS=3*365*86400
 @app.post("/pay/{token}")
@@ -290,7 +324,7 @@ def start(token:str):
         if o["draft"] and (o["form"] or "aa") in INTAKE.FORMS_V3: return RedirectResponse(f"/{'documents' if o['approved_at'] and o['details_at'] else 'details' if o['approved_at'] else 'approve' if is_wf(o) else 'deadline'}/{token}",303)
         return RedirectResponse(chat_url(o),303)
     lead="Payment received. Please confirm 2 things." if o["status"]=="paid" else "Please confirm 2 things. You only pay at the end, if you want your completed form."
-    return page((bbprog(2) if o["form"]=="bb" else prog(1,"Before we start"))+f"""<h1>Before we start</h1><p class=one>{lead}</p><form method=post action=/consent/{token}>
+    return page((bbprog(2) if o["form"]=="bb" else prog(3,"Before you start"))+f"""<h1>Before you start</h1><p class=one>{lead}</p><form method=post action=/consent/{token}>
 <label class=cb><input type=checkbox name=health required><span>I agree to {BRAND} using the health information I give to prepare this form. If it's about someone else, they agree, or I can act for them.</span></label>
 <label class=cb><input type=checkbox name=truth required><span>I'll only give true information and will check everything before sending it.</span></label>
 <div class=warning>{"Giving false information on a Blue Badge application is an offence." if o["form"]=="bb" else "Giving false information on a benefit claim is an offence."}</div>
@@ -425,7 +459,7 @@ def prepare(token:str):
     st=_stage(o)
     if st=="error": JOBS.pop(token,None)   # the next visit tries again
     items="".join(f'<li id="ps_{k}" class="{"pdone" if k=="read" else "pnow" if k=="draft" else ""}">{esc(t)}</li>' for k,t in PREP_STEPS)
-    return page(prog(3,"Filling in your form")+f"""<div class=prep><h1>We're filling in your form</h1><p class=one>This usually takes under a minute. Please keep this page open. You'll check every answer before anything is final.</p>
+    return page(prog(5,"Filling in your form")+f"""<div class=prep><h1>We're filling in your form</h1><p class=one>This usually takes under a minute. Please keep this page open. You'll check every answer before anything is final.</p>
 <ol class=prepsteps>{items}</ol><div class="bar slim"><span id=pbar style="width:30%"></span></div>
 <p class=small id=pmsg>{'This is taking longer than usual. Your answers are saved. <a href="/prepare/'+token+'">Try again</a>.' if st=="error" else ''}</p></div>
 <noscript><meta http-equiv=refresh content="5"></noscript>
@@ -599,7 +633,7 @@ def details_page(token:str, err:str=""):
     if o["intake"] and not o["details_at"]: p={**INTAKE.personal_prefill(form,json.loads(o["intake"])),**p}
     who="the child" if form=="dla" else "the person claiming"
     rows="".join(f"""<div class=field><label class=q for=d_{k}>{esc(l)}</label><input id=d_{k} name={k} {'type='+t if t else ''} value="{esc(p.get(k,''))}" {'required' if req else ''} autocomplete=off></div>""" for k,l,t,req in detail_fields(form))
-    return page(prog(3,"Your details")+f"""<h1>Your details</h1><p class=one>We add these to your documents{'' if form=='atw' else f' for {who}'} so you have less to fill in by hand. We only ask now, at the end, so we don't keep them longer than needed.</p>
+    return page(prog(5,"Your details")+f"""<h1>Your details</h1><p class=one>We add these to your documents{'' if form=='atw' else f' for {who}'} so you have less to fill in by hand. We only ask now, at the end, so we don't keep them longer than needed.</p>
 {f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{POST_OPT if (is_premium(o["tier"]) and printmail.ENABLED) else ""}<button class=btn>Save and make my documents</button></form>
 <form method=post action=/details/{token}><input type=hidden name=skip value=1><button class="btn btn-2">Skip. I'll write my details in by hand</button></form>
 <p class=small>We delete everything 90 days after your order, or now: <a href=/delete/{token}>delete my information</a>.</p>""","Your details")
@@ -654,7 +688,7 @@ def private_page(o, err=""):
     rows="".join(f"""<div class=field><label class=q for=p_{k}>{esc(l)}</label>{f'<p class=hint>{esc(h)}</p>' if h else ''}<input id=p_{k} name={k} {'required' if req else ''} autocomplete=off {'inputmode=numeric' if kind in ('sort','acc') else 'autocapitalize=characters' if kind=='ni' else ''} maxlength=60></div>""" for k,l,h,kind,req in _priv_fields(o))
     other="<label class=cb><input type=checkbox name=other_ben value=1><span>Also pay any other benefits I get into this account (question 51 on the form).</span></label>" if form=="aa" else ""
     again="<div class=panel><p>For your safety we deleted these details after your download. Type them again to download another filled-in copy.</p></div>" if o["details_at"] else ""
-    return page(prog(3,"Last details")+f"""<h1>Last details for the form</h1><p class=one>We write these onto your form and nowhere else.</p>
+    return page(prog(5,"Last details")+f"""<h1>Last details for the form</h1><p class=one>We write these onto your form and nowhere else.</p>
 {more("How we keep these safe",f"<p>We never save them with your answers and never email them. They are held encrypted only until you download your form{', or until we post it' if o['post_pack'] else ''}, then deleted.</p><p>We delete everything else 90 days after your order, or now: <a href=/delete/{token}>delete my information</a>.</p>")}{again}
 {f'<div class=warning role=alert>{esc(err)}</div>' if err else ''}<form method=post action=/details/{token}>{rows}{other}<button class="btn btn-big">Make my form</button></form>
 <form method=post action=/details/{token}><input type=hidden name=skip value=1><button class=linkbtn>Skip. I'll write these in by hand</button></form>""","Last details",minimal=True)
@@ -704,11 +738,35 @@ def intake_page(token:str, s:str="", r:str=""):
     bar="".join(f'<li class="{"done" if j<i else "now" if j==i else ""}">{esc(l)}</li>' for j,(k,l) in enumerate(secs))
     refused=REFUSED_BOX if r else ""
     reassure="<p class=reassure>It's normal for this to feel hard. You only tap, we do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
-    return page(prog(1,f"Part {i+1} of {len(secs)}",f"About {left} minute{'s' if left!=1 else ''} left")+f"""<div class=intake><div class="bar slim"><span style='width:{(i+1)*100//len(secs)}%'></span></div>
-{refused}{f'<h1>We\'ll fill in your whole form for you</h1><p class=one>About {left} minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>'+HONEST_LINE if i==0 else f'<h1>{esc(secs[i][1])}</h1><p class=one>Tap what fits. Skip anything you\'re not sure about.</p>'}
-<form method=post action=/intake/{token}><input type=hidden name=sec value={sec}>{INTAKE.section_body(form,sec,d)}
-<div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==len(ids)-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
-<button class="linkbtn" name=nav value=save>Save and finish later</button></form></div>""",secs[i][1],minimal=True)
+    first=(f'<p class=one>About {left} minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>'+HONEST_LINE) if i==0 else ''
+    return page(prog(3,f"Part {i+1} of {len(secs)}: {secs[i][1]}",f"About {left} minute{'s' if left!=1 else ''} left")+f"""<div class=intake>
+{refused}{'<h1>We\'ll fill in your whole form for you</h1>' if i==0 else f'<h1>{esc(secs[i][1])}</h1>'}{first}<p class=qcount id=qcount aria-live=polite hidden></p>
+<form method=post action=/intake/{token}><input type=hidden name=sec value={sec}><div class=qs id=qs>{INTAKE.section_body(form,sec,d)}</div>
+{QHELP}<div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==len(ids)-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
+<p class=saved>Your answers are saved each time you finish a part.</p><button class="linkbtn" name=nav value=save>Save and finish later</button></form></div>{QS_JS}""",secs[i][1],minimal=True)
+QHELP=more("Help with this question","""<ul class=tips><li>Think about a normal week, including the bad days.</li><li>If it changes from day to day, pick what happens on most days.</li><li>Not sure? Skip it and carry on. You can go back.</li><li>None of the answers fit? Tap <strong>Something else</strong> and type it in your own words.</li><li>You check every answer before anything is final.</li></ul>""")
+# One question per screen: the server still gets the whole part in one POST (nothing else changes). Without JavaScript every question shows at once.
+QS_JS="""<script>(function(){var box=document.getElementById('qs');if(!box)return;var form=box.closest('form'),nav=form.querySelector('.navrow'),sub=nav.querySelector('button[value=next]'),sback=nav.querySelector('button[value=back]'),cnt=document.getElementById('qcount');
+var kids=[].slice.call(box.children).filter(function(e){return !/^(SCRIPT|STYLE|INPUT)$/.test(e.tagName)}),steps=[],pre=[];
+function simple(e){return /^(FIELDSET|DIV)$/.test(e.tagName)&&!e.querySelector('.chips,.card,.cond,textarea,select,input[type=radio],input[type=checkbox],input[type=file],button')&&!!e.querySelector('input')}
+kids.forEach(function(e){if(/^(P|H2|H3)$/.test(e.tagName)&&!e.querySelector('input,select,textarea')){e.setAttribute('data-qpre','1');pre.push(e);return}
+var last=steps[steps.length-1],sm=simple(e);if(sm&&last&&last.sm&&last.els.length<3&&!pre.length){last.els.push(e);return}steps.push({els:pre.concat([e]),sm:sm});pre=[]});
+if(pre.length&&steps.length)steps[steps.length-1].els=steps[steps.length-1].els.concat(pre);
+if(steps.length<2)return;
+function ok(st){return st.els.some(function(e){return !e.hidden&&!e.hasAttribute('data-qpre')})}
+var cur=0,qb=document.createElement('button'),qn=document.createElement('button');qb.type=qn.type='button';qb.className='btn btn-2';qb.textContent='Back';qn.className='btn btn-start';qn.textContent='Next question';
+nav.insertBefore(qb,nav.firstChild);nav.appendChild(qn);
+function live(){return steps.filter(ok)}
+function show(focus){var L=live();if(L.indexOf(steps[cur])<0){for(var j=cur;j<steps.length&&!ok(steps[j]);j++);cur=j<steps.length?j:steps.indexOf(L[L.length-1])}
+var k=L.indexOf(steps[cur]);steps.forEach(function(st,j){st.els.forEach(function(e){e.classList.toggle('qoff',j!==cur)})});
+cnt.hidden=false;cnt.textContent='Question '+(k+1)+' of '+L.length;var lastq=k===L.length-1;qn.hidden=lastq;sub.hidden=!lastq;qb.hidden=k===0;if(sback)sback.hidden=k>0;
+if(focus){var h=steps[cur].els.filter(function(e){return !e.hidden})[0];var t=h&&h.querySelector('legend,h3,.q');if(t){t.setAttribute('tabindex','-1');t.focus({preventScroll:true})}cnt.scrollIntoView({block:'start'})}}
+function go(d){var L=live(),k=L.indexOf(steps[cur])+d;if(k<0||k>=L.length)return;cur=steps.indexOf(L[k]);show(true)}
+qn.addEventListener('click',function(){go(1)});qb.addEventListener('click',function(){go(-1)});
+form.addEventListener('keydown',function(ev){if(ev.key==='Enter'&&ev.target.tagName==='INPUT'&&!qn.hidden){ev.preventDefault();go(1)}});
+document.addEventListener('change',function(){setTimeout(function(){show(false)},0)});
+window.qsShowAll=function(){steps.forEach(function(st){st.els.forEach(function(e){e.classList.remove('qoff')})});qn.hidden=qb.hidden=cnt.hidden=true;sub.hidden=false;if(sback)sback.hidden=false};
+show(false)})();</script>"""
 @app.post("/intake/{token}")
 async def intake_save(token:str, req:Request):
     o=_intake_order(token)
@@ -755,7 +813,7 @@ def uploads_page(token:str, err:str=""):
     lst="".join(f"<li>{esc(u['name'])}</li>" for u in ups)
     chips=INTAKE._checks("evidence",EVID.options(form),I.get("evidence"),INTAKE.X(I,"evidence"))
     paid_=o["status"]=="paid"
-    return page(prog(3 if paid_ else 1,"Your evidence","last part" if not paid_ else "")+f"""<h1>What do you have that shows this?</h1><p class=one>{'Payment received, thank you. ' if paid_ else ''}Tap what you have. Add a photo if you can.</p>
+    return page(prog(5 if paid_ else 3,"Your evidence","last part" if not paid_ else "")+f"""<h1>What do you have that shows this?</h1><p class=one>{'Payment received, thank you. ' if paid_ else ''}Tap what you have. Add a photo if you can.</p>
 {f'<div class=warning>{esc(err)}</div>' if err else ''}{'<div class=promise><strong>Your repeat prescription list:</strong> you said you\'d add a photo of it. Add it below, or send a copy with your form. The form says it is enclosed.</div>' if (I.get('wf') or {}).get('meds_how')=='photo' else ''}<form method=post action=/uploads/{token}/done enctype=multipart/form-data>
 <fieldset class=iq><legend>Tap all you have</legend>{chips}</fieldset>
 {f'<h2 class=h3>Added</h2><ul class=ticks>{lst}</ul>' if ups else ''}<div class=field><label class=q for=up>{'Add more photos or PDFs' if ups else 'Add a photo or PDF'} (optional, up to 10MB each)</label><p class=hint>A photo of a letter or your repeat prescription list is fine.</p><input id=up type=file name=files multiple accept="image/*,application/pdf" capture=environment></div>
@@ -826,7 +884,7 @@ def confirm_page(token:str, err:str=""):
     for q in Q:
         body+=INTAKE._q(q["q"],INTAKE._radios("q_"+q["id"],q["opts"],"",' nums' if q.get("nums") else '')+INTAKE._else("q_"+q["id"],""),"Or tap Something else and tell us in your own words.")
     n=len(Q)+len(dm)
-    return page(prog(3,"Quick check")+f"""<h1>Quick check before we write</h1><p class=one>{'A few things' if n+bool(dc)+bool(sc)>1 else 'One thing'} didn't quite match. Tap what's right, so your form is accurate. We only write what you confirm.</p>
+    return page(prog(5,"Quick check")+f"""<h1>Quick check before we write</h1><p class=one>{'A few things' if n+bool(dc)+bool(sc)>1 else 'One thing'} didn't quite match. Tap what's right, so your form is accurate. We only write what you confirm.</p>
 {f'<div class=warning role=alert>{esc(err)}</div>' if err else ''}<form method=post action=/confirm/{token}>{body}<div class=navrow><button class="btn btn-start">Continue</button></div></form>""","Quick check",minimal=True)
 @app.post("/confirm/{token}")
 async def confirm_save(token:str, req:Request):
@@ -950,7 +1008,7 @@ def deadline_page(token:str):
         box=f"""<div class="tracker" id=tracker>{when}<p>{esc(res['rule'])}</p>{f"<p><strong>{esc(res['backdate'])}</strong></p>" if res['backdate'] else ''}<p class=small>Source: {res['source'].replace('https://www.','')} (checked 24 Oct 2026)</p></div>
 {'' if form=='atw' else "<h2>Need more time? What to say on the phone</h2><ol class=steps>"+''.join(f'<li>{esc(x)}</li>' for x in deadlines.script(form))+"</ol>"}{f"<p>Questions? Access to Work helpline: <strong>{facts.v('atw_helpline')}</strong> (Mon–Fri 9am–5pm). You can ask for all contact by email.</p>" if form=='atw' else ''}
 <p><a class="btn" href="/check/{token}">Continue to strength check</a></p>"""
-    return page(prog(3,"Timing")+(f"""<h1>Timing</h1><p class=lead>When you apply can affect who pays for equipment. Tell us when you started (or will start) this job.</p>""" if form=='atw' else f"""<h1>Your deadline</h1><p class=lead>Tell us when you asked for the form, and we'll show the date to send it back by, so you don't lose money.</p>""")+f"""
+    return page(prog(5,"Timing")+(f"""<h1>Timing</h1><p class=lead>When you apply can affect who pays for equipment. Tell us when you started (or will start) this job.</p>""" if form=='atw' else f"""<h1>Your deadline</h1><p class=lead>Tell us when you asked for the form, and we'll show the date to send it back by, so you don't lose money.</p>""")+f"""
 <form method=post action=/deadline/{token}>{howq}
 <div class=field><label class=q for=req>{'When did you start (or will you start) this job?' if form=='atw' else 'When did you ask DWP for the form?' if form in('aa','dla') else 'When did you get the form? (or the date on the letter)'}</label><input type=date id=req name=requested value="{dl.get('requested','')}"></div>
 {'' if form in('aa','dla') else f'<input type=hidden name=received value="">'}
@@ -974,14 +1032,14 @@ def check_page(token:str, r:str=""):
     if r: return r
     mode,G,I=_strength(o,d); skip=f'<a class="btn btn-2" href="/approve/{token}">Skip, my form is ready</a>'
     if not G:
-        return page(prog(3,"Strength check")+f"""<h1>Your answers look complete</h1><p class=lead>We've got what we need to fill in your form.</p><p><a class=btn href="/approve/{token}">Continue to check your form</a></p>""","Strength check")
+        return page(prog(5,"Strength check")+f"""<h1>Your answers look complete</h1><p class=lead>We've got what we need to fill in your form.</p><p><a class=btn href="/approve/{token}">Continue to check your form</a></p>""","Strength check")
     if mode=="v4":
         rows="".join(f"""<fieldset class="sc iq"><legend><strong>{esc(g['label'])}</strong>: {esc(g['q'])}</legend><div class="chips{' nums' if g['kind']=='days' else ''}">{''.join(f'<label class=chip><input type=radio name="g_{g["rid"]}_{g["kind"]}" value="{v}"><span>{esc(t)}</span></label>' for v,t in g['opts'])}</div>
 {'' if g.get('noelse') else f'<label class=hint for="g_{g["rid"]}_{g["kind"]}_x">Something else, or add a detail (optional)</label><input type=text id="g_{g["rid"]}_{g["kind"]}_x" name="g_{g["rid"]}_{g["kind"]}_x" maxlength=500>'}</fieldset>""" for g in G)
     else:
         rows="".join(f"""<div class="sc"><h3>{esc(x['label'])}</h3><p class=ans>{esc(x['answer'])}</p>{''.join(f'<p class=hint>{esc(f)}</p>' for f in x['flags'])}<label class=hint for="add_{x['id']}">Add detail in your own words (optional)</label><textarea id="add_{x['id']}" name="add_{x['id']}" rows=2></textarea></div>""" for x in G)
     n=len(G); qs=f"{n} quick question{'s' if n>1 else ''}"
-    return page(prog(3,"Strength check")+refused+f"""<h1>We can make these stronger</h1><p class=lead>{qs} to make your form stronger (optional). Only add what's true.</p>
+    return page(prog(5,"Strength check")+refused+f"""<h1>We can make these stronger</h1><p class=lead>{qs} to make your form stronger (optional). Only add what's true.</p>
 <form method=post action=/check/{token}>{rows}<p><button class=btn>Save and continue</button> {skip}</p></form>""","Strength check")
 @app.post("/check/{token}")
 async def check_save(token:str, req:Request):
@@ -1078,7 +1136,7 @@ def render_approve(token,o,d,G,fm=None,need_ok=(),need_res=(),need_honest=False)
     pending=[i for i in its if not (fm and fm.get(f"res_{i['key']}") in ("keep","edit","remove"))]
     keepall=f"""<p><button class="btn btn-2" name=keepall value=1 formnovalidate>Keep all remaining ({len(pending)}) as true</button> <span class=hint>Only if every one of them is true.</span></p>""" if pending else ""
     facts_=wf_facts(o) if is_wf(o) else ""
-    return page(prog(3,"Check and approve")+f"""{summary}<h1>Check and approve every answer</h1><p class=one>Change anything that isn't right, then tick to approve each answer.</p>{more("How this works",PROMISE+"<p>Each answer is shown next to what you told us. Nothing is ready to download until you approve each answer.</p>")}
+    return page(prog(5,"Check and approve")+f"""{summary}<h1>Check and approve every answer</h1><p class=one>Change anything that isn't right, then tick to approve each answer.</p>{more("How this works",PROMISE+"<p>Each answer is shown next to what you told us. Nothing is ready to download until you approve each answer.</p>")}
 <form method=post action=/approve/{token}>{facts_}{rows}{keepall}
 <label class=cb><input type=checkbox name=save {'checked' if fm and fm.get('save') else ''}><span>Save my answers for next time (for a review or renewal). We'll give you a save code. Saved answers are kept for 90 days unless you delete them.</span></label>
 {'<p class=err>Please tick to confirm everything is true</p>' if need_honest else ''}<label class="cb honest{' needs' if need_honest else ''}" id=honest><input type=checkbox name=honest required {'checked' if fm and fm.get('honest') else ''}><span>{esc(HONEST_TICK)}</span></label>
@@ -1169,7 +1227,7 @@ def ticks_page(token:str, err:str=""):
         opts="".join(f'<label><input type=radio name="t_{esc(x["field"])}" value="{esc(s)}" {"checked" if s==cur else ""}> Tick “{esc(TICKS.label(s))}”</label>' for s in x["options"])
         opts+=f'<label><input type=radio name="t_{esc(x["field"])}" value="" {"checked" if not cur else ""}> Leave blank</label>'
         rows+=f"""<div class=trace><p><strong>{esc(x['question'].split(':',1)[1].strip())}</strong></p><p class=hint>{esc(x['why'])}</p><div class=resopts>{opts}</div></div>"""
-    return page(prog(3,"Tick boxes")+f"""<h1>Check the tick boxes on your {esc(F['form'])}</h1><p class=one>{f"We have already set {nset} tick boxes from your answers, so you don't need to answer anything again. Open the list if you want to check or change one." if it else "These are the tick boxes we will mark on the official form. We have suggested each one from the answers you approved. Change anything that isn't right. We only tick what you confirm here."}</p>
+    return page(prog(5,"Tick boxes")+f"""<h1>Check the tick boxes on your {esc(F['form'])}</h1><p class=one>{f"We have already set {nset} tick boxes from your answers, so you don't need to answer anything again. Open the list if you want to check or change one." if it else "These are the tick boxes we will mark on the official form. We have suggested each one from the answers you approved. Change anything that isn't right. We only tick what you confirm here."}</p>
 {f'<div class=warning>{esc(err)}</div>' if err else ''}<form method=post action=/ticks/{token}>{f'<details class=tickall><summary>See or change the tick boxes</summary>{rows}</details>' if it else rows}
 <p class=small>{'We never tick the consent or declaration boxes, and never sign anything. You do those yourself.' if is_wf(o) else 'We never tick the consent, declaration, bank or "signing for someone else" boxes. You do those yourself.'}</p>
 <label class=cb><input type=checkbox name=confirm required><span>I have checked every tick box above. They are true.</span></label>
@@ -1206,25 +1264,25 @@ def documents_page(token:str, req:Request=None):
     others="".join(f'<li><span>{lab.get(f,f)}</span><a href="/download/{token}/{f}" download>Download</a></li>' for f in files if f!=main)
     when=f"<p class=deadline>Send it back by <strong>{datetime_fmt(res['deadline'])}</strong></p>" if res and res.get('deadline') else ''
     form=o["form"] or "aa"
-    nxt=ATW_NEXT if form=="atw" else f"<h2>What to do next</h2>{next_steps(form,files,hand_details(o))}"+more("Full print, sign and post guide",PSP.html_section(form,filled=(F.get('pdf_out') in files),hand_details=hand_details(o),h="h3"))
-    extras=f"{saved}{account_box(o)}{bb_addon_box(o)}"
-    return page(prog(4,"Download")+f"""<div class=ready><h1>{"Your answers are ready" if form=="atw" else "Your form is ready"}</h1><p>You approved every answer.</p></div>
+    nxt=ATW_NEXT if form=="atw" else f"<h2>What to do next</h2>{next_steps(form,files,hand_details(o))}"
+    guide="" if form=="atw" else more("Full print, sign and post guide",PSP.html_section(form,filled=(F.get('pdf_out') in files),hand_details=hand_details(o),h="h3"))
+    extras=(f'<h3>Your other documents</h3><ul class=also>{others}</ul>' if others else '')+guide+f"{saved}{account_box(o)}{bb_addon_box(o)}"
+    return page(prog(5,"Download")+f"""<div class=ready><h1>{"Your answers are ready" if form=="atw" else "Your form is ready"}</h1><p>You approved every answer.</p></div>
 {f'<a class="btn btn-big" href="/download/{token}/{main}" download>{mlab}</a>' if main else ''}{when}{gone}
-{f'<h2 class=h3>Also in your pack</h2><ul class=also>{others}</ul>' if others else ''}
 {nxt}
 {f'<div class=extras><h2>For later</h2>{extras}</div>' if extras.strip() else ''}
 <p class=small>We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>.</p>""","Your documents")
 def next_steps(form,files,hand):
     """Short numbered print-sign-post checklist for the documents page. The full guide (psp.py) is behind 'More info'."""
     handl=" Also write in the National Insurance number and bank details." if hand else ""
-    sup=("<li><strong>Pass on the supporter note</strong> to the person who writes the statement. They fill in that part themselves.</li>" if "Note-for-supporter.pdf" in files else "")
+    sup=(" Also print the supporter note and give it to the person who writes the statement. They fill in that part themselves." if "Note-for-supporter.pdf" in files else "")
     if form=="aa": st=[("Print it","at actual size (100%) on plain A4."),("Sign and date by hand in black ink",f"at question 20 (page 9) and question 64 (page 30).{handl}"),("Post it",f"to {PSP.AA_FREEPOST}. No stamp needed.")]
     elif form=="dla": st=[("Print it","at actual size (100%) on plain A4."),("Sign and date by hand in black ink",f"at question 39 (page 12) and the Declaration (page 38).{handl}"),("Post it",f"in DWP's envelope, or to {PSP.DLA_FREEPOST}. No stamp needed.")]
     elif form in ("pip","pipr"):
         code="PIP2" if form=="pip" else "AR1"
         st=[("Copy your answers",f"onto the paper {code} DWP sent you, in black ink, and print the extra sheets."),("Sign and date by hand in black ink","in the Declaration." if form=="pip" else "in Section 1 (Read and sign) and Section 3."),("Post it",f"with the extra sheets, in the envelope DWP sent you.")]
     else: return ""
-    li="".join(f"<li><strong>{esc(t)}</strong> {esc(x)}</li>" for t,x in st[:2])+sup+"".join(f"<li><strong>{esc(t)}</strong> {esc(x)}</li>" for t,x in st[2:])
+    li="".join(f"<li><strong>{esc(t)}</strong> {esc(x)}{sup if j==0 else ''}</li>" for j,(t,x) in enumerate(st))   # always 4 steps: the supporter note rides on step 1
     return f"<ol class=howit>{li}<li><strong>Keep a copy</strong> and note the date you posted it.</li></ol>"
 ATW_NEXT=f"""<h2>What to do next</h2><ol class=steps><li><strong>Read it once more</strong> and change anything that isn't right.</li><li><strong>Apply online or by phone</strong> at GOV.UK (search 'Access to Work apply'), or call {facts.v('atw_helpline')} (Mon–Fri 9am–5pm). Paste or read out each answer.</li><li><strong>Add your own details</strong>: workplace address, workplace contact, NI number (or UTR if self-employed).</li><li><strong>Disagree with the decision?</strong> Call the helpline and ask for it to be reconsidered.</li></ol>"""
 NEXT_LABEL={"aa":"Next Attendance Allowance form","dla":"Your child's DLA renewal form","pip":"Your PIP review form","pipr":"Your next PIP review form"}
@@ -1499,14 +1557,14 @@ async def _retention_loop():
 BB_ADDON_LINE="<p class=hint>Applying for a Blue Badge too? After you pay, you can add Blue Badge application answers for £15, made from the answers you give here.</p>"
 BB_TRUST="<div class=trust><h2 class=h3>Our promise</h2><ul class=ticks><li><strong>Fixed price.</strong> You pay this once. No subscription, nothing more to pay us.</li><li><strong>Only your words.</strong> Every answer is built from what you told us. You check and change anything before you use it.</li><li><strong>You stay in control.</strong> You apply yourself, and we never contact your council for you.</li><li><strong>Yours to keep.</strong> Download your answers and checklist to use now, or later if you need to ask the council to look again.</li></ul></div>"
 BB_ITEMS=["Answers for each health and walking question on the online Blue Badge application, ready to copy and paste","A hidden-disability write-up in your own words, if journeys are hard for reasons other than walking","A checklist of what to upload, and the photo and proof you need","If the council says no: a letter asking them to look at the decision again","You check every word. You apply yourself"]
+BB_BULLETS=["Answers for each health and walking question, ready to copy and paste","A checklist of what to upload, and the photo and proof you need","A letter asking the council to look again, if they say no","You check every word. You apply yourself"]
 def bb_summary(pv=""):
     n,p,_=FORMS["bb"]["tiers"][BB.SOLO_TIER]
-    return page(bbprog(1)+pv+f"""<div class=summary><p class=caption>Your order</p><h1>{esc(n)}</h1><p class=sub>For the Blue Badge application</p>
-<p class=lede><strong>Tap your answers. We write them up. You paste them into your application.</strong></p><div class=promise><strong>About 3 minutes. You only tap, we do the writing.</strong></div>
-<h2 class=h3>What's included</h2><ul class=ticks>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS)}</ul>
-<div class=total><span>Total</span><strong>£{p//100}</strong></div><p class=hint>Nothing to pay now. Answer the questions first; you pay once at the end. One-off fee.</p>
-<form method=post action=/checkout><input type=hidden name=form value=bb><input type=hidden name=tier value={BB.SOLO_TIER}><button class="btn btn-wide">Start my answers</button></form>
-<p class=hint>{esc(BB.NOT_ELIG)}</p><p class=hint>Already ordered an Attendance Allowance, DLA or PIP form with us? Add Blue Badge answers for £15 from your documents page instead.</p></div>""","Blue Badge answers",minimal=True)
+    return page(bbprog(1)+pv+f"""<p class=caption>Blue Badge application</p><h1>Your package</h1><p class=one>Nothing to pay now. You pay once, at the end, after the questions. About 3 minutes, mostly taps.</p>
+<div class=pkgs><div class="pkg one"><h2>{esc(n)}</h2><p class=pr>£{p//100} <small>one-off</small></p><ul class=ticks>{''.join(f'<li>{esc(i)}</li>' for i in BB_BULLETS)}</ul>
+<form method=post action=/checkout><input type=hidden name=form value=bb><input type=hidden name=tier value={BB.SOLO_TIER}><button class="btn btn-big">Start my answers</button></form></div></div>
+{more("Everything that's included",f"<ul class=ticks>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS)}</ul>")}
+<p class=hint>{esc(BB.NOT_ELIG)}</p><p class=hint>Already ordered an Attendance Allowance, DLA or PIP form with us? Add Blue Badge answers for £15 from your documents page instead.</p><p class=change><a href="/">Choose a different form</a></p>""","Blue Badge answers",minimal=True)
 def bb_data(o): return json.loads(o["intake"] or "{}") or {"who":"me","else":{}}
 def bb_parent(o):
     p=get(o["review_of"]) if o["review_of"] else None
