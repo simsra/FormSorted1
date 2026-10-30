@@ -94,12 +94,8 @@ FORM_CARDS=[("aa","Attendance Allowance","For people over State Pension age who 
 NOT_SURE=[("Is it for a child under 16?","DLA for a child","dla"),("Are they State Pension age or over, and need help with care?","Attendance Allowance","aa"),
  ("Aged 16 to State Pension age, with a health condition or disability?","PIP","pip"),("Already get PIP, and got a review form?","PIP review","pipr"),
  ("Need a parking badge?","Blue Badge (you can also get one of the forms above)","bb")]
-def price_line(form):
-    ts=FORMS[form]["tiers"]
-    if form=="bb": return f"£{ts[BB.SOLO_TIER][1]//100}"
-    ps=sorted({p//100 for n,p,_ in ts.values()}); return " or ".join(f"£{p}" for p in ps)
 def form_cards():
-    main="".join(f"""<a class=fcard href="/?form={k}"><span class=fn>{esc(t)}</span><span class=fw>{esc(w)}</span><span class=fp>{price_line(k)} · Choose</span></a>""" for k,t,w in FORM_CARDS if k!="atw")
+    main="".join(f"""<a class=fcard href="/?form={k}"><span class=fn>{esc(t)}</span><span class=fw>{esc(w)}</span><span class=fp>Choose</span></a>""" for k,t,w in FORM_CARDS if k!="atw")
     k,t,w=FORM_CARDS[-1]
     return f"""<div class=fcards>{main}</div><p class=alsoform>Also: <a href="/?form={k}">{esc(t)}</a>. {esc(w)}</p>"""
 def not_sure():
@@ -137,12 +133,16 @@ def how_it_works(form,price):
     pay=f"Choose your pack and pay £{price}" if (form in PLUS.PLUS_FORMS) else f"Pay £{price}"
     return f"""<ol class=howit><li><strong>Answer simple questions.</strong> {"Mostly taps, about 10 minutes." if form in INTAKE.FORMS_V3 else "In plain English, at your own pace."}</li><li><strong>{pay}.</strong> Only at the end, if you want your form.</li>
 <li><strong>Check every answer</strong> and change anything that isn't right.</li><li><strong>Download your form</strong>, then print, sign and post it.</li></ol>"""
+def no_printer():
+    """Posting is Plus-only (Simon, 30 Oct 2026). Says 'coming soon' until print-and-post is really live."""
+    return "No printer? We'll post you a printed copy"+("" if PLUS.posting() else " (coming soon)")
+NEED_POST="<p class=hint>Need it posted? Choose Plus.</p>"
 def pkg_bullets(form,t):
     """3-4 short bullets per package for the package cards."""
     ts=FORMS[form]["tiers"]
     if form in PLUS.PLUS_FORMS:
         if t=="99": return [l for l,d,b,p_ in PLUS.compare_rows(form) if b==1][:3]+["You check every answer before it's final"]
-        return ["Everything in "+ts["99"][0]]+[l for l,d in PLUS.items(form) if l not in PLUS.POST_ON.values()][:3]
+        return ["Everything in "+ts["99"][0]]+[l for l,d in PLUS.items(form) if l not in PLUS.POST_ON.values()][:2]+[no_printer()]
     items=pack_items(form,t); names=list(ts); k=names.index(t)
     return items[:1] if k==0 else ["Everything in "+ts[names[k-1]][0]]+items[k:]
 def order_summary(form,tier="",pv=""):
@@ -152,13 +152,34 @@ def order_summary(form,tier="",pv=""):
     cards=""
     for t,(n,p,_) in ts:
         mine=(t==tier)
-        cards+=f"""<div class="pkg{' mine' if mine else ''}">{'<p class=pill>Your choice</p>' if mine else ''}<h2>{esc(n)}</h2><p class=pr>£{p//100} <small>one-off</small></p><ul class=ticks>{''.join(f'<li>{esc(x)}</li>' for x in pkg_bullets(form,t))}</ul>
+        cards+=f"""<div class="pkg{' mine' if mine else ''}">{'<p class=pill>Your choice</p>' if mine else ''}<h2>{esc(n)}</h2><p class=pr>£{p//100} <small>one-off</small></p><ul class=ticks>{''.join(f'<li>{esc(x)}</li>' for x in pkg_bullets(form,t))}</ul>{NEED_POST if t=="99" and form in PLUS.PLUS_FORMS else ""}
 <form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={t}><button class="btn btn-big">{'Continue with' if mine else 'Choose'} {esc(n)}</button></form></div>"""
     up=upgrade_box(form,tier or default_tier(form))
     return page(prog(2)+pv+f"""<p class=caption>{esc(f['short'])}</p><h1>Choose your package</h1><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p>
 <div class=pkgs>{cards}</div>
 {more("Compare the packages in detail",up) if up else ""}{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}
 <p class=hint>{esc(DWP_LINE)} No success fee.</p><p class=change><a href="/">Choose a different form</a></p>""",f"Choose your package: {f['name']}",minimal=True)
+def can_change_pack(o): return o["status"]!="paid" and (o["form"] or "aa") in PLUS.PLUS_FORMS and o["tier"] in ("99","199")
+@app.get("/package/{token}")
+def change_package(token:str):
+    """Step 2 again from the pay screen (Simon, 30 Oct 2026: choose the package once; pay only shows a summary). Answers are kept."""
+    o=ready(token,paid=False)
+    if not can_change_pack(o): return RedirectResponse(f"/preview/{token}",303)
+    form=o["form"] or "aa"; f=FORMS[form]; cards=""
+    for t in ("99","199"):
+        n,p,_=f["tiers"][t]; mine=(t==o["tier"])
+        cards+=f"""<div class="pkg{' mine' if mine else ''}">{'<p class=pill>Your choice</p>' if mine else ''}<h2>{esc(n)}</h2><p class=pr>£{p//100} <small>one-off</small></p><ul class=ticks>{''.join(f'<li>{esc(x)}</li>' for x in pkg_bullets(form,t))}</ul>{NEED_POST if t=="99" else ""}
+<form method=post action=/package/{token}><input type=hidden name=tier value={t}><button class="btn btn-big">{'Keep' if mine else 'Choose'} {esc(n)}</button></form></div>"""
+    up=upgrade_box(form,o["tier"])
+    return page(prog(2,"Change package")+f"""<p class=caption>{esc(f['short'])}</p><h1>Change your package</h1><p class=one>Your answers are kept. Choose a package, then you go back to pay.</p>
+<div class=pkgs>{cards}</div>{more("Compare the packages in detail",up) if up else ""}
+<p class=change><a href="/preview/{token}">Back to pay</a></p>""",f"Change package: {f['name']}",minimal=True)
+@app.post("/package/{token}")
+def set_package(token:str, tier:str=Form("")):
+    o=ready(token,paid=False)
+    if can_change_pack(o) and tier in ("99","199") and tier!=o["tier"]:
+        c0=db(); c0.execute("update orders set tier=?, keep_until=null where token=? and status!='paid'",(tier,token)); c0.commit()
+    return RedirectResponse(f"/preview/{token}",303)
 def upgrade_box(form,tier):
     """Clear side-by-side comparison of the two packs, with a button to switch."""
     ts=FORMS[form]["tiers"]
@@ -220,26 +241,14 @@ def preview(token:str):
     extra=more("What happens after you pay",f"""<ol class=howit><li>We write every section from what you told us and check each one against your answers.</li><li>You check every answer and change anything that isn't right.</li><li>You download your form, then sign it and send it yourself.</li></ol>
 <figure class=lockprev><img src="/static/preview-placeholder.svg" alt="Example illustration of a filled-in form (not your answers)" width=520 height=360><figcaption>Illustration only. Your own answers appear after payment.</figcaption></figure>{TRUST}
 <p class=hint>One-off fee. No success fee. If you don't pay, we delete everything you told us after 7 days.</p>""")
-    rows=f"""<dl class=order><div><dt>Form</dt><dd>{esc(f['short'])}</dd></div><div><dt>Your answers</dt><dd>{got} of {total} {'sections of the form' if o['intake'] else 'topics'}{f' · <a href="/intake/{token}?s=about">Change</a>' if o['intake'] else ''}</dd></div>{'' if choose else f'<div><dt>Package</dt><dd>{esc(n)}</dd></div>'}</dl>"""
+    form=o["form"] or "aa"; bl=[x for x in pkg_bullets(form,o["tier"]) if not x.startswith("Everything in")][:3] if o["tier"] in FORMS[form]["tiers"] else []
+    chg=f' <a class=chpk href="/package/{token}">Change package</a>' if choose else ""
+    rows=f"""<dl class=order><div><dt>Form</dt><dd>{esc(f['short'])}</dd></div><div><dt>Your answers</dt><dd>{got} of {total} {'sections of the form' if o['intake'] else 'topics'}{f' · <a href="/intake/{token}?s=about">Change</a>' if o['intake'] else ''}</dd></div><div class=pkrow><dt>Your package</dt><dd><strong>{esc(n)}</strong> · £{p//100}{chg}{'<ul class=ticks>'+''.join(f'<li>{esc(x)}</li>' for x in bl)+'</ul>' if bl else ''}</dd></div></dl>"""
     head="<h1>Check your order and pay</h1><p class=one>Nothing is filled in until you pay. Then you check every answer.</p>"
     return page(prog(4)+f"""<div class=summary>{head}{rows}
-{pack_choice(o) if choose else f'<form method=post action=/pay/{token}>'+(KEEP_OPT if is_premium(o["tier"]) else "")}<div class=total><span>Total to pay</span><strong id=paytotal>£{p//100}</strong></div><div class=paybox><label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
+<form method=post action=/pay/{token}>{KEEP_OPT if is_premium(o["tier"]) else ""}<div class=total><span>Total to pay</span><strong id=paytotal>£{p//100}</strong></div><div class=paybox><label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
 <button class="btn btn-big" id=paybtn>Pay £{p//100} and get my form</button><p class=hint>Have a discount code? You can enter it on the next screen, when you add your card.</p></div></form>
 {extra}<p class=hint>{esc(DWP_LINE)}</p></div>""","Check your order and pay",minimal=True)
-def pack_choice(o):
-    """Package on the pay screen: what they chose at step 2, with the other one beside it to switch. £99 unless they chose Plus.
-    No countdown, nothing ticked for them, no saving line. The keep-answers option only shows (and only counts) for Plus. Detail behind a toggle."""
-    form=o["form"] or "aa"; ts=FORMS[form]["tiers"]; cur="199" if o["tier"]=="199" else "99"
-    (bn,bp,_),(pn,pp,_)=ts["99"],ts["199"]
-    base=[l for l,d,b,p_ in PLUS.compare_rows(form) if b==1]
-    plus=["Everything in "+bn]+[l for l,d in PLUS.items(form) if l not in PLUS.POST_ON.values()]   # posting hidden in this UI (decision pending)
-    card=lambda t,n,pr,lst: f"""<label><input type=radio name=pack value={t} data-price={pr//100} {'checked' if t==cur else ''} required><span class=nm>{esc(n)}</span><span class=pr>£{pr//100}</span><span class=ch>{'Your choice' if t==cur else 'Switch to this'}</span></label>"""
-    detail=f"""<div class=compare><table><thead><tr><th></th><th>{esc(bn)}<br>£{bp//100}</th><th>{esc(pn)}<br>£{pp//100}</th></tr></thead><tbody>{compare_table_rows(form)}</tbody></table>{''.join(f"<p class=hint>{esc(x)}</p>" for x in ui_notes(form))}<p class=hint>{esc(PLUS.FOOT)}</p></div>"""
-    return f"""<style>.pk .keepopt{{display:none}}.pk:has(input[value="199"]:checked) .keepopt{{display:block}}.compare small{{display:block;color:#3d4f58;font-size:.85em}}</style>
-<form method=post action=/pay/{o['token']} class=pk><fieldset class=pkfs><legend>Your package <span class=hint>(you can still change it)</span></legend><div class=choice>
-{card("99",bn,bp,base)}{card("199",pn,pp,plus)}</div></fieldset>
-{more("What's in each package",detail)}<div class=keepopt>{KEEP_OPT}</div>
-<script>document.querySelectorAll('.pk input[name=pack]').forEach(function(r){{r.addEventListener('change',function(){{var b=document.getElementById('paybtn'),t=document.getElementById('paytotal');if(b)b.textContent='Pay £'+r.dataset.price+' and get my form';if(t)t.textContent='£'+r.dataset.price;document.querySelectorAll('.pk .ch').forEach(function(c){{c.textContent=c.parentNode.querySelector('input').checked?'Your choice':'Switch to this'}})}})}})</script>"""
 KEEP_OPT="<label class=cb><input type=checkbox name=keep value=1><span>Keep my answers for 3 years, so you can help with a reconsideration or my renewal without asking again. I can delete them at any time. (Optional. Without this we delete them after 90 days.)</span></label>"
 THREE_YEARS=3*365*86400
 @app.post("/pay/{token}")

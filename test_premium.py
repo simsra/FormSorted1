@@ -20,7 +20,7 @@ DWP="You can claim directly from DWP for free; FormSorted is a paid online form-
 for form in ("aa","dla","pip"):
     h=body(f"/?form={form}")
     assert "£99" in h and "£199" in h and "Compare the packages in detail" in h and "Choose Done for you Plus" in h and "Choose Done for you<" in h and h.count(DWP)==1
-    hp=body(f"/?form={form}&tier=199"); assert "Continue with Done for you Plus" in hp and "Choose Done for you<" in hp and "riefing" in hp
+    hp=body(f"/?form={form}&tier=199"); assert "Continue with Done for you Plus" in hp and "Choose Done for you<" in hp and ("riefing" in hp or "Assessment prep" in hp)
     for x in (h,hp):
         low=x.lower().replace(DWP.lower(),"").replace("freepost",""); assert "free" not in low and "stripe" not in low and " ai " not in low and "we claim for you" not in low and "we submit your claim" not in low and "claim pack" not in low and "claims service" not in low and "claims firm" not in low and "claim handling" not in low
         assert not set(re.findall(r'href="?(https?://[^" >]+)',x))-{"https://formsorted.com/privacy.html","https://formsorted.com/terms.html","https://formsorted.com/#prices"}
@@ -71,7 +71,7 @@ rv=body(f"/review/{code}"); assert "What has changed?" in rv and "Last time you 
 # ---- £99 order: no Plus extras, appeal not available
 t9=loc(req("/checkout",{"tier":"99","form":"pip"})).split("/")[-1]; req(f"/consent/{t9}",{"health":"on","truth":"on"})
 for s in ("about","conds","daily","out","finish"): req(f"/intake/{t9}",{"sec":s,"nav":"next","who":"me"})
-p9=body(f"/preview/{t9}"); assert "Check your order and pay" in p9 and "name=pack value=99 data-price=99 checked" in p9 and "name=pack value=199 data-price=199  required" in p9 and p9.index("Keep my answers for 3 years")>p9.index("<div class=keepopt>")   # only shown for Plus
+p9=body(f"/preview/{t9}"); assert "Check your order and pay" in p9 and "name=pack" not in p9 and "Change package" in p9 and "Keep my answers for 3 years" not in p9   # only shown for Plus
 req(f"/pay/{t9}",{"waive":"on","keep":"1"}); assert A.get(t9)["keep_until"] is None
 # ---- retention: opted-in Plus answers survive the 90-day purge; erase removes them
 import orders

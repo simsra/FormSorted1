@@ -42,14 +42,19 @@ def intake_order(tier,form="aa",who="parent"):
     for s,d in [("about",{"who":who,"name":"Margaret","signer":"poa"}),("conds",{"cond_0":"1","cond_0_since":"2015"}),("daily",{"bad":"3","r_bed_hard":"1","r_bed_help":"1","r_bed_freq":"every"}),("safety",{"falls":"3-5"}),("finish",{"people":["GP","Family carer"]})]:
         req(f"/intake/{tok}",{"sec":s,"nav":"next",**d})
     return tok
+import app as A0
 t9=intake_order("99"); pv=body(f"/preview/{t9}"); low=pv.lower()
 assert "Check your order and pay" in pv and "Your package" in pv and pv.count(DWP)==1 and "Pay £99" in pv
-assert re.search(r"name=pack value=99 [^>]*checked",pv) and not re.search(r"name=pack value=199 [^>]*checked",pv)
+assert "name=pack" not in pv and "Done for you</strong> · £99" in pv and f'href="/package/{t9}">Change package' in pv and "Keep my answers" not in pv   # step 4: summary of the step-2 choice, no cards (Simon, 30 Oct 2026)
 assert not re.search(r"type=checkbox[^>]*checked",pv)   # nothing ticked for them
 for b in BANNED[:10]: assert b not in low, b
-assert "May never need this".lower() in low and "1 in 4" not in low
-tp=intake_order("99","pip","me"); assert "1 in 4 of these requests leads to a change in award" in body(f"/preview/{tp}")
-t1=intake_order("199"); assert re.search(r"name=pack value=199 [^>]*checked",body(f"/preview/{t1}"))   # picked Plus at the start: stays Plus
+assert "1 in 4" not in low and "May never need this".lower() in body("/?form=aa").lower() and "1 in 4" not in body("/?form=aa")
+tp=intake_order("99","pip","me"); assert "1 in 4 of these requests leads to a change in award" in body("/?form=pip") and "1 in 4" not in body(f"/preview/{tp}")   # comparison lives on step 2 only
+t1=intake_order("199"); p1=body(f"/preview/{t1}"); assert "Done for you Plus</strong> · £199" in p1 and "Pay £199" in p1   # picked Plus at the start: stays Plus
+# Change package from the pay screen: back to the package cards, answers kept, then back to pay
+tc=intake_order("99"); i0=A0.get(tc)["intake"]; cp=body(f"/package/{tc}"); assert "Change your package" in cp and "Step 2 of 5" in cp and f"action=/package/{tc}" in cp
+assert loc(req(f"/package/{tc}",{"tier":"199"}))==f"/preview/{tc}" and A0.get(tc)["tier"]=="199" and A0.get(tc)["intake"]==i0 and "Pay £199" in body(f"/preview/{tc}")
+req(f"/package/{tc}",{"tier":"0"}); assert A0.get(tc)["tier"]=="199"   # a made-up package is ignored
 import app as A
 assert loc(req(f"/pay/{t9}",{"waive":"on","pack":"199","keep":"1"}))==f"/start/{t9}"; o=A.get(t9); assert o["tier"]=="199" and o["keep_until"]>time.time()+2.9*365*86400
 tq=intake_order("199"); req(f"/pay/{tq}",{"waive":"on","pack":"99","keep":"1"}); o=A.get(tq); assert o["tier"]=="99" and o["keep_until"] is None

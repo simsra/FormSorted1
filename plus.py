@@ -19,7 +19,7 @@ ITEMS={
        ("Blue Badge answers","If you think a badge may help, made from the answers you've already given us."),
        ("The next Attendance Allowance form","If DWP sends a renewal form, or you ask for the higher rate, we fill it in from your saved answers. Many awards have no end date, so you may never need this.")],
  "dla":[("Help if the claim is turned down",LETTER_DETAIL+" Also if the award is lower than you expected."),
-        ("Briefing","What DWP may ask you, the school or the doctor, with your answers to refer to."),
+        ("Assessment prep","What DWP may ask you, the school or the doctor, with your answers to refer to."),
         ("Request letters for everyone who knows your child","School or SENCo, paediatrician, therapists or family. Each asks them to describe what they've seen, in their own words."),
         ("Blue Badge answers","If you think your child may qualify, made from the answers you've already given us."),
         ("Your child's DLA renewal form","Most child awards last for a set time. When the renewal pack arrives, we fill it in from your saved answers, updated for what has changed. This doesn't cover the PIP claim at 16, which is a different form.")],
@@ -50,7 +50,7 @@ def notes(form):
 def flat(form): return [f"{l}: {d[0].lower()+d[1:]}" if d else l for l,d in items(form)]
 RC="(a reconsideration letter from your answers)"
 SUMMARY={"aa":f"Everything in Done for you, plus help if the claim is turned down {RC}, a phone-call briefing, request letters for everyone who helps, Blue Badge answers, and the next Attendance Allowance form from your saved answers.",
- "dla":f"Everything in Done for you, plus help if the claim is turned down {RC}, a briefing, request letters for everyone who knows your child, Blue Badge answers, and your child's DLA renewal form from your saved answers.",
+ "dla":f"Everything in Done for you, plus help if the claim is turned down {RC}, assessment prep, request letters for everyone who knows your child, Blue Badge answers, and your child's DLA renewal form from your saved answers.",
  "pip":f"Everything in Done for you, plus help if you're turned down {RC}, an assessment briefing, request letters for everyone who helps you, Blue Badge answers, and your PIP review form from your saved answers.",
  "pipr":f"Everything in Done for you, plus help if your award is reduced or stopped {RC}, an assessment briefing, request letters for everyone who helps you, and your next PIP review form from your saved answers."}
 def summary(form):

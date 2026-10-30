@@ -192,3 +192,5 @@ dl.order dt{font-weight:700}dl.order dd{margin:0;text-align:right}
 [hidden]{display:none!important}
 .stepper li.past:before{content:none}
 .intake .navrow{flex-wrap:nowrap;gap:.5rem}.intake .navrow .btn{margin:0}.intake .navrow .btn-start{flex:1;text-align:center}
+dl.order dd ul.ticks{margin:.4rem 0 0;font-size:.95em}.chpk{margin-left:.5rem;white-space:nowrap}
+dl.order .pkrow{display:block}dl.order .pkrow dd{text-align:left;margin:.3rem 0 0}
