@@ -18,6 +18,7 @@ import bluebadge as BB, printmail
 import evidence as EVID, honesty as HONEST, fraud as FRAUD
 import wholeform as WF, secure as SECURE
 import accounts as ACCT
+import ask as ASK
 BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STRIPE_SECRET_KEY_PLACEHOLDER")
 PUBLIC=os.getenv("PUBLIC_URL","http://localhost:8000"); DEV=STRIPE.endswith("PLACEHOLDER")
 HERE=os.path.dirname(os.path.abspath(__file__)); OUT=store.OUT; DB=store.SQLITE_PATH
@@ -25,6 +26,9 @@ import hashlib as _hl; CSS_V=_hl.sha256(open(os.path.join(HERE,"static","app.css
 ICON_V=_hl.sha256(open(os.path.join(HERE,"static","logo-white.svg"),"rb").read()+open(os.path.join(HERE,"static","favicon.svg"),"rb").read()).hexdigest()[:10]   # brand logo/favicon cache-bust
 DOTS='<svg class="dots" aria-hidden="true" focusable="false" viewBox="0 0 240 220" fill="#9db1f9"><circle cx="78" cy="10" r="8"/><circle cx="112" cy="10" r="8"/><circle cx="146" cy="10" r="8"/><circle cx="61" cy="40" r="8"/><circle cx="95" cy="40" r="8"/><circle cx="163" cy="40" r="8"/><circle cx="197" cy="40" r="8"/><circle cx="78" cy="70" r="8"/><circle cx="112" cy="70" r="8"/><circle cx="146" cy="70" r="8"/><circle cx="214" cy="70" r="8"/><circle cx="27" cy="100" r="8"/><circle cx="61" cy="100" r="8"/><circle cx="95" cy="100" r="8"/><circle cx="163" cy="100" r="8"/><circle cx="197" cy="100" r="8"/><circle cx="78" cy="130" r="8"/><circle cx="112" cy="130" r="8"/><circle cx="146" cy="130" r="8"/><circle cx="214" cy="130" r="8"/><circle cx="61" cy="160" r="8"/><circle cx="95" cy="160" r="8"/><circle cx="163" cy="160" r="8"/><circle cx="197" cy="160" r="8"/><circle cx="78" cy="190" r="8"/><circle cx="112" cy="190" r="8"/><circle cx="146" cy="190" r="8"/></svg>'   # decorative brand dot motif (aria-hidden), same as the site's brand_edits.dots()
 os.makedirs(OUT,exist_ok=True)
+ASK_ON=os.getenv("ASK_HELPER","0")=="1"   # 'Ask a question?' helper: off unless ASK_HELPER=1 (test branch, awaiting approval)
+ASK_V=_hl.sha256(open(os.path.join(HERE,"static","ask.js"),"rb").read()).hexdigest()[:10]
+def ask_tag(): return f'<script src="/static/ask.js?v={ASK_V}" defer data-api="" data-choose="/#pick"></script>' if ASK_ON else ""
 CRON_SECRET=os.getenv("CRON_SECRET","")
 def db(): return store.connect()
 def is_wf(o):
@@ -110,7 +114,7 @@ def home(form:str="", tier:str=""):
     if form not in FORMS:
         return page(prog(1)+pv+f"""<section class=hero>{DOTS}<h1>Get your benefit form filled in</h1><p class=one>Answer simple questions. We fill in the form. You check it, sign it and send it.</p><a class=btn href="#pick">Choose your form</a></section>
 <h2 class=h3 id=pick>Which form do you need?</h2>{form_cards()}{not_sure()}
-<p class=hint>England and Wales only. You only pay at the end, after the questions.</p>""","Choose your form",minimal=True)
+<p class=hint>England and Wales only. You only pay at the end, after the questions.</p>{ask_tag()}""","Choose your form",minimal=True)
     if form=="bb": return bb_summary(pv)
     return order_summary(form,tier if tier in FORMS[form]["tiers"] else "",pv)
 PRICING_URL="https://formsorted.com/#prices"
@@ -161,7 +165,7 @@ def order_summary(form,tier="",pv=""):
     return page(prog(2)+pv+f"""<section class="hero hero-lt">{DOTS}<p class=caption>{esc(f['short'])}</p><h1>Choose your package</h1><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p></section>
 <div class=pkgs>{cards}</div>
 {more("Compare the packages in detail",up) if up else ""}{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}
-<p class=hint>{esc(DWP_LINE)} No success fee.</p><p class=change><a href="/">Choose a different form</a></p>""",f"Choose your package: {f['name']}",minimal=True)
+<p class=hint>{esc(DWP_LINE)} No success fee.</p><p class=change><a href="/">Choose a different form</a></p>{ask_tag()}""",f"Choose your package: {f['name']}",minimal=True)
 def can_change_pack(o): return o["status"]!="paid" and (o["form"] or "aa") in PLUS.PLUS_FORMS and o["tier"] in ("99","199")
 @app.get("/package/{token}")
 def change_package(token:str):
@@ -1548,7 +1552,7 @@ def healthz(): return {"ok":True}
 def cron_retention(req:Request):
     got=req.headers.get("x-cron-secret","")
     if not CRON_SECRET or not hmac.compare_digest(got,CRON_SECRET): raise HTTPException(403)
-    return {"ok":True,"purged":orders.purge(db(),OUT),"private":SECURE.purge(),"accounts":ACCT.purge(db())}
+    return {"ok":True,"purged":orders.purge(db(),OUT),"private":SECURE.purge(),"accounts":ACCT.purge(db()),"ask_log":ASK.purge(db())}
 @app.post("/cron/formwatch")
 def cron_formwatch(req:Request):
     """Weekly: compare GOV.UK's current AA1/DLA1A with the bundled copies; switches pre-fill off if a new version appears."""
@@ -1576,7 +1580,7 @@ def bb_summary(pv=""):
 <div class=pkgs><div class="pkg one"><h2>{esc(n)}</h2><p class=pr>£{p//100} <small>one-off</small></p><ul class=ticks>{''.join(f'<li>{esc(i)}</li>' for i in BB_BULLETS)}</ul>
 <form method=post action=/checkout><input type=hidden name=form value=bb><input type=hidden name=tier value={BB.SOLO_TIER}><button class="btn btn-big">Start my answers</button></form></div></div>
 {more("Everything that's included",f"<ul class=ticks>{''.join(f'<li>{esc(i)}</li>' for i in BB_ITEMS)}</ul>")}
-<p class=hint>{esc(BB.NOT_ELIG)}</p><p class=hint>Already ordered an Attendance Allowance, DLA or PIP form with us? Add Blue Badge answers for £15 from your documents page instead.</p><p class=change><a href="/">Choose a different form</a></p>""","Blue Badge answers",minimal=True)
+<p class=hint>{esc(BB.NOT_ELIG)}</p><p class=hint>Already ordered an Attendance Allowance, DLA or PIP form with us? Add Blue Badge answers for £15 from your documents page instead.</p><p class=change><a href="/">Choose a different form</a></p>{ask_tag()}""","Blue Badge answers",minimal=True)
 def bb_data(o): return json.loads(o["intake"] or "{}") or {"who":"me","else":{}}
 def bb_parent(o):
     p=get(o["review_of"]) if o["review_of"] else None
@@ -1645,3 +1649,35 @@ def bb_addon_box(o):
 <form method=post action=/bb/addon/{o['token']}><button class="btn btn-2">Get my Blue Badge answers</button></form><p class=hint>{esc(BB.NOT_ELIG)}</p></div>"""
     return f"""<div class=panel><h2 class=h3>Applying for a Blue Badge too?</h2><p>We can turn the answers you've already given us into answers for the online Blue Badge application, with a checklist of what to upload. £15, and you only pay once you've checked your answers.</p>
 <form method=post action=/bb/addon/{o['token']}><button class="btn btn-2">Add Blue Badge answers, £15</button></form><p class=hint>{esc(BB.NOT_ELIG)}</p></div>"""
+
+# ---------- 'Ask a question?' helper (test branch). POST /api/ask {q, page} -> {status, answer, choose}. Site + app steps 1-2 only. ----------
+import re as _re2
+_ASK_ORIGIN=_re2.compile(r"^https://([a-z0-9-]+\.)?formsorted\.(com|pages\.dev)$|^http://localhost(:\d+)?$|^http://127\.0\.0\.1(:\d+)?$")
+def _ask_cors(req):
+    o=req.headers.get("origin","")
+    return {"Access-Control-Allow-Origin":o,"Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"600","Vary":"Origin","Cache-Control":"no-store"} if _ASK_ORIGIN.match(o) else {"Cache-Control":"no-store"}
+@app.options("/api/ask")
+def ask_preflight(req:Request): return Response(status_code=204,headers=_ask_cors(req))
+@app.post("/api/ask")
+async def ask_api(req:Request):
+    h=_ask_cors(req)
+    if not ASK_ON: return JSONResponse({"status":"unavailable","answer":ASK.UNAVAILABLE},headers=h)
+    try: j=await req.json()
+    except Exception: j={}
+    if not isinstance(j,dict): j={}
+    ip=(req.headers.get("x-forwarded-for","").split(",")[0].strip() or (req.client.host if req.client else ""))
+    q,pg=str(j.get("q",""))[:2000],str(j.get("page",""))
+    r=await run_in_threadpool(lambda: ASK.answer(db(),q,pg,ip))
+    return JSONResponse({k:r[k] for k in ("status","answer","choose") if k in r},headers=h)
+@app.get("/admin/questions")
+def admin_questions_home():
+    if not ADMIN_SECRET: raise HTTPException(404)
+    return admin_page("""<h1>Helper questions</h1><form method=post action=/admin/questions><div class=field><label class=q for=k>Admin key</label><input id=k type=password name=key autocomplete=off required></div><button class=btn>Show common questions</button></form>""")
+@app.post("/admin/questions")
+def admin_questions(key:str=Form(""),days:int=Form(30)):
+    _admin_ok(key); t=ASK.top(db(),days=max(1,min(days,90)))
+    st=" · ".join(f"{esc(k)} {v}" for k,v in sorted(t["status"].items())); tp="".join(f"<li>{esc(k)}: {v}</li>" for k,v in t["topics"])
+    rows="".join(f"<tr><td>{g['n']}</td><td>{esc(g['q'])}</td><td>{esc(g['topic'])}</td><td>{esc(', '.join(f'{k} {v}' for k,v in g['status'].items()))}</td><td>{esc(', '.join(g['pages'])[:80])}</td></tr>" for g in t["questions"])
+    return admin_page(f"""<h1>Helper questions, last {days} days</h1><p>{t['total']} questions · {st}</p><h2 class=h3>By topic</h2><ul>{tp}</ul>
+<h2 class=h3>Most common (candidates for new FAQs)</h2><table class=admin><tr><th>Times</th><th>Question</th><th>Topic</th><th>Result</th><th>Pages</th></tr>{rows}</table>
+<p class=hint>'unknown' and 'refused' rows show gaps in our help pages. Personal details are removed before saving. Kept 90 days.</p>""")
