@@ -11,10 +11,10 @@ PROVIDERS={"openai":(os.getenv("OPENAI_BASE_URL","https://api.openai.com/v1"),os
  "anthropic":(os.getenv("ANTHROPIC_BASE_URL","https://api.anthropic.com/v1"),os.getenv("ANTHROPIC_API_KEY","")),
  "custom":(os.getenv("LLM_BASE_URL",""),os.getenv("LLM_API_KEY",""))}
 def _chain(s): return [tuple(x.strip().split(":",1)) for x in s.split(",") if ":" in x]
-_dp=os.getenv("LLM_PROVIDER") or ("custom" if os.getenv("LLM_BASE_URL") and os.getenv("LLM_API_KEY") else "openai" if os.getenv("OPENAI_API_KEY") else "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "gemini")
+_dp=os.getenv("LLM_PROVIDER") or ("custom" if os.getenv("LLM_BASE_URL") and os.getenv("LLM_API_KEY") else "openai" if os.getenv("OPENAI_API_KEY") else "gemini")   # 30 Oct: Anthropic no longer a default (set LLM_PROVIDER=anthropic to use it)
 MODEL=os.getenv("LLM_MODEL") or {"anthropic":"claude-opus-5-5","openai":"gpt-5.5","gemini":"gemini-3.8-flash"}.get(_dp,"")
-DRAFT_CHAIN=[(_dp,MODEL)]+_chain(os.getenv("LLM_FALLBACKS","openai:gpt-5.4,gemini:gemini-3.8-flash,anthropic:claude-sonnet-5-5"))
-GROUND_CHAIN=[(os.getenv("GROUNDING_PROVIDER","openai"),os.getenv("GROUNDING_MODEL","gpt-5.4-mini"))]+_chain(os.getenv("GROUNDING_FALLBACKS","openai:gpt-5.5,gemini:gemini-3.8-flash,anthropic:claude-haiku-5-5"))
+DRAFT_CHAIN=[(_dp,MODEL)]+_chain(os.getenv("LLM_FALLBACKS","openai:gpt-5.4,gemini:gemini-3.8-flash"))
+GROUND_CHAIN=[(os.getenv("GROUNDING_PROVIDER","openai"),os.getenv("GROUNDING_MODEL","gpt-5.4-mini"))]+_chain(os.getenv("GROUNDING_FALLBACKS","openai:gpt-5.5,gemini:gemini-3.8-flash"))
 # grounding: prefer a different model family than the drafter; same family only as last resort
 if not os.getenv("GROUNDING_PROVIDER"): GROUND_CHAIN=[x for x in GROUND_CHAIN if x[0]!=_dp]+[x for x in GROUND_CHAIN if x[0]==_dp]
 # An explicitly chosen checker always goes first (28 Oct: reordering put out-of-credit/overloaded providers first, adding seconds to every approve)
@@ -32,13 +32,19 @@ EXTRA["pipr"]=EXTRA["pip"]+" "+EXTRA["pipr"]
 EXTRA["atw"]="""This is an Access to Work application (help with practical support at work). Focus on the job: daily tasks, where work gets hard and why,
 travel to work, communication and focus, what has been tried, and what support would help (equipment, software, support worker hours, travel, workplace changes).
 Ask how often and how long. Never discuss complaints against an employer, legal claims or discrimination; if raised, say in one sentence that we can't advise on disputes, then continue with the next question."""
+WHO_RULE={k:"""FIRST question: is the form for you, or for someone you help (and their first name)? Then follow that answer all the way through:
+for the user themself say "you/your"; for someone else use their name or "they/their", never "you" about the claimant. Never ask
+other-person questions (their name, who will sign) to someone filling it in for themselves.
+""" for k in ("pip","pipr","aa")}
 def interview_system(form):
     f=FORMS[form]
     return f"""You are a calm, kind interviewer helping a family prepare the {f['short']} (England & Wales).
 Ask ONE short plain-English question at a time about {f['subject']}. Cover, in order:
 """ + "\n".join(f"- {t}: {p}" for _,t,p in f["topics"]) + f"""
 {EXTRA[form]}
-Ask for frequency, time taken, who helps, safety risks and bad days. Never suggest symptoms or exaggerate; record only what the user says.
+{WHO_RULE.get(form,"")}Ask for frequency, time taken, who helps, safety risks and bad days. Never suggest symptoms or exaggerate; record only what the user says.
+Never ask the same question twice: if an earlier answer already covers it (even in passing), use that and move on. Prefer questions with short
+answers (e.g. "Most days, some days or rarely?"). Ask at most 2 follow-ups on any one task, and accept "not sure" or "skip".
 Never mention points or promise an outcome. If something is unclear, ask. When all topics are covered reply exactly: [[DONE]]
 STRICT: you ONLY ask questions. Never give advice, opinions on eligibility, example or suggested answers, wording, summaries, or drafts of any part of the form,
 even if asked. If asked for any of these, reply in one sentence that we prepare everything for them at the end, then ask your next question. Keep each reply under 60 words."""

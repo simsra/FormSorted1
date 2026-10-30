@@ -2,7 +2,7 @@
 Each fact is asked once. Taps map straight to form tick boxes and number boxes; we also turn the taps into plain
 sentences (the customer's own answers) that the drafter and the grounding check use as the source.
 Before payment we only collect answers: nothing here shows advice, answer text or drafts."""
-import re
+import re, os
 from html import escape as esc
 FORMS_V3=("aa","dla","pip")
 FREQ=[("rarely","Rarely"),("some","Some days"),("most","Most days"),("every","Every day"),("ns","Not sure")]
@@ -81,7 +81,9 @@ def name(d,form):
     n=(d.get("name") or "").strip()
     if n: return n
     if form=="dla": return "your child"
-    return "you" if d.get("who","me")=="me" else "them"
+    if d.get("who","me") in ("me",""): return "you"
+    # 30 Oct: no name given for someone else -> a noun that works as subject and object ('them' gave "does them have")
+    return {"parent":"your parent","partner":"your partner"}.get(d.get("who"),"the person you help")
 def is_me(d,form): return form!="dla" and d.get("who","me") in ("me","")
 def _chk(n,v,txt,on,cls=""): return f'<label class="chip{cls}"><input type=checkbox name="{n}" value="{esc(v)}" {"checked" if on else ""}><span>{esc(txt)}</span></label>'
 def _rad(n,v,txt,cur): return f'<label class=chip><input type=radio name="{n}" value="{esc(v)}" {"checked" if cur==v else ""}><span>{esc(txt)}</span></label>'
@@ -115,10 +117,16 @@ def card_opts(form,rid,chips):
     cm={c[0]:c[1] for c in chips}; ids=t.split() if t else [c[0] for c in chips[:3]]
     tk=[(i,cm[i]) for i in ids if i in cm]; fx=[(x,FX_ALL[x]) for x in f][:6-len(tk)]
     return tk,fx
+def pw(t,me,form):
+    """Chip wording for who the form is about (30 Oct: 'Cleaning themselves' was shown to people filling it in for themselves)."""
+    if form=="dla": return t.replace("Cleaning yourself","Cleaning themselves")
+    if me: return t.replace("themselves","yourself").replace("they don't","you don't").replace("with them","with you")
+    return t.replace("yourself","themselves")
 def row_card(form,r,d):
     rid,topic,label,gate,chips=r; cur=(d.get("rows") or {}).get(rid,{}); me=is_me(d,form)
     lvl=cur.get("lvl") or ("cant" if cur.get("hard") and cur.get("help") else "help" if cur.get("help") else "slow" if cur.get("hard") else "")
     tk,fx=card_opts(form,rid,chips); cv=cur.get("c") or []
+    tk=[(v,pw(t,me,form)) for v,t in tk]
     opts="".join(_chk(f"r_{rid}_c",v,t,v in cv,cls=f" fx-{v}") for v,t in tk+fx)
     more='<p class=sub>What happens? <span class=hint>(tap any)</span></p><div class="chips two">'+opts+_else(f"r_{rid}_c",cur.get("x",""))+'</div>'
     more+='<p class=sub>How many days a week is it like this?</p>'+_radios(f"r_{rid}_days",DAYS,cur.get("days")," nums")
@@ -138,8 +146,12 @@ def section_body(form,sec,d):
         else:
             opts=[("me","Me"),("parent","My mum or dad"),("partner","My partner"),("other","Someone else")] if form=="aa" else [("me","Me"),("other","Someone I help")]
             h+=_q("Who is this form for?",_radios("who",opts,d.get("who")))
-            h+=_q("Their first name (if it's not you)",f'<input name=name value="{esc(d.get("name",""))}" autocomplete=off maxlength=40 placeholder="e.g. Mum or Margaret">',"We use it in the questions. Optional.")
-            h+=_q("If it's someone else: who will sign the form?",_radios("signer",[("them","They will sign it themselves"),("poa","I have Power of Attorney"),("appointee","I'm their appointee"),("deputy","I'm their deputy (Court of Protection)"),("ns","Not sure yet")],d.get("signer")),"Skip this if the form is for you.")
+            # 30 Oct: only shown once 'someone else' is picked (one question per screen skips hidden ones); 'Me' never sees them
+            dv=" ".join(v for v,_ in opts if v!="me")
+            h+=f'<div class=wdep data-dep="who" data-vals="{dv}">'+_q("Their first name",f'<input name=name value="{esc(d.get("name",""))}" autocomplete=off maxlength=40 placeholder="e.g. Mum or Margaret">',"We use it in the questions. Optional.")+'</div>'
+            h+=f'<div class=wdep data-dep="who" data-vals="{dv}">'+_q("Who will sign the form?",_radios("signer",[("them","They will sign it themselves"),("poa","I have Power of Attorney"),("appointee","I'm their appointee"),("deputy","I'm their deputy (Court of Protection)"),("ns","Not sure yet")],d.get("signer")))+'</div>'
+            h+=wholeform.DEP_JS
+
     elif sec=="conds":
         have={c.get("name"):c for c in d.get("conds") or []}
         yrs=[("","When did it start?")]+[(str(y),str(y)) for y in range(2026,1939,-1)]+[("ns","Not sure")]
@@ -168,14 +180,16 @@ def section_body(form,sec,d):
             h+=_q(f"Does someone need to stay awake to watch over {you} at night?",_radios("watch",[("no","No"),("some","Some nights"),("most","Most nights"),("ns","Not sure")],d.get("watch")))+'</div></div>'
         else:
             h+=_q("Fits, blackouts or seizures?",_radios("fits",[("no","No"),("month","Less than weekly"),("week","Weekly"),("day","Daily"),("ns","Not sure")],d.get("fits")))
-            h+=_q("Do their needs change from day to day?",_radios("varies",[("same","Mostly the same"),("varies","They change a lot"),("ns","Not sure")],d.get("varies")))
+            h+=_q(f"Do {nm}'s needs change from day to day?" if d.get("name") else "Do their needs change from day to day?",_radios("varies",[("same","Mostly the same"),("varies","They change a lot"),("ns","Not sure")],d.get("varies")))
             nn=d.get("nn") or []; q=d.get("nnum") or {}
             inner="".join(f'<div class=cond>{_chk("nn",k,t,k in nn,cls=" k")}<div class=more>{_radios(f"nn_{k}_n",[(str(i),f"{i} nights") for i in range(1,8)]+[("ns","Not sure")],q.get(k,{}).get("n"))}{_radios(f"nn_{k}_t",[(str(i),f"{i}× a night") for i in range(1,5)]+[("ns","Not sure")],q.get(k,{}).get("t"))}{_radios(f"nn_{k}_m",[("10","10 min"),("20","20 min"),("30","30 min"),("45","45 min"),("60","1 hour+"),("ns","Not sure")],q.get(k,{}).get("m"))}</div></div>' for k,t in NIGHT_DLA)
             inner+=f'<div class=chips>{_else("nn",X(d,"nn"))}</div>'
             h+=_q(f"Help {nm} needs at night (after everyone is in bed)",inner,"Tap a reason, then nights a week, times a night and minutes. Skip if none.")
             if d.get("age")!="u3": h+='<p class=lede2>Getting out and about</p>'+"".join(row_card(form,r,d) for r in rows(form,"safety",d))
     elif sec=="finish":
-        h+=_q("Aids or equipment used",_checks("aids",[(a,a) for a in AIDS[form]],d.get("aids"),X(d,"aids")))
+        # 30 Oct: a pendant alarm tapped under falls is already ticked here (never ask the same thing twice)
+        cur=d.get("aids") if d.get("aids") is not None else (["Pendant alarm"] if "alarm" in (d.get("fallx") or []) and "Pendant alarm" in AIDS[form] else [])
+        h+=_q("Aids or equipment used",_checks("aids",[(a,a) for a in AIDS[form]],cur,X(d,"aids")))
         if form=="dla": h+=_q("School or nursery",_checks("school",SCHOOL,d.get("school"),X(d,"school")))
         h+=_q(f"Who knows {you} well?",_checks("people",[(p,p) for p in PEOPLE[form]],d.get("people"),X(d,"people")),"We'll list who could support the claim.")
         h+=_q("Anything else, in your own words (optional)",f'<textarea name=words rows=4 maxlength=3000 placeholder="For example: what a bad day looks like.">{esc(d.get("words",""))}</textarea>',"Skip this if you like. You only tap, we do the writing.")
@@ -190,7 +204,7 @@ def save(form,sec,d,fm):
     if sec=="about":
         for k in ("who","name","signer","rel","age"): d[k]=g(k)
         d["name"]=re.sub(r"[^\w '\-.]","",d["name"])[:40]
-        if d.get("who")=="me": d["signer"]=""
+        if form!="dla" and d.get("who") in ("me",""): d["signer"]=""; d["name"]=""   # 'Me': no other-person answers kept
     elif sec=="conds":
         cs=[]
         for i,cn in enumerate(CONDS[form]):
@@ -219,6 +233,12 @@ def save(form,sec,d,fm):
     elif sec=="finish":
         for k in ("aids","school","people"): d[k]=gl(k); d.setdefault("else",{})[k]=other_txt(fm,k)
         d["words"]=str(fm.get("words") or "").strip()[:3000]
+        import followups   # completeness check per hard task before anything is written (asked once; answered checks count as known)
+        keep=[tuple(x) for x in d.get("fu_qs") or [] if f"{x[0]}_{x[1]}" not in (d.get("fu") or {})]
+        if os.getenv("FOLLOWUPS","1")=="0": d["fu_qs"],d["fu_how"]=[],"off"
+        elif keep: d["fu_qs"]=keep   # coming back through: same checks, no new Gemini call
+        else: d["fu_qs"],d["fu_how"]=followups.pick(form,d)
+        d["coverage"]=followups.coverage(form,d)
     return d
 # ---------- turning taps into the customer's own answers ----------
 def _ok(v): return v not in (None,"","ns")

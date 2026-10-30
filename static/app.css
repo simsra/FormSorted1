@@ -279,3 +279,5 @@ details.more>summary{color:var(--ink);font-weight:600}details.more>summary:befor
 .cond select,.cond input[type=text],.cond input:not([type]){border-color:var(--muted)}
 a{color:var(--brand)}a:hover{color:var(--brand-dk)}
 .inset{border-left:0;background:#f3f4f6;border-radius:var(--r);padding:1.2rem 1.5rem}
+
+.cue{font-weight:700;color:var(--accent);margin:.1rem 0 .8rem}.diffopt{margin-top:.8rem}.diffopt .chips{margin:0}
