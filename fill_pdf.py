@@ -25,9 +25,14 @@ def build_values(personal, draft):
     for c,fs in zip(draft.get("conditions",[]),CONDITION_FIELDS):
         for key,f in zip(("name","since","meds","dose"),fs):
             if c.get(key): v[f]=c[key]
+    _badday(v,"354",draft)
     # Q56 (box 344, page 28 of the AA1 11/25) is the supporter's own statement: never our words. It is left blank; a note goes with the pack.
     return v
 AA_LABELS={f:f"Question {q} ({t})" for q,t,_,f in CARE_QUESTIONS}
+def _badday(v,f,draft):
+    """Last screen: their recent bad day, word for word, leads the extra-information box (only when the writer didn't use it in a box)."""
+    n=(draft.get("badday_note") or "").strip()
+    if n: v[f]=n+("\n\n"+v[f] if v.get(f) else "")
 def fill(personal, draft, out_path, ticks=None, extra=None):
     return _write("aa",build_values(personal,draft),personal,out_path,ticks,extra)
 VERSION={"aa":("AA1","11/25"),"dla":("DLA1A","10/25")}
@@ -87,6 +92,7 @@ def dla_values(personal, draft):
     for k,fs in DLA_NIGHT_FIELDS.items():
         for val,f in zip(draft.get("extra",{}).get(k) or [],fs):
             if val: v[f]=str(val)
+    _badday(v,DLA_FIELDS["anything_else"],draft)
     if draft.get("extra",{}).get("care_start"): v["71"]=draft["extra"]["care_start"]
     for c,fs in zip(draft.get("conditions",[]),DLA_CONDITION_FIELDS):
         for key,f in zip(("name","since","meds","dose"),fs):

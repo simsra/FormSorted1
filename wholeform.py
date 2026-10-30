@@ -141,10 +141,21 @@ def conds(d): return [c for c in d.get("conds") or [] if c.get("name")][:6 if Tr
 def aids(d): return I.aids_list(d)[:6]
 def bad_rows(form,d):
     R=d.get("rows") or {}; return [r for r in I.rows(form,None,d) if R.get(r[0]) and R[r[0]].get("lvl")!="ok"]
-PROFS={"aa":["Consultant","Practice nurse","Occupational therapist","District nurse","Social worker"],"dla":["Paediatrician","Speech therapist","Occupational therapist","Health visitor","CAMHS"]}
+# 30 Oct (last screen): new 'Who knows about your condition?' labels first; the older labels stay for orders started before.
+PROFS={"aa":["Consultant or specialist","Nurse","Social worker","Consultant","Practice nurse","Occupational therapist","District nurse"],
+       "dla":["Paediatrician or specialist","Nurse or health visitor","Social worker","Paediatrician","Speech therapist","Occupational therapist","Health visitor","CAMHS"]}
 def prof(form,d):
-    p=[x for x in d.get("people") or [] if x in PROFS[form]]; x=X(d,"people").strip()
+    """The one professional (not the GP, who has their own boxes) for the form's 'other professional' section, in PROFS order."""
+    p=[x for x in PROFS.get(form,[]) if x in (d.get("people") or [])]; x=X(d,"people").strip()
     return p[0] if p else (x.split(",")[0].strip()[:60] if x else "")
+_TTL=re.compile(r"^(Dr|Doctor|Mr|Mrs|Ms|Miss|Mx|Nurse|Sister|Professor|Prof)\.?\s+\S",re.I)
+def prof_split(form,d):
+    """(name, place) from what they typed for that professional on the last screen, e.g. 'Dr Shah, St James's' -> ('Dr Shah', "St James's").
+    Only ever their own words: split at the first comma when the first part is a titled name, otherwise it is all the name line."""
+    t=((d.get("know_names") or {}).get(prof(form,d)) or "").strip()
+    a,_,b=t.partition(",")
+    return (a.strip(),b.strip()) if b.strip() and _TTL.match(a.strip()) else (t,"")
+def prof_name(form,d): return prof_split(form,d)[0]
 # ---------- AA / DLA subtasks for 'how often each day' ----------
 # (key, label, chip ids that mean this part is hard, fields...) AA: (difficulty fields, help field, prompt field)
 AA_SUB={
@@ -237,7 +248,7 @@ def questions(form,sec,d):
                   Q("pr_often","How often?","radio",HOWOFTEN),Q("pr_seen","Last seen","radio",SEEN)]
         else: qs.append(Q("pr_any",f"Apart from the GP, {P['have']} seen anyone about this in the last 12 months?","radio",YN,hint="For example a consultant, nurse or therapist."))
         if form=="aa":
-            carer=d.get("who") not in ("me","") or "Family carer" in (d.get("people") or [])
+            carer=d.get("who") not in ("me","") or bool({"Family carer","Carer","Family or friend"}&set(d.get("people") or []))
             hpo=([("me","Yes, me (the person filling this in)"),("yes","Yes, someone else")] if not me(d,form) else [("yes","Yes")])+[("no","No")]
             mine=["yes"] if applies(form,"helper",d) else ["yes","me"]
             qs+= [Q("hp_any",f"Does anyone help {you} because of this?","radio",hpo),
@@ -470,6 +481,9 @@ def save(form,sec,d,fm):
     return d
 def prefill(form,d):
     p={}; n=(d.get("name") or "").strip()
+    n,where=prof_split(form,d)   # typed on the last screen: shown filled in, they can change it
+    if n: p["pr_name"]=n
+    if where: p["pr_where"]=where
     if n and (form=="dla" or not me(d,form)) and n.lower() not in ("mum","dad","mom","mam","nan","gran","nana","grandma","grandad"): p["first"]=n
     return p
 DEP_JS="""<script>(function(){function upd(){document.querySelectorAll('[data-dep]').forEach(function(e){var n=e.getAttribute('data-dep'),v=e.getAttribute('data-vals').split(' '),on=false;document.querySelectorAll('[name="'+n+'"]').forEach(function(i){if(i.checked&&v.indexOf(i.value)>=0)on=true});e.hidden=!on})}
@@ -612,7 +626,7 @@ def pdf_values(form,d,uploads=None):
         # Q17 professional, Q18 helper, Q19 GP
         p=prof(form,d)
         if p:
-            t("x17","/Yes"); v("17_1",w.get("pr_name") or f"My {p.lower()}"); v("17_2",p); addr(["17_3","17_4","17_5"],[w.get("pr_where"),w.get("pr_town")])
+            t("x17","/Yes"); v("17_1",w.get("pr_name") or prof_name("aa",d) or f"My {p.lower()}"); v("17_2",p); addr(["17_3","17_4","17_5"],[w.get("pr_where") or prof_split("aa",d)[1],w.get("pr_town")])
             v("17_6",w.get("pr_pc")); v("17_7",w.get("pr_tel")); v("17_8",w.get("pr_hosp")); v("17_9",lab([(x,x) for x in [c["name"] for c in conds(d)]],w.get("pr_cond"),w.get("pr_cond_x")))
             v("17_10",lab(HOWOFTEN,w.get("pr_often"),w.get("pr_often_x"))); v("17_11",seen_txt(w.get("pr_seen"),w.get("pr_seen_x")))
         elif w.get("pr_any"): t("x17",yn(w["pr_any"]))
@@ -759,7 +773,7 @@ def pdf_values(form,d,uploads=None):
         v("24_1",", ".join(dict.fromkeys(x for x in docs if x)))
         p=prof(form,d)
         if p:
-            t("25","/Yes"); v("25_1",w.get("pr_name") or f"My {p.lower()}"); v("25_2",p); addr(["25_3","25_4","25_5"],[w.get("pr_where"),w.get("pr_town")]); v("25_6",w.get("pr_pc"))
+            t("25","/Yes"); v("25_1",w.get("pr_name") or prof_name("dla",d) or f"My {p.lower()}"); v("25_2",p); addr(["25_3","25_4","25_5"],[w.get("pr_where") or prof_split("dla",d)[1],w.get("pr_town")]); v("25_6",w.get("pr_pc"))
             v("25_7",w.get("pr_tel")); v("25_8",w.get("pr_hosp")); v("25_9",w.get("pr_cond_x") or w.get("pr_cond")); v("25_10",seen_txt(w.get("pr_seen"),w.get("pr_seen_x")))
             t("89_3","/You have included")
         elif w.get("pr_any"): t("25",yn(w["pr_any"]))

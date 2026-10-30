@@ -24,11 +24,14 @@ def briefing(brand,form,personal,d):
 <h2>What to expect</h2><p>{e(ASK[form])}</p><ul>{''.join(f'<li>{e(q)}</li>' for q in Q)}</ul>
 <h2>Tips</h2><ul><li>Describe a bad day as well as a typical day. Say how often bad days happen.</li><li>Say if you can't do something safely, to a good standard, again when needed, or in a reasonable time.</li><li>You can have someone with you. You can ask for the call to be recorded.</li><li>If you're not sure, say so. Don't guess.</li></ul>
 <h2>What you told us, by section</h2>{rows or '<p>No answers yet.</p>'}"""
-ROLES={"GP":"GP","Consultant":"consultant","Paediatrician":"paediatrician","Teacher or SENCo":"teacher or SENCo","Family carer":"family carer","Mental health team":"mental health team"}
+ROLES={"GP":"GP","Consultant":"consultant","Consultant or specialist":"consultant or specialist","Paediatrician or specialist":"paediatrician or specialist",
+       "Nurse":"nurse","Nurse or health visitor":"nurse or health visitor","Social worker":"social worker","Paediatrician":"paediatrician","Teacher or SENCo":"teacher or SENCo","Family carer":"family carer","Mental health team":"mental health team"}
 import re as _re
 PROF={"GP","Practice nurse","Consultant","Occupational therapist","District nurse","Social worker","Paediatrician","Teacher or SENCo","Speech therapist",
-      "Health visitor","CAMHS","Mental health team","Physio","Support worker"}
-MED={"GP","Practice nurse","Consultant","District nurse","Paediatrician","Mental health team","CAMHS","Occupational therapist","Speech therapist","Physio","Health visitor"}
+      "Health visitor","CAMHS","Mental health team","Physio","Support worker","Nurse","Consultant or specialist","Nurse or health visitor","Paediatrician or specialist"}
+MED={"GP","Practice nurse","Consultant","District nurse","Paediatrician","Mental health team","CAMHS","Occupational therapist","Speech therapist","Physio","Health visitor",
+     "Nurse","Consultant or specialist","Nurse or health visitor","Paediatrician or specialist"}
+_TITLE=_re.compile(r"^(Dr|Doctor|Mr|Mrs|Ms|Miss|Mx|Nurse|Sister|Professor|Prof)\.?\s+\S",_re.I)
 SKIP={"conditions","statement","other","contact","support","tried"}
 def _topic(l):
     """'Question 30: Toilet needs' / 'Activity 4: Washing and bathing (PIP2 Q6)' / 'Q69–70: Help during the night (from 11pm)' -> 'toilet needs'."""
@@ -71,14 +74,16 @@ def supporting_letters(brand,form,personal,d,people,intake=None):
     who=[p for p in (people or [])] or (["GP","Family carer"] if form!="dla" else ["GP","Teacher or SENCo"])
     out=[]
     for p in who:
-        dear="Dear Dr ____," if p=="GP" else ("Dear ____," if p not in PROF else f"Dear {e(ROLES.get(p,p))},")
+        kn=((I.get("know_names") or {}).get(p) or "").strip()   # typed on the last screen; only ever used as typed
+        nm1=kn.split(",")[0].strip()
+        dear=(f"Dear {e(nm1)}," if _TITLE.match(nm1) else "Dear Dr ____," if p=="GP" else ("Dear ____," if p not in PROF else f"Dear {e(ROLES.get(p,p))},"))
         verb="am filling in" if form=="pipr" else "am applying for"
         intro=(f"I {verb} {e(claim)} and I would be grateful for your help." if me else
                (f"I am applying for {e(claim)} for {e(nm or obj)}, and I would be grateful for your help." if form=="dla" else
                 f"I am helping {e(nm or obj)} apply for {e(claim)}, and I would be grateful for your help."))
         tl=f"<p>It would be most useful to hear about any of these that you have seen yourself:</p><ul>{''.join(f'<li>{e(t)}</li>' for t in tops)}</ul>" if tops else ""
         prof=(f"<p>If it's easier, a short letter on your headed paper confirming {e(pos)} diagnoses and how they affect {e(obj)} day to day would be very helpful.</p>" if p in MED else "")
-        out.append(f"""<section class=letter style="page-break-after:always"><p class=hint>For: {e(p)}. A request letter from you. Add your name, then print, email or hand it to them.</p>
+        out.append(f"""<section class=letter style="page-break-after:always"><p class=hint>For: {e(p)}{f" ({e(kn)})" if kn else ""}. A request letter from you. Add your name, then print, email or hand it to them.</p>
 <p>{dear}</p><p>{intro} Please could you describe, in your own words, what you have seen yourself of {e(needs)} day to day?</p>
 <p>It helps to say:</p><ul>{''.join(f'<li>{e(x)}</li>' for x in asks)}</ul>{tl}{prof}
 <p>{e(where)}</p>

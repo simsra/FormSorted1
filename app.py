@@ -1175,7 +1175,7 @@ def render_approve(token,o,d,G,fm=None,need_ok=(),need_res=(),need_honest=False)
     keepall=f"""<p><button class="btn btn-2" name=keepall value=1 formnovalidate>Keep all remaining ({len(pending)}) as true</button> <span class=hint>Only if every one of them is true.</span></p>""" if pending else ""
     facts_=wf_facts(o) if is_wf(o) else ""
     return page(prog(5,"Check and approve")+f"""{summary}<h1>Check and approve every answer</h1><p class=one>Change anything that isn't right, then tick to approve each answer.</p>{more("How this works",PROMISE+"<p>Each answer is shown next to what you told us. Nothing is ready to download until you approve each answer.</p>")}
-<form method=post action=/approve/{token}>{facts_}{rows}{keepall}
+<form method=post action=/approve/{token}>{facts_}{rows}{_badday_block(o,d,fm)}{keepall}
 <label class=cb><input type=checkbox name=save {'checked' if fm and fm.get('save') else ''}><span>Save my answers for next time (for a review or renewal). We'll give you a save code. Saved answers are kept for 90 days unless you delete them.</span></label>
 {'<p class=err>Please tick to confirm everything is true</p>' if need_honest else ''}<label class="cb honest{' needs' if need_honest else ''}" id=honest><input type=checkbox name=honest required {'checked' if fm and fm.get('honest') else ''}><span>{esc(HONEST_TICK)}</span></label>
 <button class="btn btn-big">I approve. Make my documents</button></form>""","Approve your answers")
@@ -1196,6 +1196,13 @@ def wf_facts(o):
     return f"""<details class="trace facts"><summary><strong>Facts we copied onto the form ({len(items)} boxes)</strong></summary><p class=hint>These come straight from your answers. If one is wrong, correct it on the printed form before you sign, or tell us at hello@formsorted.com.</p><ul class=factlist>{lis}</ul>{''.join(f'<p>{esc(n)}</p>' for n in notes)}</details>"""
 def _short(l):
     l=_re.sub(r"^(Your care needs during the day|About you|About the child) - ","",l); return l[:140]
+def _badday_block(o,d,fm=None):
+    """Last screen (30 Oct): their recent bad day, word for word, for the form's extra-information box. Shown so they see and approve every word."""
+    if not d.get("badday_note"): return ""
+    q={"aa":"Question 63","dla":"Question 89"}.get(o["form"] or "aa","the extra information box")
+    v=str(fm.get("ans__badday")) if fm and fm.get("ans__badday") is not None else d["badday_note"]
+    return (f'<div class=trace id=topic__badday><h3>Extra information ({q}): your recent bad day</h3><p class=hint>Your own words, as you typed them. '
+            f'Edit or clear it if you like.</p><textarea name="ans__badday" rows=3>{esc(v)}</textarea></div>')
 @app.get("/approve/{token}")
 def approve_page(token:str):
     r,o,d=ordered(token)
@@ -1227,6 +1234,10 @@ async def approve_save(token:str, req:Request):
     for i in its:
         ch=fm.get(f"res_{i['key']}"); res.append({"topics":i["topics"],"phrase":i["sentence"],"choice":ch,"at":time.time()})
         if ch=="remove": removed.append(i["sentence"])
+    if d.get("badday_note") and "ans__badday" in fm:
+        bn=str(fm.get("ans__badday") or "").strip()[:1500]
+        if bn: d["badday_note"]=bn
+        else: d.pop("badday_note",None)
     for t,_,_ in F["topics"]:
         a=str(fm.get(f"ans_{t}",d["answers"].get(t,"")))[:4000]
         for snt in removed: a=grounding.remove_sentence(a,snt)

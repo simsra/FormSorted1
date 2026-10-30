@@ -59,9 +59,18 @@ TREAT=[("tabs","Tablets"),("inj","Injections"),("inh","Inhaler"),("phys","Physio
 AIDS={"aa":["Walking stick","Walking frame","Wheelchair","Stairlift","Grab rails","Shower seat","Commode","Raised toilet seat","Pendant alarm","Pill organiser","Hearing aid"],
  "dla":["Buggy or wheelchair","Ear defenders","Visual timetable","Car seat harness","Hearing aid","Glasses","Bed rails or safe space bed","Feeding equipment"],
  "pip":["Walking stick","Crutches","Wheelchair","Grab rails","Shower seat","Perching stool","Pill organiser","Hearing aid","Alarms or reminders on phone"]}
-PEOPLE={"aa":["GP","Practice nurse","Consultant","Occupational therapist","District nurse","Social worker","Family carer"],
- "dla":["GP","Paediatrician","Teacher or SENCo","Speech therapist","Occupational therapist","Health visitor","CAMHS"],
- "pip":["GP","Consultant","Mental health team","Physio","Occupational therapist","Support worker","Family or friend"]}
+# 30 Oct (last screen): 'Who knows about your condition?' (was 'Who knows you well?'). Professionals get an optional name line.
+PEOPLE={"aa":["GP","Nurse","Consultant or specialist","Social worker","Carer","Family or friend"],
+ "dla":["GP","Nurse or health visitor","Paediatrician or specialist","Teacher or SENCo","Social worker","Carer","Family or friend"],
+ "pip":["GP","Nurse","Consultant or specialist","Social worker","Carer","Family or friend"]}
+PROF_PEOPLE={"GP","Nurse","Consultant or specialist","Social worker","Nurse or health visitor","Paediatrician or specialist","Teacher or SENCo"}
+# 'Is there anything you need help with but no one is there to help?' -> the form box each one belongs to
+NOHELP=[("wash","Washing"),("meals","Meals"),("night","At night"),("out","Going out"),("meds","Taking medicines")]
+NOHELP_WHAT={"wash":"with washing","meals":"with meals","night":"at night","out":"with going out","meds":"with taking medicines"}
+NOHELP_TOPIC={"aa":{"wash":"31","meals":"35","night":"42","out":"39","meds":"36"},
+ "dla":{"wash":"daycare","meals":"daycare","night":"night","out":"outdoors","meds":"daycare"},
+ "pip":{"wash":"a4","meals":"a1","night":"other","out":"a11","meds":"a3"}}
+OWN_TOPIC={"aa":"40","dla":"42","pip":"other"}   # where free words sit in the transcript (the writer may use them in any box)
 SCHOOL=[("ehcp","Has an EHCP (or plan in progress)"),("one","1:1 support"),("special","Specialist school or unit"),("reduced","Reduced timetable"),("transport","School transport"),("notatschool","Not in school or nursery")]
 NIGHT_DLA=[("night_bed","Getting into or out of bed"),("night_toilet","Toilet, nappy or pad change"),("night_treatment","Medicine or treatment"),("night_settle","Settling back to sleep"),("night_danger","Keeping them safe"),("night_wander","Wandering"),("night_behaviour","Behaviour or distress")]
 SECTIONS={"aa":[("about","About them"),("conds","Health conditions"),("daily","Everyday help"),("safety","Nights and safety"),("finish","Aids and anything else")],
@@ -338,8 +347,7 @@ def section_body(form,sec,d):
         cur=d.get("aids") if d.get("aids") is not None else (["Pendant alarm"] if "alarm" in (d.get("fallx") or []) and "Pendant alarm" in AIDS[form] else [])
         h+=_q("Aids or equipment used",_checks("aids",[(a,a) for a in AIDS[form]],cur,X(d,"aids")))
         if form=="dla": h+=_q("School or nursery",_checks("school",SCHOOL,d.get("school"),X(d,"school")))
-        h+=_q(f"Who knows {you} well?",_checks("people",[(p,p) for p in PEOPLE[form]],d.get("people"),X(d,"people")),"We'll list who could support the claim.")
-        h+=_q("Anything else, in your own words (optional)",f'<textarea name=words rows=4 maxlength=3000 placeholder="For example: what a bad day looks like.">{esc(d.get("words",""))}</textarea>',"Skip this if you like. We do the writing.")
+        h+=last_things(form,d)
     return h
 # ---------- saving ----------
 def save(form,sec,d,fm):
@@ -387,6 +395,7 @@ def save(form,sec,d,fm):
     elif sec=="finish":
         for k in ("aids","school","people"): d[k]=gl(k); d.setdefault("else",{})[k]=other_txt(fm,k)
         d["words"]=str(fm.get("words") or "").strip()[:3000]
+        save_last(form,d,fm)
         import followups   # completeness check per hard task before anything is written (asked once; answered checks count as known)
         keep=[tuple(x) for x in d.get("fu_qs") or [] if f"{x[0]}_{x[1]}" not in (d.get("fu") or {})]
         # 30 Oct (claude-live): off by default now the inline follow-ups (6504e73) ask the same things on each task card; FOLLOWUPS=1 turns the extra "quick checks" page back on
@@ -485,8 +494,15 @@ def topic_texts(form,d):
         if ns: T["night"].append("Help at night with: "+"; ".join(ns)+".")
         sc=dict(SCHOOL); s=[sc[x] for x in d.get("school") or [] if x in sc]
         if s: T["school"].append("School or nursery: "+"; ".join(s)+".")
-        if d.get("people"): T["statement"].append("People who know the child well: "+", ".join(d["people"])+".")
-    if form=="pip" and d.get("people"): T["other"].append("Professionals and people who know "+("me" if me else "them")+": "+", ".join(d["people"])+".")
+        if d.get("people"): T["statement"].append("People who know about the child's condition: "+people_txt(d)+".")
+    if form=="pip" and d.get("people"): T["other"].append("People who know about "+("my" if me else "their")+" condition: "+people_txt(d)+".")
+    for k in d.get("nohelp") or []:   # help needed even though no one gives it: ONLY the activities they named
+        tp=NOHELP_TOPIC[form].get(k)
+        if tp in T: T[tp].append(f"Needs help {NOHELP_WHAT[k]}, but no one is there to help.")
+    for k in ("nohelp_x","nohelp_w"):
+        v=(X(d,"nohelp") if k=="nohelp_x" else d.get("nohelp_w") or "").strip().rstrip(".")
+        if v: T[OWN_TOPIC[form]].append(f"Help needed but no one there to help, in my own words: {v}.")
+    if form=="pip" and d.get("badday"): T["other"].append(f"A recent bad day, in my own words: {d['badday'].strip().rstrip('.')}.")
     E=lambda k: X(d,k).rstrip(".")
     for k,tp,lab in (("falls","34","Falls in the last year"),("lastfall","34","Last fall"),("alone","40","Being left alone"),("nights","42","Nights a week needing help"),
                      ("ntimes","42","Times a night"),("nmins","42","Minutes each time at night"),("watch","44","Someone staying awake at night"),("fits","65","Fits or seizures"),("varies","42","How needs change day to day")):
@@ -496,7 +512,7 @@ def topic_texts(form,d):
         if E("eye"): T["40"].append(f"Keeping an eye on them, also: {E('eye')}.")
         if E("night"): T["42"].append(f"Help at night, also: {E('night')}.")
         if E("people"): T["40"].append(f"Other people who know them well: {E('people')}.")
-        if d.get("people"): T["40"].append("People who know them well: "+", ".join(d["people"])+".")
+        if d.get("people"): T["40"].append("People who know about their condition: "+people_txt(d)+".")
     if form=="dla":
         if E("nn"): T["night"].append(f"Help at night, also: {E('nn')}.")
         if E("school"): T["school"].append(f"School or nursery, also: {E('school')}.")
@@ -599,7 +615,8 @@ def _polish(t,me,w):
        (r"\bReferred to a falls clinic\.",f"{w} {S('have','has')} been referred to a falls clinic."),
        (r"\bHas a pendant alarm\.",f"{w} {S('have','has')} a pendant alarm."),
        (r"\bNeeds someone to keep an eye on them: ([^.]+)\.",lambda m:f"Someone needs to keep an eye on {_v3(me,'me',w)} during the day, because {w} "+_conj(m[1],me)+"."),
-       (r"\bPeople who know them well: ",f"People who know {obj} well: "),(r"\bOther people who know them well: ",f"Other people who know {obj} well: "),
+       (r"\bPeople who know them well: ",f"People who know {obj} well: "),(r"\bPeople who know about their condition: ",f"People who know about {S('my','their')} condition: "),
+       (r"\bNeeds help ((?:with|at) [^,.]+), but no one is there to help\.",lambda m:f"{w} {S('need','needs')} help {m[1]}, but no one is there to help."),(r"\bOther people who know them well: ",f"Other people who know {obj} well: "),
        (r"\bBad days: about (\S+) a week\.",lambda m:f"{w} {S('have','has')} bad days about {m[1]} a week."),
        (r"\bNeeds change a lot from day to day\.",f"{S('My','Their') if w in ('I','My child') else w+chr(39)+'s'} needs change a lot from day to day."),
        (r"\bNeeds are mostly the same each day\.",f"{S('My','Their') if w in ('I','My child') else w+chr(39)+'s'} needs are mostly the same each day."),
@@ -666,6 +683,7 @@ def fallback_draft(form,d):
     from forms import FORMS
     carer=form=="aa" and not is_me(d,form)
     said=topic_texts(form,d)[1]   # 'what you told us' stays in the words of whoever filled in the form
+    bn=badday_note(form,d)   # before the AA voice switch below: a carer's words are labelled as theirs
     if form=="aa": d={**d,"who":"me"}   # the AA1 is the claimant's own form: always 'I', even when someone else fills it in
     me,w=_who(d,form); T={t:[] for t,_,_ in FORMS[form]["topics"]}; intro,raw=topic_texts(form,d)
     rowtopics={}
@@ -682,8 +700,10 @@ def fallback_draft(form,d):
     ans={t:_fb_voice(" ".join(v).strip(),form,me,w,carer) for t,v in T.items()}
     if form=="dla": ans["statement"]=""   # the statement box is for someone who knows the child: never our words
     tick_yes=[t for t,a in ans.items() if a and t.isdigit()] if form=="aa" else []
-    return {"answers":ans,"sources":{t:[said[t]] for t in ans if said.get(t)},"tick_yes":tick_yes,"conditions":[],"extra":{},
+    out={"answers":ans,"sources":{t:[said[t]] for t in ans if said.get(t)},"tick_yes":tick_yes,"conditions":[],"extra":{},
             "checklist":[],"notes_for_user":[],"gp_letter":"","drafted_from":"taps"}
+    if bn: out["badday_note"]=bn   # their bad day, word for word, in the form's extra-information box (the writer drops this when it used it in a box)
+    return out
 def coverage(form,d):
     from forms import FORMS
     _,T=topic_texts(form,d); tops=FORMS[form]["topics"]; return sum(1 for t,_,_ in tops if T.get(t)),len(tops)
@@ -778,7 +798,7 @@ def notes(form,d):
        "them":"They will sign the form themselves. Read the answers through with them first.",
        "ns":"Before you post it, decide who signs. The person claiming signs if they can; otherwise their attorney or appointee signs."}
     out=[n[d["signer"]]] if d.get("signer") in n else []
-    if d.get("people"): out.append("People who could support the claim: "+", ".join(d["people"])+".")
+    if d.get("people"): out.append("People who could support the claim: "+people_txt(d)+".")
     return out
 def personal_prefill(form,d):
     p={}
@@ -786,3 +806,80 @@ def personal_prefill(form,d):
     if nm and (form=="dla" or not is_me(d,form)) and nm.lower() not in ("mum","dad","mom","mam","nan","gran","nana","grandma","grandad"): p["other_names"]=nm
     if form=="dla" and d.get("rel") and d["rel"]!="Other": p["relationship"]=d["rel"]
     return p
+
+# ---------- the last screen (30 Oct 2026): 'A few last things that really help your form' ----------
+# Three prompts on the SAME screen as aids (one question step, so no extra screens): a recent bad day, help they need but
+# go without, and who knows about their condition. Everything here is the customer's own words or taps; nothing is guessed.
+def people_txt(d):
+    """'GP (Dr Patel, Hill Surgery), Carer': the names are only what they typed; never added."""
+    kn=d.get("know_names") or {}
+    return ", ".join(p+(f" ({kn[p]})" if kn.get(p) else "") for p in d.get("people") or [])
+def badday_note(form,d):
+    b=(d.get("badday") or "").strip()
+    if not b or form not in ("aa","dla"): return ""
+    carer=form=="aa" and not is_me(d,form)
+    return ("A recent bad day, described by the person helping me: " if carer else "A recent bad day: ")+b
+def _starters(target,items):
+    return '<div class="chips starters">'+"".join(f'<button type=button class=starter data-for="{target}" data-s="{esc(x)} "><span>{esc(x)}…</span></button>' for x in items)+'</div>'
+def last_things(form,d):
+    me=is_me(d,form); nm=name(d,form); dla=form=="dla"
+    N=(d.get("name") or "").strip()
+    subj="I" if me else (N or ("My child" if dla else "They"))
+    poss="your" if me else ("their" if not N else f"{N}'s")
+    ex=("e.g. Last Tuesday I couldn't get out of bed until my daughter came at 11" if me else
+        f"e.g. Last Tuesday {N or 'my child'} couldn't get dressed and I had to stay home from work" if dla else
+        f"e.g. Last Tuesday {N or 'they'} couldn't get out of bed until I came at 11")
+    if me: st=["I couldn't get up until","I fell when","I forgot","I needed help to"]
+    elif dla: st=[f"{subj} couldn't",f"{subj} got very upset when",f"I had to help {subj if N else 'them'} to"]
+    else: st=[f"{subj} couldn't get up until",f"{subj} fell when",f"{subj} forgot",f"{subj} needed help to"]
+    they="you" if me else "they"
+    b=d.get("badday",""); nh=d.get("nohelp") or (["no"] if d.get("nohelp_no") else []); pp=d.get("people") or (["None"] if d.get("people_none") else []); kn=d.get("know_names") or {}
+    h=('<fieldset class="iq lastq"><legend>A few last things that really help your form</legend>'
+       '<p class=hint>Skip anything you are not sure about. We do the writing.</p>')
+    # 1. a recent bad day
+    h+=(f'<div class=lt><h3 class=ltq>Tell us about a recent bad day{"" if me else " for "+nm}</h3>'
+        f'<p class=tip>Think of one day recently. What happened, what {they} couldn\'t do, and who helped.</p>'
+        f'{_starters("badday",st)}'
+        f'<textarea id=badday name=badday rows=3 maxlength=1000 aria-label="A recent bad day" placeholder="{esc(ex)}">{esc(b)}</textarea>'
+        f'<p class=nudge hidden>{FU_NUDGE}</p></div>')
+    # 2. help they need but go without
+    q2="Is there anything you need help with but no one is there to help?" if me else f"Is there anything {('your child' if dla and not N else nm)} needs help with but no one is there to help?"
+    tip2="Count help you need even if no one gives it. Don't say you cope if it's a struggle." if me else "Count help they need even if no one gives it. Don't say they cope if it's a struggle."
+    h+=(f'<div class=lt><h3 class=ltq>{esc(q2)}</h3><p class=tip>{esc(tip2)}</p>'
+        '<div class="chips solo" data-solo=no>'+"".join(_chk("nohelp",v,t,v in nh) for v,t in NOHELP)+_else("nohelp",X(d,"nohelp"))+_chk("nohelp","no","No",("no" in nh))+'</div>'
+        '<label class=ltw for=nohelp_w><span>Anything to add? (you can skip this)</span></label>'
+        +_starters("nohelp_w",["No one is there when "+("I" if me else "they" if not N else N),("I go without" if me else ("They go without" if not N else N+" goes without"))])
+        +f'<input id=nohelp_w name=nohelp_w value="{esc(d.get("nohelp_w",""))}" maxlength=300 placeholder="{esc("e.g. I skip lunch when no one is here" if me else (f"e.g. {N} goes without lunch when no one is there" if N else "e.g. they go without lunch when no one is there"))}"></div>')
+    # 3. who could back it up
+    q3=f"Who knows about {poss} condition?"
+    tip3="Anyone who's seen how your condition affects you. You don't need their details now." if me else "Anyone who's seen how their condition affects them. You don't need their details now."
+    chips=""
+    for p in PEOPLE[form]:
+        chips+=_chk("people",p,p,p in pp)
+        if p in PROF_PEOPLE:
+            chips+=(f'<label class=kn><span>Their name or surgery, if you know it</span><input name="know_{PEOPLE[form].index(p)}" value="{esc(kn.get(p,""))}" maxlength=80 '
+                    f'placeholder="{esc("e.g. Dr Patel, Hill Surgery" if p=="GP" else "e.g. Dr Shah at St James\'s")}"></label>')
+    h+=(f'<div class=lt><h3 class=ltq>{esc(q3)}</h3><p class=tip>{esc(tip3)}</p>'
+        '<div class="chips solo knowc" data-solo=None>'+chips+_else("people",X(d,"people"))+_chk("people","None","None",("None" in pp))+'</div></div>')
+    # 4. the old free box, now a small last line
+    h+=(f'<label class="ltw ltlast"><span>Anything else? (you can skip this)</span><textarea name=words rows=2 maxlength=3000 placeholder="Anything we haven\'t asked about">{esc(d.get("words",""))}</textarea></label>'
+        '</fieldset>'+LAST_JS)
+    return h
+LAST_JS="""<script>(function(){
+ document.querySelectorAll('.starter').forEach(function(b){b.addEventListener('click',function(){var t=document.getElementById(b.dataset.for);if(!t)return;
+   var v=t.value.replace(/\\s+$/,'');t.value=(v?v+(/[.!?]$/.test(v)?' ':'. '):'')+b.dataset.s;t.focus();try{t.setSelectionRange(t.value.length,t.value.length)}catch(e){}})});
+ document.querySelectorAll('.chips.solo').forEach(function(g){var solo=g.dataset.solo;g.addEventListener('change',function(e){var i=e.target;if(i.type!=='checkbox'||!i.checked)return;
+   g.querySelectorAll('input[type=checkbox]').forEach(function(o){if(o!==i&&(i.value===solo||o.value===solo))o.checked=false})})});
+ var t=document.getElementById('badday');if(t)t.addEventListener('input',function(){if(t.value.trim()){var n=t.closest('.lt').querySelector('.nudge');if(n)n.hidden=true}});
+ document.addEventListener('click',function(e){var b=e.target.closest('button');if(!b||!t||b.value!=='next'||t.dataset.nudged||t.value.trim())return;var box=t.closest('.lt');if(!box||box.offsetParent===null)return;
+   e.preventDefault();e.stopImmediatePropagation();t.dataset.nudged=1;box.querySelector('.nudge').hidden=false;t.focus()},true);
+})();</script>"""
+def save_last(form,d,fm):
+    g=lambda k:re.sub(r"\s+"," ",str(fm.get(k) or "")).strip()
+    d["badday"]=str(fm.get("badday") or "").strip()[:1000]
+    nh=[x for x in fm.getlist("nohelp") if x in NOHELP_WHAT]
+    d["nohelp"]=nh; d["nohelp_no"]=("no" in fm.getlist("nohelp")) and not nh and not X(d,"nohelp")
+    d["nohelp_w"]=g("nohelp_w")[:300]
+    pp=[p for p in fm.getlist("people") if p in PEOPLE[form]]
+    d["people_none"]="None" in fm.getlist("people") and not pp and not X(d,"people"); d["people"]=pp
+    d["know_names"]={p:g(f"know_{PEOPLE[form].index(p)}")[:80] for p in pp if p in PROF_PEOPLE and g(f"know_{PEOPLE[form].index(p)}")}

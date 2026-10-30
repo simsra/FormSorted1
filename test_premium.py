@@ -27,7 +27,7 @@ for form in ("aa","dla","pip"):
 assert "Choose your package" in body("/?form=atw")
 # ---- Plus AA order through the intake
 tok=loc(req("/checkout",{"tier":"199","form":"aa"})).split("/")[-1]; req(f"/consent/{tok}",{"health":"on","truth":"on"})
-for s,d in [("about",{"who":"parent","name":"Margaret","signer":"poa"}),("conds",{"cond_0":"1","cond_0_since":"2015"}),("daily",{"bad":"3","r_bed_hard":"1","r_bed_help":"1","r_bed_freq":"every"}),("safety",{"falls":"3-5"}),("finish",{"people":["GP","Family carer"]})]:
+for s,d in [("about",{"who":"parent","name":"Margaret","signer":"poa"}),("conds",{"cond_0":"1","cond_0_since":"2015"}),("daily",{"bad":"3","r_bed_hard":"1","r_bed_help":"1","r_bed_freq":"every"}),("safety",{"falls":"3-5"}),("finish",{"people":["GP","Carer"]})]:
     req(f"/intake/{tok}",{"sec":s,"nav":"next",**d})
 pv=body(f"/preview/{tok}"); assert "Keep my answers for 3 years" in pv and "Pay £199" in pv and pv.count(DWP)==1 and "Margaret finds" not in pv
 assert req(f"/appeal/nope").status==404
@@ -47,7 +47,7 @@ import app as A
 o=A.get(tok); d=json.loads(o["draft"])
 for x in re.findall(r"<p class=you>(.*?)</p>",br):   # every quoted block is an approved answer, word for word
     import html as H; assert H.unescape(x) in d["answers"].values(), x
-assert "For: GP" in sl and "For: Family carer" in sl and "http" not in br+sl
+assert "For: GP" in sl and "For: Carer" in sl and "http" not in br+sl
 import html as H; slt=H.unescape(re.sub(r"<[^>]+>"," ",sl))
 assert "Request letters" in sl and "question 56 (page 28)" in slt and "only write what you know to be true" in slt
 for a in d["answers"].values():   # never the customer's answers pasted in for them to sign

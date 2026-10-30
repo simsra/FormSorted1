@@ -27,6 +27,8 @@ def _ans(q,w):
     elif k=="radio": parts=[o.get(v,v)] if v else []
     else: parts=[str(v)] if v else []
     return "; ".join(p for p in parts+([x] if x else []) if p)
+BADDAY="One recent bad day (one day, not every day), in the customer's own words: "   # 'one' here: the number check lets 'On one recent bad day' through (live AA run, 30 Oct)
+NOHELP_OWN="Help needed but no one is there to give it, in the customer's own words: "
 def facts(form,d,history=None):
     """[{id, topic, text}] in form order. topic '*' = can support any box (e.g. 'about the claim')."""
     out=[]; add=lambda t,s: s and s.strip() and out.append({"id":f"F{len(out)+1}","topic":t,"text":" ".join(s.split())})
@@ -34,7 +36,8 @@ def facts(form,d,history=None):
         for m in history or []:
             if m["role"]=="user": add("*",m["content"][:1500])
         return out
-    intro,T=I.topic_texts(form,{**d,"rows":{}}); add("*",intro)   # everything except the task cards...
+    own={"badday":"","nohelp_w":"","else":{**(d.get("else") or {}),"nohelp":""}}   # last-screen words: added whole below, never split into sentences
+    intro,T=I.topic_texts(form,{**d,"rows":{},**own}); add("*",intro)   # everything except the task cards...
     me=I.is_me(d,form)
     for r in I.rows(form,None,d):   # ...which become one fact per tap, so the writer composes rather than copies
         v=(d.get("rows") or {}).get(r[0])
@@ -65,6 +68,10 @@ def facts(form,d,history=None):
             _,q,tp,_=I.fu_spec(form,key,d); tl=dict(tp).get(f.get("t"))
             if tl: add(t,f"{lab}, {what}, {q.rstrip('?')}: {tl}.")
     if d.get("words"): add("*","In the customer's own words: "+d["words"])
+    # last screen (30 Oct): a recent bad day and help they go without, in their own words (only when they typed it)
+    if (d.get("badday") or "").strip(): add("*",BADDAY+d["badday"])
+    for w in (I.X(d,"nohelp"),d.get("nohelp_w")):
+        if (w or "").strip(): add("*",NOHELP_OWN+w)
     for t,_,_ in FORMS[form]["topics"]:
         for s in re.split(r"(?<=\.)\s+(?=[A-Z])",T.get(t) or ""):
             if not s.startswith("In my own words:"): add("*" if t=="other" else t,s)   # PIP 'other' (own words, aids) can back any box
@@ -109,6 +116,8 @@ RULES (all must hold):
 - 'Checked with you:' facts are the customer's later answers and win over earlier ones.
 - Plain English, short sentences, UK spelling. No medical or legal advice, no points, descriptors, rates or likely outcomes. Never write a statement for anyone else (e.g. a carer or teacher).
 - Bad days: say how many a week only as stated. Never present a bad day as every day.
+- 'One recent bad day' fact: use it ONCE, as a real example, in the one box it fits best (e.g. getting up -> the getting-up box). Write it in the first person with their exact details (day, time, who helped, what happened) and say it was one recent day ('Last Tuesday...', 'On one recent bad day...'). Never add to it, never make it typical or more frequent, and only split it across boxes if its parts clearly belong in different boxes.
+- 'Needs help but no one is there to help' facts: in THAT box only, write that the help is needed even though no one gives it ('I need help with washing, but there is no one to help me'). Never say this about an activity no fact names, and never say the person copes.
 Return JSON matching the schema: boxes = [{{topic, sentences:[{{text, facts:[ids]}}]}}] for these topics only: {topics}."""
 SCHEMA={"type":"object","properties":{"boxes":{"type":"array","items":{"type":"object","properties":{"topic":{"type":"string"},
   "sentences":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"facts":{"type":"array","items":{"type":"string"}}},"required":["text","facts"]}}},"required":["topic","sentences"]}}},"required":["boxes"]}
@@ -116,6 +125,7 @@ XSYS="""From the customer's FACTS for a UK benefit form ({short}), write short h
 Speak to the customer about 'your answers', never 'the facts'.
 - checklist: up to 6 kinds of evidence they could include that relate to the facts (e.g. 'A copy of your repeat prescription list'). Never invent a document they have.
 - gp_letter: a short polite letter FROM the customer to their GP asking for a letter that confirms their condition and how it affects them. Restate only what the facts say, in the facts' own terms: no causes or links between facts ('which makes', 'because', 'due to'), nothing more specific than the facts. Sign off 'Yours sincerely,' then a blank line for their name.
+- People who know about the condition: use only the people and names the facts give, exactly as given (e.g. 'a letter from your consultant' only if a consultant is listed). Never invent a name, surgery, hospital or job title. With no people in the facts, suggest no person.
 - notes_for_user: up to 3 short tips about completing or sending the form (no outcomes, no advice on eligibility).
 {extra}Never mention AI, models, software, Claude, Anthropic or that anyone has checked the form. Return JSON."""
 XSCHEMA={"type":"object","properties":{"checklist":{"type":"array","items":{"type":"string"}},"gp_letter":{"type":"string"},"notes_for_user":{"type":"array","items":{"type":"string"}},
@@ -242,6 +252,7 @@ def write(form,d,history=None):
     base["answers"]={t:ans.get(t,"") for t,_,_ in FORMS[form]["topics"]}
     for t in NOT_DRAFTED.get(form,()): base["answers"][t]=""
     base["sources"]={t:list(dict.fromkeys(fx[i]["text"] for s in sents if s["topic"]==t for i in s["facts"])) for t in tops if ans.get(t)}
+    if any(fx[i]["text"].startswith(BADDAY) for s in sents for i in s["facts"]): base.pop("badday_note",None)   # used as an example in a box: not repeated
     clean=lambda L:[x for x in (L or []) if isinstance(x,str) and x.strip() and not BANNED_COPY.search(x)][:6]
     base["checklist"]=clean(xo.get("checklist")) or base.get("checklist",[]); base["notes_for_user"]=clean(xo.get("notes_for_user"))[:3]
     gl=xo.get("gp_letter") or ""; base["gp_letter"]="" if BANNED_COPY.search(gl) else gl

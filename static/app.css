@@ -355,3 +355,19 @@ label.chip:has(input:checked)+.fu{display:block}
 .card:has(.lvl input[value=slow]:checked) .fu-lvl-slow,.card:has(.lvl input[value=help]:checked) .fu-lvl-help,.card:has(.lvl input[value=cant]:checked) .fu-lvl-cant{display:block}
 .card:has(.lvl input[value=cant]:checked) label.fx-every+.fu,.card:has(.lvl input[value=slow]:checked) label.fx-every+.fu,.card:has(.lvl input[value=slow]:checked) label.fx-nobody+.fu{display:none}}
 .cue{font-weight:700;color:var(--accent);margin:.1rem 0 .8rem}.diffopt{margin-top:.8rem}.diffopt .chips{margin:0}
+/* 30 Oct: the last screen, 'A few last things that really help your form' (one step: three prompts and a small last line) */
+.lastq .lt{margin:0 0 1.4rem;padding:0 0 1.2rem;border-bottom:1px solid #e6e1d6}
+.lastq .ltq{font-size:1.12rem;margin:.2rem 0 .25rem;line-height:1.35}
+.lastq .tip{margin:0 0 .6rem;color:#4a4f57;font-size:1rem;line-height:1.45}
+.lastq .tip::before{content:"Tip: ";font-weight:600;color:#2f6b4f}
+.lastq textarea,.lastq input[type=text],.lastq .ltw input,.lastq .kn input{width:100%;box-sizing:border-box}
+.lastq .chips.starters{display:flex;flex-wrap:wrap;gap:.4rem;margin:.1rem 0 .5rem}
+.lastq button.starter{font:inherit;font-size:.95rem;padding:.35rem .75rem;border:1px dashed #9aa5b1;border-radius:999px;background:#fff;color:#1f2933;cursor:pointer;min-height:2.4rem}
+.lastq button.starter:hover,.lastq button.starter:focus{border-style:solid;border-color:#2f6b4f;outline:none}
+.lastq .ltw{display:block;margin:.7rem 0 .3rem}.lastq .ltw span,.lastq .kn span{display:block;font-size:.95rem;color:#4a4f57;margin:0 0 .25rem}
+.lastq .kn{display:none;flex-basis:100%;width:100%;margin:-.1rem 0 .5rem 1.2rem;max-width:calc(100% - 1.2rem)}
+@supports selector(:has(a)){.lastq label.chip:has(input:checked)+.kn{display:block}}
+@supports not selector(:has(a)){.lastq .kn{display:block}}
+.lastq .nudge{margin:.4rem 0 0;color:#8a4b00;font-weight:600}
+.lastq .ltlast{border:0;margin-top:.2rem}
+.lastq>legend{font-size:1.3rem;line-height:1.3}.lastq #nohelp_w{width:100%;box-sizing:border-box}

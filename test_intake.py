@@ -58,7 +58,7 @@ SAMPLE={
  "aa":[("about",{"who":"parent","name":"Margaret","signer":"poa"}),("conds",{"cond_0":"1","cond_0_since":"2015","cond_0_t":["tabs"],"cond_1":"1","cond_1_since":"2021","oc_0":"Macular degeneration","oc_0_since":"ns"}),
        ("daily",{"bad":"3","r_bed_lvl":"cant","r_bed_c":["out","in"],"r_bed_c_xon":"1","r_bed_c_x":"Grips the bed rail for ages","r_bed_days":"7","r_wash_lvl":"help","r_wash_c":["in","fell"],"r_wash_days":"5","r_indoors_lvl":"slow","r_indoors_c":["stairs","chair"],"r_meds_lvl":"help","r_meds_c":["forget"],"r_meds_days":"7","r_comm_lvl":"slow","r_comm_c":["mem","phone"]}),
        ("safety",{"falls":"3-5","lastfall":"month","fallx":["getup","alarm"],"eye":["confused","wander"],"alone":"lt1","night":["toilet","confused"],"nights":"6","ntimes":"2","nmins":"10_30","watch":"some"}),
-       ("finish",{"aids":["Walking frame","Shower seat"],"people":["GP","Family carer"],"words":"Mum gets very muddled in the evenings.","aids_xon":"1","aids_x":"Bath lift"})],
+       ("finish",{"aids":["Walking frame","Shower seat"],"people":["GP","Carer"],"words":"Mum gets very muddled in the evenings.","aids_xon":"1","aids_x":"Bath lift"})],
  "dla":[("about",{"rel":"Mum","name":"Leo","age":"5to15"}),("conds",{"cond_0":"1","cond_0_since":"2021","cond_1":"1","cond_1_since":"ns"}),
        ("daily",{"bad":"4","r_toilet_lvl":"help","r_toilet_c":["pads"],"r_dress_lvl":"help","r_dress_c":["sens","long"],"r_superv_lvl":"cant","r_superv_c":["danger","imp","over"],"r_speak_lvl":"slow"}),
        ("safety",{"fits":"no","varies":"varies","nn":["night_settle","night_toilet"],"nn_night_settle_n":"5","nn_night_settle_t":"2","nn_night_settle_m":"30","nn_night_toilet_n":"3","r_out_lvl":"cant","r_out_c":["road","anx"]}),

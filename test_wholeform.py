@@ -47,7 +47,7 @@ P={"aa":{
           "acts":["hobby","visits","calls","family","faith","club"],**{f"{p}_{k}":v for k in ("hobby","visits","calls","family","faith","club") for p,v in (("ah","with"),("ao","weekly"))},
           "falls_m":"2","fall_what":"legs","stum_m":"3-5","stum_y":"6-20","stum_last":"week","eye2":["prevent","neglect","harm","aggr","voices"],"eye_days":"7",
           "w_times":"2","w_long":"30 minutes","w_nights":"5","n_incont":"yes","n_treat":"yes","n_prompt":["toilet","meds"]},
- "finish":{"aids":AA_AIDS,"people":["GP","Consultant","Family carer"],"words":"Mum gets very muddled in the evenings."},
+ "finish":{"aids":AA_AIDS,"people":["GP","Consultant or specialist","Carer"],"words":"Mum gets very muddled in the evenings.","badday":"Last Tuesday Mum couldn't get out of bed until I came at 11.","nohelp":["night"]},
  "you":{"title":"Mrs","first":"Margaret Ann","surname":"Testcase","dob":"1938-04-02","sex":"female","nat":"EEA","nat_c":"Poland","eea_before":"yes","pc":"LS6 2AA","addr1":"12 Oak Road","addr2":"Headingley","town":"Leeds","phone":"0113 496 0000","mobile":"07700 900000","welsh":"no"},
  "helper":{"h_name":"Sam Testcase","h_dob":"1968-05-06","h_same":"no","h_pc":"LS8 1AA","h_addr1":"3 Elm Street","h_town":"Leeds","h_phone":"07700 900001","h_online":"yes"},
  "health":{"med_0":"Paracetamol 500mg","dose_0":"4d","med_1":"Donepezil 10mg","dose_1":"1d","med_2":"Eye drops","dose_2":"2d",
@@ -190,6 +190,7 @@ for form,who,ANS in RUNS:
         break
     assert nx==f"/approve/{tok}", nx
     ap=body(f"/approve/{tok}"); assert "Facts we copied onto the form" in ap and ("Oak Surgery" in ap), ap[:300]
+    if form=="aa": assert "your recent bad day" in ap and "until I came at 11" in ap, "last screen: the bad day is shown to approve"
     from forms import FORMS
     ok={f"ok_{x}":"on" for x,_,_ in FORMS[form]["topics"]}; ok["honest"]="on"
     for rn in sorted(set(re.findall(r'name="(res_[^"]+)"',ap))): ok[rn]="keep"
@@ -227,6 +228,8 @@ for form,who,ANS in RUNS:
     if form=="aa":
         assert val("01-02NINO").replace(" ","")==NI["aa"] and val("15_4").replace(" ","")==HNI["aa"] and val("340")==ACC and val("336")=="Test Bank" and val("341")=="RL-42"
         assert val("344")=="", "witness box must stay blank"
+        alltxt=re.sub(r"\s+"," ",val("354")+" "+" ".join((pg.extract_text() or "") for pg in rd.pages[-4:]))   # Q63, or its continuation sheet when long
+        assert "A recent bad day, described by the person helping me" in val("354") and "until I came at 11" in alltxt, ("last screen: bad day in Q63",val("354")[:200])
     else:
         assert val("5").replace(" ","")=="SC123456A" and val("76").replace(" ","")==NI["dla"] and val("87")==ACC and (val("81_2").replace(" ","")==HNI["his"] if ANS["parent"].get("p_his")=="yes" else not val("81_2"))
         assert val("38_3")=="", "statement box must stay blank"
