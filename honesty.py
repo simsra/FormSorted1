@@ -26,7 +26,13 @@ def scrub(d):
     for k,v in list((d.get("else") or {}).items()):
         if refuse(v): d["else"][k]=""; n+=1
     for v in (d.get("rows") or {}).values():
-        if refuse(v.get("x")): v["x"]=""; n+=1
+        for k in ("x","lvl_x","days_x"):
+            if refuse(v.get(k)): v[k]=""; n+=1
+        for f in (v.get("fu") or {}).values():   # 30 Oct: words typed in the inline follow-ups
+            if refuse(f.get("w")): f["w"]=""; n+=1
+    for q in (d.get("nnum") or {}).values():
+        for k in ("n_x","t_x","m_x"):
+            if refuse(q.get(k)): q[k]=""; n+=1
     for c in d.get("conds") or []:
         if refuse(c.get("tx")): c["tx"]=""; n+=1
     if n: d["refused"]=int(d.get("refused") or 0)+1   # one refused request per answer submitted
@@ -36,7 +42,8 @@ ACTIVE=re.compile(r"\b(walk(?:s|ing)? (?:the|my|our|his|her) dogs?|(?:go|goes|go
 SLEEPS=re.compile(r"\b(sleeps? (?:right |all the way )?through(?: the night)?|sleeps? (?:fine|well|ok|okay) at night|no (?:problems|help|issues) at night|(?:good|fine) nights?)\b",re.I)
 SOCIAL=re.compile(r"\b((?:meet|meets|meeting|see|sees|seeing) (?:up with )?(?:my |his |her |their )?friends|(?:go|goes|going) (?:to the )?(?:pub|parties|party|nightclub|concerts?|football matches?)|socialis\w+ (?:a lot|every|most))\b",re.I)
 def free_text(d):
-    parts=[d.get("words","")]+list((d.get("else") or {}).values())+[v.get("x","") for v in (d.get("rows") or {}).values()]
+    parts=[d.get("words","")]+list((d.get("else") or {}).values())+[v.get(k,"") for v in (d.get("rows") or {}).values() for k in ("x","lvl_x","days_x")]
+    parts+=[f.get("w","") for v in (d.get("rows") or {}).values() for f in (v.get("fu") or {}).values()]
     return " ".join(p for p in parts if p)
 def _lv(d,rid): return ((d.get("rows") or {}).get(rid) or {})
 def contradictions(form,d,limit=3):

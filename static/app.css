@@ -335,3 +335,22 @@ main{padding:18px 0 48px}
  .qs fieldset.iq legend,.qs .card h3{font-size:1.15rem}
  .total{font-size:1.15em}
 }
+
+.diffopt{margin-top:.8rem}.diffopt .chips{margin:0}
+/* 30 Oct 2026: inline follow-ups under each tapped chip (same card, same screen) */
+.fu{grid-column:1/-1;margin:.1rem 0 .5rem;padding:.55rem .7rem .6rem;border-left:3px solid var(--accent);background:rgba(157,177,249,.10);border-radius:8px}
+.fu .fuq{margin:0 0 .3rem;font-weight:600;font-size:.95rem}
+.fu .chips.futaps{display:flex;flex-wrap:wrap;gap:.3rem;margin:0 0 .45rem}
+.fu .futaps .chip span{min-height:40px;font-size:.88rem;padding:.3rem .65rem}
+.fu .fuw{display:block;font-size:.9rem}
+.fu .fuw span{display:block;margin:0 0 .2rem}
+.fu .fuw input{width:100%;box-sizing:border-box;min-height:44px;font-size:1rem}
+.fu .carry{display:none;margin:.25rem 0 0;font-size:.82rem;opacity:.8}
+.fu.carried .carry{display:block}
+.fu.dup .fuq,.fu.dup .futaps,.fu.dup .carry{display:none}
+.fu .nudge{margin:.3rem 0 0;font-size:.88rem;font-weight:600}
+.chips.lvl .else{display:contents}.chips.lvl .elsebox{grid-column:1/-1}
+@supports selector(:has(a)){.fu{display:none}
+label.chip:has(input:checked)+.fu{display:block}
+.card:has(.lvl input[value=slow]:checked) .fu-lvl-slow,.card:has(.lvl input[value=help]:checked) .fu-lvl-help,.card:has(.lvl input[value=cant]:checked) .fu-lvl-cant{display:block}
+.card:has(.lvl input[value=cant]:checked) label.fx-every+.fu,.card:has(.lvl input[value=slow]:checked) label.fx-every+.fu,.card:has(.lvl input[value=slow]:checked) label.fx-nobody+.fu{display:none}}

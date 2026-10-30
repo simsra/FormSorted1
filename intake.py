@@ -81,11 +81,13 @@ def name(d,form):
     n=(d.get("name") or "").strip()
     if n: return n
     if form=="dla": return "your child"
-    return "you" if d.get("who","me")=="me" else "them"
+    if d.get("who","me") in ("me",""): return "you"
+    # 30 Oct: no name given for someone else -> a noun that works as subject and object ('them' gave "does them have")
+    return {"parent":"your parent","partner":"your partner"}.get(d.get("who"),"the person you help")
 def is_me(d,form): return form!="dla" and d.get("who","me") in ("me","")
 def _chk(n,v,txt,on,cls=""): return f'<label class="chip{cls}"><input type=checkbox name="{n}" value="{esc(v)}" {"checked" if on else ""}><span>{esc(txt)}</span></label>'
 def _rad(n,v,txt,cur): return f'<label class=chip><input type=radio name="{n}" value="{esc(v)}" {"checked" if cur==v else ""}><span>{esc(txt)}</span></label>'
-def _radios(n,opts,cur,cls=""): return f"<div class='chips{cls}'>"+"".join(_rad(n,v,t,cur) for v,t in opts)+"</div>"
+def _radios(n,opts,cur,cls="",x=None): return f"<div class='chips{cls}'>"+"".join(_rad(n,v,t,cur) for v,t in opts)+(_else(n,x) if x is not None else "")+"</div>"
 def _else(n,txt):
     """'Something else' chip that reveals a short text box for this question (stored per question)."""
     return f'<span class=else><label class=chip><input type=checkbox name="{n}_xon" value=1 {"checked" if txt else ""}><span>Something else</span></label><input class=elsebox name="{n}_x" value="{esc(txt or "")}" maxlength=200 placeholder="Tell us briefly" aria-label="Something else: tell us briefly"></span>'
@@ -115,14 +117,167 @@ def card_opts(form,rid,chips):
     cm={c[0]:c[1] for c in chips}; ids=t.split() if t else [c[0] for c in chips[:3]]
     tk=[(i,cm[i]) for i in ids if i in cm]; fx=[(x,FX_ALL[x]) for x in f][:6-len(tk)]
     return tk,fx
+def pw(t,me,form):
+    """Chip wording for who the form is about (30 Oct: 'Cleaning themselves' was shown to people filling it in for themselves)."""
+    if form=="dla": return t.replace("Cleaning yourself","Cleaning themselves")
+    if me: return t.replace("themselves","yourself").replace("they don't","you don't").replace("with them","with you")
+    return t.replace("yourself","themselves")
 def row_card(form,r,d):
     rid,topic,label,gate,chips=r; cur=(d.get("rows") or {}).get(rid,{}); me=is_me(d,form)
     lvl=cur.get("lvl") or ("cant" if cur.get("hard") and cur.get("help") else "help" if cur.get("help") else "slow" if cur.get("hard") else "")
     tk,fx=card_opts(form,rid,chips); cv=cur.get("c") or []
-    opts="".join(_chk(f"r_{rid}_c",v,t,v in cv,cls=f" fx-{v}") for v,t in tk+fx)
-    more='<p class=sub>What happens? <span class=hint>(tap any)</span></p><div class="chips two">'+opts+_else(f"r_{rid}_c",cur.get("x",""))+'</div>'
-    more+='<p class=sub>How many days a week is it like this?</p>'+_radios(f"r_{rid}_days",DAYS,cur.get("days")," nums")
-    return f'<div class=card><h3>{esc(label)}</h3><div class="chips main lvl">{"".join(_rad(f"r_{rid}_lvl",v,t,lvl) for v,t in LVL)}</div><div class=more>{more}</div></div>'
+    tk=[(v,pw(t,me,form)) for v,t in tk]
+    fu=cur.get("fu") or {}
+    # 30 Oct: each tapped chip opens its own one-line follow-up right under it (same card, same screen)
+    opts="".join(_chk(f"r_{rid}_c",v,t,v in cv,cls=f" fx-{v}")+fu_block(form,rid,v,fu.get(v),d) for v,t in tk+fx)
+    lf="".join(fu_block(form,rid,"lvl:"+lv,fu.get("lvl:"+lv),d,cls=f" fu-lvl fu-lvl-{lv}") for lv in ("slow","help","cant"))
+    more=lf+'<p class=sub>What happens? <span class=hint>(tap any)</span></p><div class="chips two">'+opts+_else(f"r_{rid}_c",cur.get("x",""))+'</div>'
+    more+='<p class=sub>How many days a week is it like this?</p>'+_radios(f"r_{rid}_days",DAYS,cur.get("days")," nums",x=cur.get("days_x",""))
+    lvls="".join(_rad(f"r_{rid}_lvl",v,t,lvl) for v,t in LVL)+_else(f"r_{rid}_lvl",cur.get("lvl_x",""))
+    return f'<div class=card><h3>{esc(label)}</h3><div class="chips main lvl">{lvls}</div><div class=more>{more}</div></div>'
+# ---------- inline follow-ups on activity cards (30 Oct 2026, Simon: 'ask a little more about what they tapped, and let them type') ----------
+# One short line under each tapped chip, on the same card (never a new screen): 2-3 taps that matter under the official
+# criteria (how often, how long, safety/falls, who helps) + Something else, and an always-visible box for their own words.
+# Typed words are kept exactly as typed; the box is never required (one gentle nudge on Next).
+FU_T={  # template: (question for Me, question for someone else / {n}=name, taps)
+ "last":("When was the last time?","When was the last time?",[("week","Last week"),("month","Last month"),("months","Last few months")]),
+ "who":("Who helps you?","Who helps {n}?",[("partner","Partner"),("family","Family"),("carer","Carer"),("noone","No one, but I need it|No one, but they need it")]),
+ "lasts":("How long does it last?","How long does it last?",[("hour","About an hour"),("hours","A few hours"),("day","The rest of the day or more")]),
+ "long":("How long does it take you?","How long does it take {n}?",[("15","About 15 min"),("30","About 30 min"),("60","An hour or more")]),
+ "often":("How often does it happen?","How often does it happen?",[("day","Every day"),("week","A few times a week"),("less","Less often")]),
+ "risk":("What could happen?","What could happen?",[("fall","A fall or getting hurt"),("undone","It doesn't get done"),("upset","Distress or panic")]),
+ "age":("Compared with other children the same age?","Compared with other children the same age?",[("far","Far more help than them"),("more","More help than them"),("same","About the same")]),
+}
+# chip -> (template, example for the text box: written as {I}/{my}/{me} so it reads right for Me, a parent or a child)
+FU_C={
+ "every":("who","e.g. {I} need someone to help with this every morning"), "long":("long","e.g. it takes {me} 40 minutes and {I} have to sit down twice"),
+ "rest":("lasts","e.g. {I} have to stop after a few steps to get {my} breath"), "pain":("lasts","e.g. {my} back aches for the rest of the morning"),
+ "wrong":("last","e.g. {I} slipped getting out of bed in June and hurt {my} hip"), "half":("often","e.g. {I} can't rinse {my} hair properly, so it's left soapy"),
+ "prompt":("often","e.g. {I} forget unless someone reminds {me}"), "aid":("often","e.g. {I} use a frame, but still need a hand"),
+ "nobody":("risk","e.g. {I} go without a wash when no one is there"), "std_safe":("risk","e.g. {I} get dizzy and could fall"),
+ "burn":("last","e.g. {I} burned {my} hand on a pan last month"),
+ "out":("who","e.g. {I} need pulling up, it takes a few goes"), "in":("who","e.g. {I} can't lift {my} legs in without help"),
+ "onoff":("who","e.g. {I} need a hand to get up off the toilet"), "acc":("often","e.g. {I} don't always get there in time at night"),
+ "clean":("who","e.g. {I} can't reach to wipe properly"), "fell":("last","e.g. {I} slipped getting out of the bath in June and hurt {my} hip"),
+ "feet":("who","e.g. {I} can't bend to reach {my} feet"), "fast":("who","e.g. {my} fingers can't do up small buttons"),
+ "choose":("often","e.g. {I} put on summer clothes in winter"), "walk":("risk","e.g. {I} hold on to the furniture to get around"),
+ "stairs":("risk","e.g. {I} go up on {my} bottom, one step at a time"), "chair":("who","e.g. {I} need a push to stand up"),
+ "cut":("who","e.g. {I} can't grip a knife, so someone cuts it up"), "forget":("often","e.g. {I} skip lunch unless someone reminds {me}"),
+ "swallow":("risk","e.g. {I} choke on dry food a few times a week"), "open":("who","e.g. {I} can't press tablets out of the blister pack"),
+ "mix":("last","e.g. {I} took the evening tablets twice last week"), "und":("who","e.g. {I} need someone to explain what the doctor said"),
+ "mem":("often","e.g. {I} lose track halfway through a conversation"), "phone":("who","e.g. {I} can't hear well enough on the phone"),
+ "read":("who","e.g. someone reads {my} letters to {me}"), "get":("who","e.g. {I} need a lift, {I} can't manage the bus"),
+ "with":("who","e.g. {I} get anxious if no one is with {me}"), "stopped":("last","e.g. {I} stopped going to church last year"),
+ # PIP
+ "hob":("risk","e.g. {I} forget the hob is on"), "chop":("risk","e.g. {I} drop pans, {my} grip goes"), "mouth":("who","e.g. {I} spill food, {my} hand shakes"),
+ "remind":("often","e.g. {I} forget {my} tablets unless reminded"), "monitor":("who","e.g. {my} partner checks {my} blood sugar"),
+ "therapy":("long","e.g. physio exercises take 30 minutes a day"), "incont":("often","e.g. accidents most nights"),
+ "hear":("who","e.g. {I} need someone to repeat things"), "speak":("who","e.g. people can't understand {me}, so someone speaks for {me}"),
+ "basic":("who","e.g. {I} can't read signs, someone reads for {me}"), "complex":("who","e.g. someone reads {my} letters to {me} and explains it all"),
+ "someone":("who","e.g. {I} only go out if {my} sister comes too"), "avoid":("last","e.g. {I} haven't seen anyone outside the family for months"),
+ "bills":("who","e.g. {my} son pays {my} bills, {I} get muddled"), "unfam":("who","e.g. {I} get lost unless someone comes with {me}"),
+ "alone":("risk","e.g. {I} panic and freeze if {I} go out alone"), "panic":("lasts","e.g. {I} shake and have to go home"),
+ "lost":("last","e.g. {I} got lost coming back from the shop in March"), "lt20":("risk","e.g. {I} have to stop after 15 metres, {my} legs give way"),
+ "change":("who","e.g. {I} can't work out change, so someone pays for {me}"), "safe":("risk","e.g. {I} get dizzy in the shower and have fallen"),
+ "hair":("who","e.g. {I} can't lift {my} arms to wash {my} hair"), "anx":("lasts","e.g. {I} shake and can't leave the house"),
+ "lt50":("risk","e.g. {I} have to stop at the corner because of pain"), "wheel":("who","e.g. someone pushes {me}, {I} can't self-propel"),
+}
+# DLA: the parent fills it in, so {I} is the child's name and the examples are in the parent's voice
+FU_D={
+ "every":("age","e.g. I help {me} every time, other children {my} age do it alone"), "long":("long","e.g. it takes 30 minutes because {I} won't keep still"),
+ "prompt":("age","e.g. I have to stand over {me} and remind {me} every step"), "wrong":("last","e.g. {I} fell off the bed last week"),
+ "rest":("lasts","e.g. {I} sits down on the pavement and won't move"),
+ "pads":("age","e.g. {I} still needs pads day and night"), "wipe":("age","e.g. {I} can't wipe properly, so I do it every time"),
+ "hair":("age","e.g. {I} screams and fights when I wash {my} hair"), "safe":("risk","e.g. {I} has had seizures in the bath"),
+ "sens":("long","e.g. labels hurt, so getting dressed takes 30 minutes"), "order":("age","e.g. {I} puts clothes on back to front"),
+ "limited":("age","e.g. {I} only eats 5 foods, I make separate meals"), "choke":("last","e.g. {I} choked on pasta last week"),
+ "lift":("age","e.g. I lift {me} in and out of the bath"), "meds":("long","e.g. 3 medicines a day, 10 minutes each time"),
+ "inhaler":("long","e.g. nebuliser twice a day, 20 minutes each time"), "physio":("long","e.g. stretches every evening for 30 minutes"),
+ "signs":("age","e.g. {I} uses pictures to ask for things"), "instr":("age","e.g. I have to repeat simple instructions many times"),
+ "danger":("risk","e.g. {I} climbs on the window sill"), "imp":("last","e.g. {I} ran into the road last week"),
+ "over":("lasts","e.g. a meltdown lasts an hour and I have to stay close"), "anx":("lasts","e.g. {I} panics in shops and can't calm down"),
+ "change":("lasts","e.g. a change of plan means screaming for an hour"), "harm":("last","e.g. {I} bit {my} sister yesterday"),
+ "play":("age","e.g. I have to sit with {me} to play"), "social":("age","e.g. {I} doesn't understand taking turns"),
+ "learn":("age","e.g. homework takes an hour with me beside {me}"), "tired":("lasts","e.g. after a short walk {I} needs the buggy"),
+ "breath":("lasts","e.g. {I} gets breathless after a few metres"), "carry":("age","e.g. I carry {me} after about 50 metres"),
+ "road":("last","e.g. {I} pulled free and ran at the road in May"), "falls":("last","e.g. {I} fell on the pavement and cut {my} knee last week"),
+}
+FU_L={"slow":("long","e.g. it takes {me} twice as long and {I} need to sit down"),"help":("who","e.g. {my} daughter helps every morning and evening"),"cant":("risk","e.g. {I} tried last month and fell")}
+FU_LD={"slow":("long","e.g. it takes an hour, other children {my} age take 10 minutes"),"help":("age","e.g. I do it all for {me}, other children {my} age manage alone"),"cant":("risk","e.g. {I} would fall if I let go")}
+FU_P={"last":"Last time: {}.","who":"Who helps: {}.","lasts":"It lasts {}.","long":"It takes {}.","often":"It happens {}.","risk":"What could happen: {}.","age":"Compared with other children the same age: {}."}
+FU_PROMPT="Tell us what happens"; FU_NUDGE="A few words here really helps your form."
+def _fu_tpl(form,t): return {"who":"age"}.get(t,t) if form=="dla" else t   # DLA: the parent helps, so ask what scores (more than other children)
+def _fu_say(s,form,d):
+    """Example text in the person's own perspective (Me: I/my/me; someone else: they/their/them; DLA: the child's name)."""
+    if is_me(d,form): return s.format(I="I",my="my",me="me")
+    if form=="dla":
+        n=(d.get("name") or "").strip() or "my child"; t=s.format(I=n,my="their",me="them")
+        return t.replace("e.g. my child","e.g. My child")
+    return s.format(I="they",my="their",me="them")
+def fu_spec(form,key,d):
+    """(template id, question, taps, example) for one chip id or 'lvl:<level>'."""
+    me=is_me(d,form); nm=name(d,form)
+    dla=form=="dla"; L,Cm=(FU_LD,FU_D) if dla else (FU_L,FU_C)
+    t,ex=L.get(key[4:]) if key.startswith("lvl:") else Cm.get(key,("often","e.g. what happens, in a few words"))
+    t=_fu_tpl(form,t); qm,qo,taps=FU_T[t]
+    q=qm if me else qo.format(n=nm)
+    taps=[(v,(l.split("|")[0] if me else l.split("|")[-1])) for v,l in taps]
+    return t,q,taps,_fu_say(ex,form,d)
+def known_who(d):
+    """A 'who helps' answer already given on an earlier card (carried forward so it is one tap to confirm, never asked afresh)."""
+    for v in (d.get("rows") or {}).values():
+        for f in (v.get("fu") or {}).values():
+            if f.get("tpl")=="who" and f.get("t") not in ("","else",None): return f["t"]
+    return ""
+def fu_block(form,rid,key,cur,d,cls=""):
+    """Inline follow-up shown under its chip only once that chip is tapped (CSS); never its own screen."""
+    t,q,taps,ex=fu_spec(form,key,d); f=dict(cur or {}); k=key.replace(":","_"); n=f"r_{rid}_f_{k}"; w=f"r_{rid}_w_{k}"
+    if t=="who" and not f.get("t") and known_who(d): f["t"]=known_who(d); cls+=" carried"
+    tp="".join(_rad(n,v,l,f.get("t")) for v,l in taps)+_rad(n,"else","Something else",f.get("t"))
+    return (f'<div class="fu{cls}" data-fu="{t}"><p class=fuq>{esc(q)}</p><div class="chips futaps">{tp}</div>'
+            f'<label class=fuw><span>{FU_PROMPT}</span><input type=text name="{w}" value="{esc(f.get("w",""))}" maxlength=300 placeholder="{esc(ex)}"></label>'
+            f'<p class=carry>Same as before? Change it if not.</p><p class=nudge hidden>{FU_NUDGE}</p></div>')
+def fu_keys(form,rid,chips):
+    tk,fx=card_opts(form,rid,chips); return [v for v,_ in tk+fx]+["lvl:slow","lvl:help","lvl:cant"]
+def fu_save(form,fm,rid,keys,d):
+    out={}
+    for key in keys:
+        k=key.replace(":","_"); t=str(fm.get(f"r_{rid}_f_{k}") or "").strip()[:20]; w=str(fm.get(f"r_{rid}_w_{k}") or "")
+        w=re.sub(r"\s+"," ",w).strip()[:300]   # their words exactly (spaces tidied, length capped)
+        if t or w: out[key]={"t":t,"w":w,"tpl":fu_spec(form,key,d)[0]}
+    return out
+def fu_lines(form,r,v,d):
+    """(their own words, tapped answers) for one card's follow-ups, words first."""
+    rid,topic,label,gate,chips=r; cm={c[0]:c[1] for c in chips}; cm.update(FX_ALL); words=[]; taps=[]
+    for key,f in (v.get("fu") or {}).items():
+        if key.startswith("lvl:"):
+            if v.get("lvl")!=key[4:]: continue
+            what=dict(LVL).get(key[4:],"")
+        else:
+            if key not in (v.get("c") or []): continue
+            what=pw(cm.get(key,key),is_me(d,form),form)
+        if f.get("w"): words.append(f'"{f["w"]}" ({what.lower()})')
+        t,q,tp,_=fu_spec(form,key,d); tl=dict(tp).get(f.get("t"))
+        if tl: taps.append(FU_P[t].format(tl[0].lower()+tl[1:]))
+    return words,taps
+FU_JS="""<script>(function(){
+ /* Inline follow-ups: one per tapped chip. If the same question is already showing on this card, only its words box shows.
+    'Who helps' carries to the next cards (shown as a tap they can change). One gentle nudge on Next if a shown box is empty. */
+ function vis(e){return e.offsetParent!==null}
+ function tidy(card){var seen={};card.querySelectorAll('.fu').forEach(function(f){if(!vis(f))return;var t=f.dataset.fu;
+   f.classList.toggle('dup',!!seen[t]&&!f.querySelector('.futaps input:checked'));seen[t]=1})}
+ var last=null;
+ document.querySelectorAll('.card').forEach(function(c){c.addEventListener('change',function(e){
+   var i=e.target;if(i.closest('.fu[data-fu=who] .futaps')&&i.checked&&i.value!='else')last=i.value;
+   if(!i.closest('.fu')&&last){setTimeout(function(){c.querySelectorAll('.fu[data-fu=who]').forEach(function(f){
+     if(vis(f)&&!f.querySelector('.futaps input:checked')){var r=f.querySelector('.futaps input[value="'+last+'"]');if(r){r.checked=true;f.classList.add('carried')}}})},0)}
+   if(i.closest('.fu .futaps'))i.closest('.fu').classList.remove('carried');
+   setTimeout(function(){tidy(c)},0)})});
+ document.addEventListener('click',function(e){var b=e.target.closest('button');if(!b||!(b.value==='next'||b.textContent==='Next question'))return;
+   var empty=[].filter.call(document.querySelectorAll('.fu'),function(f){return vis(f)&&!f.dataset.nudged&&!f.querySelector('.fuw input').value.trim()});
+   if(!empty.length)return;e.preventDefault();e.stopImmediatePropagation();empty.forEach(function(f){f.dataset.nudged=1});
+   empty.forEach(function(f){f.querySelector('.nudge').hidden=false});empty[0].querySelector('.fuw input').focus()},true);
+})();</script>"""
 def sections(form,d):
     """Sections for this order: whole-form orders (wf_v) get the extra ones from wholeform.py."""
     import wholeform; return wholeform.sections(form,d or {})
@@ -132,14 +287,18 @@ def section_body(form,sec,d):
     nm=name(d,form); me=is_me(d,form); you=("you" if me else nm); h=""
     if sec=="about":
         if form=="dla":
-            h+=_q("Who are you to the child?",_radios("rel",[("Mum","Mum"),("Dad","Dad"),("Grandparent","Grandparent"),("Guardian","Guardian"),("Other","Someone else")],d.get("rel")))
+            h+=_q("Who are you to the child?",_radios("rel",[("Mum","Mum"),("Dad","Dad"),("Grandparent","Grandparent"),("Guardian","Guardian")],d.get("rel"),x=X(d,"rel")))
             h+=_q("Child's first name",f'<input name=name value="{esc(d.get("name",""))}" autocomplete=off maxlength=40>',"We use it in the questions. Optional.")
-            h+=_q("How old are they?",_radios("age",[("u3","Under 3"),("3to4","3 or 4"),("5to15","5 to 15"),("ns","Not sure")],d.get("age")))
+            h+=_q("How old are they?",_radios("age",[("u3","Under 3"),("3to4","3 or 4"),("5to15","5 to 15"),("ns","Not sure")],d.get("age"),x=X(d,"age")))
         else:
             opts=[("me","Me"),("parent","My mum or dad"),("partner","My partner"),("other","Someone else")] if form=="aa" else [("me","Me"),("other","Someone I help")]
             h+=_q("Who is this form for?",_radios("who",opts,d.get("who")))
-            h+=_q("Their first name (if it's not you)",f'<input name=name value="{esc(d.get("name",""))}" autocomplete=off maxlength=40 placeholder="e.g. Mum or Margaret">',"We use it in the questions. Optional.")
-            h+=_q("If it's someone else: who will sign the form?",_radios("signer",[("them","They will sign it themselves"),("poa","I have Power of Attorney"),("appointee","I'm their appointee"),("deputy","I'm their deputy (Court of Protection)"),("ns","Not sure yet")],d.get("signer")),"Skip this if the form is for you.")
+            # 30 Oct: only shown once 'someone else' is picked (one question per screen skips hidden ones); 'Me' never sees them
+            dv=" ".join(v for v,_ in opts if v!="me")
+            h+=f'<div class=wdep data-dep="who" data-vals="{dv}">'+_q("Their first name",f'<input name=name value="{esc(d.get("name",""))}" autocomplete=off maxlength=40 placeholder="e.g. Mum or Margaret">',"We use it in the questions. Optional.")+'</div>'
+            h+=f'<div class=wdep data-dep="who" data-vals="{dv}">'+_q("Who will sign the form?",_radios("signer",[("them","They will sign it themselves"),("poa","I have Power of Attorney"),("appointee","I'm their appointee"),("deputy","I'm their deputy (Court of Protection)"),("ns","Not sure yet")],d.get("signer"),x=X(d,"signer")))+'</div>'
+            h+=wholeform.DEP_JS
+
     elif sec=="conds":
         have={c.get("name"):c for c in d.get("conds") or []}
         yrs=[("","When did it start?")]+[(str(y),str(y)) for y in range(2026,1939,-1)]+[("ns","Not sure")]
@@ -153,32 +312,34 @@ def section_body(form,sec,d):
         h+=_q("Which health conditions or disabilities "+("do you have?" if me else f"does {nm} have?"),lst,"Tap each one that applies, then roughly when it started. No diagnosis needed.")
     elif sec in ("daily","out"):
         if sec=="daily":
-            h+=_q("How many bad days in a normal week?",_radios("bad",NUM(0,7),d.get("bad")," nums"),"A bad day is when things are harder than usual. We work out the rest.")
+            h+=_q("How many bad days in a normal week?",_radios("bad",NUM(0,7)[:-1]+[("varies","It varies a lot"),("ns","Not sure")],d.get("bad")," nums",x=X(d,"bad")),"A bad day is when things are harder than usual. We work out the rest.")
             # v4: AA 'days a week needing help' is no longer asked; it comes from the per-task days answers (see save)
-        h+='<p class=lede2>How is each of these? One tap each. We only ask more if it isn\'t fine.</p>'+"".join(row_card(form,r,d) for r in rows(form,sec,d))
+        h+='<p class=lede2>How is each of these? One tap each. We only ask more if it isn\'t fine.</p>'+"".join(row_card(form,r,d) for r in rows(form,sec,d))+FU_JS
     elif sec=="safety":
         if form=="aa":
-            h+='<div class=gq><div class=g>'+_q("Falls in the last year",_radios("falls",[("0","None"),("1-2","1–2"),("3-5","3–5"),("6+","6 or more"),("ns","Not sure")],d.get("falls")))+'</div><div class=dep>'
-            h+=_q("When was the last fall?",_radios("lastfall",[("week","This week"),("month","This month"),("months","1–6 months ago"),("year","Over 6 months ago"),("ns","Not sure")],d.get("lastfall")))
+            h+='<div class=gq><div class=g>'+_q("Falls in the last year",_radios("falls",[("0","None"),("1-2","1–2"),("3-5","3–5"),("6+","6 or more"),("ns","Not sure")],d.get("falls"),x=X(d,"falls")))+'</div><div class=dep>'
+            h+=_q("When was the last fall?",_radios("lastfall",[("week","This week"),("month","This month"),("months","1–6 months ago"),("year","Over 6 months ago"),("ns","Not sure")],d.get("lastfall"),x=X(d,"lastfall")))
             h+=_q("After a fall",_checks("fallx",[("getup","Can't get up without help"),("hurt","Was hurt or went to hospital"),("clinic","Referred to a falls clinic"),("alarm","Has a pendant alarm")],d.get("fallx"),X(d,"fallx")))+'</div></div>'
             h+=_q(f"Does someone need to keep an eye on {you} in the day?",_checks("eye",[("danger","Not aware of dangers"),("wander","May wander"),("fits","Dizzy spells, fits or blackouts"),("confused","Gets confused")],d.get("eye"),X(d,"eye")))
-            h+=_q(f"How long can {you} safely be left alone?",_radios("alone",[("always","As long as needed"),("hours","A few hours"),("lt1","Under an hour"),("never","Not at all"),("ns","Not sure")],d.get("alone")))
+            h+=_q(f"How long can {you} safely be left alone?",_radios("alone",[("always","As long as needed"),("hours","A few hours"),("lt1","Under an hour"),("never","Not at all"),("ns","Not sure")],d.get("alone"),x=X(d,"alone")))
             h+='<div class=gq><div class=g>'+_q("Help during the night (after everyone has gone to bed)",_checks("night",[("toilet","Toilet"),("turn","Turning over or settling"),("pain","Pain or breathing"),("meds","Medicines"),("confused","Confused or distressed")],d.get("night"),X(d,"night")),"Skip if none.")+'</div><div class=dep>'
-            h+=_q("Nights a week",_radios("nights",NUM(0,7),d.get("nights")," nums"))+_q("Times a night",_radios("ntimes",[("1","1"),("2","2"),("3","3"),("4+","4 or more"),("ns","Not sure")],d.get("ntimes")))+_q("Minutes each time",_radios("nmins",TIME,d.get("nmins")))
-            h+=_q(f"Does someone need to stay awake to watch over {you} at night?",_radios("watch",[("no","No"),("some","Some nights"),("most","Most nights"),("ns","Not sure")],d.get("watch")))+'</div></div>'
+            h+=_q("Nights a week",_radios("nights",NUM(0,7),d.get("nights")," nums",x=X(d,"nights")))+_q("Times a night",_radios("ntimes",[("1","1"),("2","2"),("3","3"),("4+","4 or more"),("ns","Not sure")],d.get("ntimes"),x=X(d,"ntimes")))+_q("Minutes each time",_radios("nmins",TIME,d.get("nmins"),x=X(d,"nmins")))
+            h+=_q(f"Does someone need to stay awake to watch over {you} at night?",_radios("watch",[("no","No"),("some","Some nights"),("most","Most nights"),("ns","Not sure")],d.get("watch"),x=X(d,"watch")))+'</div></div>'
         else:
-            h+=_q("Fits, blackouts or seizures?",_radios("fits",[("no","No"),("month","Less than weekly"),("week","Weekly"),("day","Daily"),("ns","Not sure")],d.get("fits")))
-            h+=_q("Do their needs change from day to day?",_radios("varies",[("same","Mostly the same"),("varies","They change a lot"),("ns","Not sure")],d.get("varies")))
+            h+=_q("Fits, blackouts or seizures?",_radios("fits",[("no","No"),("month","Less than weekly"),("week","Weekly"),("day","Daily"),("ns","Not sure")],d.get("fits"),x=X(d,"fits")))
+            h+=_q(f"Do {nm}'s needs change from day to day?" if d.get("name") else "Do their needs change from day to day?",_radios("varies",[("same","Mostly the same"),("varies","They change a lot"),("ns","Not sure")],d.get("varies"),x=X(d,"varies")))
             nn=d.get("nn") or []; q=d.get("nnum") or {}
-            inner="".join(f'<div class=cond>{_chk("nn",k,t,k in nn,cls=" k")}<div class=more>{_radios(f"nn_{k}_n",[(str(i),f"{i} nights") for i in range(1,8)]+[("ns","Not sure")],q.get(k,{}).get("n"))}{_radios(f"nn_{k}_t",[(str(i),f"{i}× a night") for i in range(1,5)]+[("ns","Not sure")],q.get(k,{}).get("t"))}{_radios(f"nn_{k}_m",[("10","10 min"),("20","20 min"),("30","30 min"),("45","45 min"),("60","1 hour+"),("ns","Not sure")],q.get(k,{}).get("m"))}</div></div>' for k,t in NIGHT_DLA)
+            inner="".join(f'<div class=cond>{_chk("nn",k,t,k in nn,cls=" k")}<div class=more>{_radios(f"nn_{k}_n",[(str(i),f"{i} nights") for i in range(1,8)]+[("ns","Not sure")],q.get(k,{}).get("n"),x=q.get(k,{}).get("n_x",""))}{_radios(f"nn_{k}_t",[(str(i),f"{i}× a night") for i in range(1,5)]+[("ns","Not sure")],q.get(k,{}).get("t"),x=q.get(k,{}).get("t_x",""))}{_radios(f"nn_{k}_m",[("10","10 min"),("20","20 min"),("30","30 min"),("45","45 min"),("60","1 hour+"),("ns","Not sure")],q.get(k,{}).get("m"),x=q.get(k,{}).get("m_x",""))}</div></div>' for k,t in NIGHT_DLA)
             inner+=f'<div class=chips>{_else("nn",X(d,"nn"))}</div>'
             h+=_q(f"Help {nm} needs at night (after everyone is in bed)",inner,"Tap a reason, then nights a week, times a night and minutes. Skip if none.")
-            if d.get("age")!="u3": h+='<p class=lede2>Getting out and about</p>'+"".join(row_card(form,r,d) for r in rows(form,"safety",d))
+            if d.get("age")!="u3": h+='<p class=lede2>Getting out and about</p>'+"".join(row_card(form,r,d) for r in rows(form,"safety",d))+FU_JS
     elif sec=="finish":
-        h+=_q("Aids or equipment used",_checks("aids",[(a,a) for a in AIDS[form]],d.get("aids"),X(d,"aids")))
+        # 30 Oct: a pendant alarm tapped under falls is already ticked here (never ask the same thing twice)
+        cur=d.get("aids") if d.get("aids") is not None else (["Pendant alarm"] if "alarm" in (d.get("fallx") or []) and "Pendant alarm" in AIDS[form] else [])
+        h+=_q("Aids or equipment used",_checks("aids",[(a,a) for a in AIDS[form]],cur,X(d,"aids")))
         if form=="dla": h+=_q("School or nursery",_checks("school",SCHOOL,d.get("school"),X(d,"school")))
         h+=_q(f"Who knows {you} well?",_checks("people",[(p,p) for p in PEOPLE[form]],d.get("people"),X(d,"people")),"We'll list who could support the claim.")
-        h+=_q("Anything else, in your own words (optional)",f'<textarea name=words rows=4 maxlength=3000 placeholder="For example: what a bad day looks like.">{esc(d.get("words",""))}</textarea>',"Skip this if you like. You only tap, we do the writing.")
+        h+=_q("Anything else, in your own words (optional)",f'<textarea name=words rows=4 maxlength=3000 placeholder="For example: what a bad day looks like.">{esc(d.get("words",""))}</textarea>',"Skip this if you like. We do the writing.")
     return h
 # ---------- saving ----------
 def save(form,sec,d,fm):
@@ -189,8 +350,9 @@ def save(form,sec,d,fm):
     g=lambda k:(str(fm.get(k) or "").strip())[:200]; gl=lambda k:[str(x)[:80] for x in fm.getlist(k)]
     if sec=="about":
         for k in ("who","name","signer","rel","age"): d[k]=g(k)
+        for k in ("signer","rel","age"): d.setdefault("else",{})[k]=other_txt(fm,k)
         d["name"]=re.sub(r"[^\w '\-.]","",d["name"])[:40]
-        if d.get("who")=="me": d["signer"]=""
+        if form!="dla" and d.get("who") in ("me",""): d["signer"]=""; d["name"]=""; d["else"]["signer"]=""   # 'Me': no other-person answers kept
     elif sec=="conds":
         cs=[]
         for i,cn in enumerate(CONDS[form]):
@@ -203,19 +365,25 @@ def save(form,sec,d,fm):
         R=d.setdefault("rows",{})
         for r in rows(form,sec,d):
             rid=r[0]; lvl=g(f"r_{rid}_lvl")
-            v={"hard":bool(fm.get(f"r_{rid}_hard")) or lvl in ("slow","cant"),"help":bool(fm.get(f"r_{rid}_help")) or lvl in ("help","cant"),"lvl":lvl if lvl in dict(LVL) else "","c":gl(f"r_{rid}_c"),"std":gl(f"r_{rid}_std"),"freq":g(f"r_{rid}_freq"),"time":g(f"r_{rid}_time"),"days":g(f"r_{rid}_days"),"x":other_txt(fm,f"r_{rid}_c")}
+            v={"hard":bool(fm.get(f"r_{rid}_hard")) or lvl in ("slow","cant"),"help":bool(fm.get(f"r_{rid}_help")) or lvl in ("help","cant"),"lvl":lvl if lvl in dict(LVL) else "","c":gl(f"r_{rid}_c"),"std":gl(f"r_{rid}_std"),"freq":g(f"r_{rid}_freq"),"time":g(f"r_{rid}_time"),"days":g(f"r_{rid}_days"),"x":other_txt(fm,f"r_{rid}_c"),"lvl_x":other_txt(fm,f"r_{rid}_lvl"),"days_x":other_txt(fm,f"r_{rid}_days")}
+            v["fu"]=fu_save(form,fm,rid,fu_keys(form,rid,r[4]),d)
             if lvl in ("cant","slow"): v["c"]=[x for x in v["c"] if x!="every"]
+            # keep only follow-ups for what is tapped now (their words are never dropped for a chip they still have on)
+            v["fu"]={k:f for k,f in v["fu"].items() if (k[4:]==lvl if k.startswith("lvl:") else k in v["c"])}
+            if not v["fu"]: v.pop("fu")
+            for k in ("lvl_x","days_x"):
+                if not v[k]: v.pop(k)
             if lvl=="ok": v={"lvl":"ok"}   # 'No difficulty': follow-ups ignored
-            if v.get("hard") or v.get("help") or v.get("c") or v.get("std") or v.get("x") or lvl=="ok": R[rid]=v
+            if v.get("hard") or v.get("help") or v.get("c") or v.get("std") or v.get("x") or v.get("lvl_x") or lvl=="ok": R[rid]=v
             else: R.pop(rid,None)
         if sec=="daily" and form=="aa" and not fm.get("days_help"):   # derived from their own per-task answers, never guessed
             dd=[int(v["days"]) for v in R.values() if v.get("help") and str(v.get("days","")).isdigit()]
             d["days_help"]=str(max(dd)) if dd else ""
         keys={"daily":("bad",)+(("days_help",) if fm.get("days_help") else ()),"out":(),"safety":("falls","lastfall","alone","nights","ntimes","nmins","watch","fits","varies")}[sec]
-        for k in keys: d[k]=g(k)
+        for k in keys: d[k]=g(k); d.setdefault("else",{})[k]=other_txt(fm,k)
         if sec=="safety":
             for k in ("fallx","eye","night","nn"): d[k]=gl(k); d.setdefault("else",{})[k]=other_txt(fm,k)
-            d["nnum"]={k:{x:g(f"nn_{k}_{x}") for x in "ntm"} for k in d["nn"]}
+            d["nnum"]={k:{**{x:g(f"nn_{k}_{x}") for x in "ntm"},**{x+"_x":other_txt(fm,f"nn_{k}_{x}") for x in "ntm" if other_txt(fm,f"nn_{k}_{x}")}} for k in d["nn"]}
     elif sec=="finish":
         for k in ("aids","school","people"): d[k]=gl(k); d.setdefault("else",{})[k]=other_txt(fm,k)
         d["words"]=str(fm.get("words") or "").strip()[:3000]
@@ -225,6 +393,8 @@ def _ok(v): return v not in (None,"","ns")
 def _rowtext(form,r,v,d):
     rid,topic,label,gate,chips=r; me=is_me(d,form); who=name(d,form); bits=[]
     if v.get("lvl")=="ok": return f"{label}: no difficulty."
+    words,taps=fu_lines(form,r,v,d)
+    if v.get("lvl_x"): words.insert(0,'"'+v["lvl_x"]+'"')
     lv=v.get("lvl")
     if lv:
         t={"slow":("I manage, but it is slow, painful or tiring" if me else f"{who} manages, but it is slow, painful or tiring"),"help":("I need help, prompting or watching" if me else f"{who} needs help, prompting or watching"),"cant":("I can't do it, or it isn't safe for me to" if me else f"{who} can't do it, or it isn't safe to")}[lv]
@@ -241,16 +411,23 @@ def _rowtext(form,r,v,d):
     if st: bits.append("it can be done "+", ".join(st))
     if _ok(v.get("freq")): bits.append("like this "+FREQ_T[v["freq"]].lower())
     if TIME_T.get(v.get("time","")): bits.append("each time takes "+TIME_T[v["time"]])
-    return (f"{label}: "+", ".join(bits)+".") if bits else ""
+    if v.get("days_x"): bits.append("how many days a week: "+v["days_x"].rstrip("."))
+    # 30 Oct: their own typed words go first (the drafter uses these first), then the tapped details
+    own=("In my own words: "+"; ".join(words)+". ") if words else ""
+    t=", ".join(bits)+("." if bits else "")
+    if taps: t=(t+" " if t else "")+" ".join(taps)
+    return (f"{label}: "+own+t).strip() if (bits or words or taps) else ""
 def topic_texts(form,d):
     """(intro, {topic id: plain text of what the customer tapped})."""
     from forms import FORMS
     me=is_me(d,form); nm=name(d,form); T={t:[] for t,_,_ in FORMS[form]["topics"]}
-    if form=="dla": intro=f"This form is for my child{(' '+d['name']) if d.get('name') else ''}"+(f"; I am their {d['rel'].lower()}." if d.get("rel") and d["rel"]!="Other" else ".")
+    if form=="dla": intro=f"This form is for my child{(' '+d['name']) if d.get('name') else ''}"+(f"; I am their {d['rel'].lower()}." if d.get("rel") and d["rel"]!="Other" else f"; I am their {X(d,'rel').rstrip('.')}." if X(d,"rel") else ".")
     else: intro={"me":"This form is for me.","parent":"This form is for my parent","partner":"This form is for my partner","other":"This form is for someone I help"}.get(d.get("who") or "me","")
     if not me and form!="dla": intro+=(f" ({d['name']})." if d.get("name") else ".")
     intro+=" "+{"them":"They will sign the form themselves.","poa":"I have Power of Attorney.","appointee":"I am their appointee.","ns":"I'm not sure yet who will sign."}.get(d.get("signer",""),"")
     if _ok(d.get("age")): intro+=" Age: "+{"u3":"under 3","3to4":"3 or 4","5to15":"5 to 15"}[d["age"]]+"."
+    if X(d,"age"): intro+=f" Age: {X(d,'age').rstrip('.')}."
+    if X(d,"signer") and not me: intro+=f" Who will sign: {X(d,'signer').rstrip('.')}."
     cl=[]
     for c in d.get("conds") or []:
         tm=dict(TREAT); tr=[tm[x].lower() for x in c.get("treat",[]) if x in tm and x!="ns"]
@@ -259,8 +436,9 @@ def topic_texts(form,d):
         s="Health conditions: "+"; ".join(cl)+"."
         if "conditions" in T: T["conditions"].append(s)
         else: intro+=" "+s
-    if _ok(d.get("bad")):
-        s=f"Bad days: about {d['bad']} a week."
+    if _ok(d.get("bad")) or X(d,"bad"):
+        s=("Bad days: it varies a lot from week to week." if d.get("bad")=="varies" else f"Bad days: about {d['bad']} a week." if _ok(d.get("bad")) else "")+(f" Bad days, in my own words: {X(d,'bad').rstrip('.')}." if X(d,"bad") else "")
+        s=s.strip()
         if form=="dla": T["42"].append(s)
         elif form=="pip": T["other"].append(s)
         else: intro+=" "+s
@@ -295,6 +473,7 @@ def topic_texts(form,d):
         for k in d.get("nn") or []:
             q=(d.get("nnum") or {}).get(k,{})
             parts=[p for p in (f"{q['n']} nights a week" if _ok(q.get("n")) else "",f"{q['t']} times a night" if _ok(q.get("t")) else "",f"about {q['m']} minutes each time" if _ok(q.get("m")) else "") if p]
+            parts+=[q[x+"_x"].rstrip(".") for x in "ntm" if q.get(x+"_x")]
             ns.append(nd.get(k,k)+(" ("+", ".join(parts)+")" if parts else ""))
         if ns: T["night"].append("Help at night with: "+"; ".join(ns)+".")
         sc=dict(SCHOOL); s=[sc[x] for x in d.get("school") or [] if x in sc]
@@ -302,6 +481,9 @@ def topic_texts(form,d):
         if d.get("people"): T["statement"].append("People who know the child well: "+", ".join(d["people"])+".")
     if form=="pip" and d.get("people"): T["other"].append("Professionals and people who know "+("me" if me else "them")+": "+", ".join(d["people"])+".")
     E=lambda k: X(d,k).rstrip(".")
+    for k,tp,lab in (("falls","34","Falls in the last year"),("lastfall","34","Last fall"),("alone","40","Being left alone"),("nights","42","Nights a week needing help"),
+                     ("ntimes","42","Times a night"),("nmins","42","Minutes each time at night"),("watch","44","Someone staying awake at night"),("fits","65","Fits or seizures"),("varies","42","How needs change day to day")):
+        if E(k) and tp in T: T[tp].append(f"{lab}, in my own words: {E(k)}.")
     if form=="aa":
         if E("fallx"): T["34"].append(f"After a fall, also: {E('fallx')}.")
         if E("eye"): T["40"].append(f"Keeping an eye on them, also: {E('eye')}.")
@@ -373,6 +555,11 @@ def _rowprose(form,r,v,d):
     if lv and _ok(v.get("days")): out.append(f"This happens {v['days']} days a week.")
     if _ok(v.get("freq")) and FREQ_T.get(v["freq"]): out.append("This happens "+FREQ_T[v["freq"]].lower()+".")
     if TIME_T.get(v.get("time","")): out.append("Each time takes "+TIME_T[v["time"]]+".")
+    if v.get("days_x"): out.append("How many days a week: "+v["days_x"].rstrip(".")+".")
+    words,taps=fu_lines(form,r,v,d)
+    if v.get("lvl_x"): words.insert(0,'"'+v["lvl_x"]+'"')
+    out+=taps
+    if words: out.insert(0,"In my own words: "+"; ".join(words)+".")
     t=" ".join(out)
     if me: t=re.sub(r"\bthemselves\b","myself",re.sub(r"\bthey don't\b","I don't",t))
     return t

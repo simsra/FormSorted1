@@ -51,7 +51,7 @@ assert dv["rows"]["bed"]=={"lvl":"ok"} and I.ticks("aa",dv).get("x29")=="/No" an
 _,T=I.topic_texts("aa",dv); assert "no difficulty" in T["29"] and "3 days a week" in T["31"] and "every time" in T["31"] and "pain or exhaustion" in T["31"], T["31"]
 card=I.row_card("aa",I.AA_ROWS[0],{}); assert card.count("<p class=sub>")==2 and "Something else" in card and "No difficulty" in card
 for f in I.FORMS_V3:   # at most 6 'What happens?' options per card (+ Something else)
-    for r in I.rows(f,None,{}): c=I.row_card(f,r,{}); assert c.count('name="r_')-c.count("_lvl")-c.count("_days")-2<=6, (f,r[0])
+    for r in I.rows(f,None,{}): c=I.row_card(f,r,{}); assert c.count(f'name="r_{r[0]}_c"')<=6, (f,r[0])   # 'What happens?' choices (30 Oct: the inline follow-ups under them are not extra choices)
 dc=I.save("aa","daily",{},FM({"r_bed_lvl":"cant","r_bed_c":["every","out"]})); assert dc["rows"]["bed"]["c"]==["out"]   # implied by 'can't do it'
 print("intake units ok")
 SAMPLE={
@@ -81,7 +81,7 @@ for form in I.FORMS_V3:
         tok=loc(req("/checkout",{"tier":tier,"form":form})).split("/")[-1]
         assert req(f"/intake/{tok}").status==402                                    # nothing before consent
         assert loc(req(f"/consent/{tok}",{"health":"on","truth":"on"}))==f"/intake/{tok}"
-        h=body(f"/intake/{tok}"); assert "About 10 minutes" in h and "You only tap, we do the writing" in h and "Part 1 of 5" in h
+        h=body(f"/intake/{tok}"); assert "About 10 minutes" in h and "Tap what fits and add a few words where you can. We do the writing." in h and "Part 1 of 5" in h
         low=h.lower(); assert "stripe" not in low and " ai " not in low and "charity" not in low and "citizens advice" not in low
         assert not set(re.findall(r'href="?(https?://[^" >]+)',h))-{"https://formsorted.com/privacy.html","https://formsorted.com/terms.html"}
         secs=SAMPLE[form]

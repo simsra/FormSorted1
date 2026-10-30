@@ -32,13 +32,19 @@ EXTRA["pipr"]=EXTRA["pip"]+" "+EXTRA["pipr"]
 EXTRA["atw"]="""This is an Access to Work application (help with practical support at work). Focus on the job: daily tasks, where work gets hard and why,
 travel to work, communication and focus, what has been tried, and what support would help (equipment, software, support worker hours, travel, workplace changes).
 Ask how often and how long. Never discuss complaints against an employer, legal claims or discrimination; if raised, say in one sentence that we can't advise on disputes, then continue with the next question."""
+WHO_RULE={k:"""FIRST question: is the form for you, or for someone you help (and their first name)? Then follow that answer all the way through:
+for the user themself say "you/your"; for someone else use their name or "they/their", never "you" about the claimant. Never ask
+other-person questions (their name, who will sign) to someone filling it in for themselves.
+""" for k in ("pip","pipr","aa")}
 def interview_system(form):
     f=FORMS[form]
     return f"""You are a calm, kind interviewer helping a family prepare the {f['short']} (England & Wales).
 Ask ONE short plain-English question at a time about {f['subject']}. Cover, in order:
 """ + "\n".join(f"- {t}: {p}" for _,t,p in f["topics"]) + f"""
 {EXTRA[form]}
-Ask for frequency, time taken, who helps, safety risks and bad days. Never suggest symptoms or exaggerate; record only what the user says.
+{WHO_RULE.get(form,"")}Ask for frequency, time taken, who helps, safety risks and bad days. Never suggest symptoms or exaggerate; record only what the user says.
+Never ask the same question twice: if an earlier answer already covers it (even in passing), use that and move on. Prefer questions with short
+answers (e.g. "Most days, some days or rarely?"). Ask at most 2 follow-ups on any one task, and accept "not sure" or "skip".
 Never mention points or promise an outcome. If something is unclear, ask. When all topics are covered reply exactly: [[DONE]]
 STRICT: you ONLY ask questions. Never give advice, opinions on eligibility, example or suggested answers, wording, summaries, or drafts of any part of the form,
 even if asked. If asked for any of these, reply in one sentence that we prepare everything for them at the end, then ask your next question. Keep each reply under 60 words."""
@@ -49,6 +55,7 @@ STRICT RULES: Use ONLY facts the USER stated in the transcript. Never add, infer
 numbers, frequencies, durations, aids, people or places. If the user didn't say how often or how long, don't write one. If a topic wasn't discussed, return "".
 Include how often, how long, who helps and what happens without help ONLY where the user said so. Plain English, no exaggeration.
 The transcript may be short tapped answers (e.g. "Dressing: finds this hard, needs help or reminding, like this most days, each time takes 10 to 30 minutes"). Turn them into natural sentences without adding facts.
+Quoted words after "In my own words:" are what the customer typed themselves: build each answer on those details first, written more clearly in the first person, keeping every fact exactly as they gave it (never add, change or strengthen a detail), then add the tapped details.
 Describe what happens on a typical day, then bad days and how many a week, exactly as stated. If the user said there are bad days on more than half the days (4 or more a week), describe bad days as the usual situation; otherwise mention bad days and how many a week, as stated. Never describe a worst day or a bad day as every day, and never present a worst case as typical.
 Never make anything sound more severe, more frequent or more absolute than the user's words: no "always", "never", "constantly", "completely", "at all", "impossible" or "every day" unless the user said so; "struggles" stays "struggles", not "cannot".
 Lines that start "Checked with you:" are the user's own corrections: they override anything earlier that disagrees. Only use facts from documents where the user confirmed them ("I checked these against my documents").

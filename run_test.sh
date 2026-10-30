@@ -25,4 +25,8 @@ AC=${LOGDIR:-/tmp}/acct-test; rm -rf $AC; mkdir -p $AC   # customer accounts: ow
 DATABASE_URL= SUPABASE_URL= ACCOUNTS_ENABLED=1 SQLITE_PATH=$AC/orders.db OUT_DIR=$AC/out MAIL_LOG=$AC/mail.log $PY/uvicorn app:app --port ${PORT_AC:-8037} >$AC/server.log 2>&1 & AS=$!
 DATABASE_URL= SUPABASE_URL= SQLITE_PATH=$AC/orders.db OUT_DIR=$AC/out MAIL_LOG=$AC/mail.log $PY/uvicorn app:app --port ${PORT_AC0:-8038} >$AC/server-off.log 2>&1 & AO=$!; sleep 3
 DATABASE_URL= $PY/python test_accounts.py http://localhost:${PORT_AC:-8037} $AC/orders.db $AC/mail.log http://localhost:${PORT_AC0:-8038} || R=1; kill $AS $AO
+HS=${LOGDIR:-/tmp}/https-test; rm -rf $HS; mkdir -p $HS   # https-only + HSTS (as live: PUBLIC_URL is https)
+DATABASE_URL= SUPABASE_URL= PUBLIC_URL=https://app.formsorted.com SQLITE_PATH=$HS/orders.db OUT_DIR=$HS/out $PY/uvicorn app:app --port ${PORT_HS:-8039} >$HS/server.log 2>&1 & HP=$!; sleep 3
+$PY/python test_https.py http://localhost:${PORT_HS:-8039} || R=1; kill $HP
+DATABASE_URL= SUPABASE_URL= $PY/python test_flow_branching.py || R=1; DATABASE_URL= SUPABASE_URL= $PY/python test_something_else.py || R=1; DATABASE_URL= SUPABASE_URL= $PY/python test_followups_inline.py || R=1
 $PY/python test_prefill.py || R=1; $PY/python test_strength.py || R=1; $PY/python test_fill_gaps.py || R=1; $PY/python test_statement_ref.py || R=1; DATABASE_URL= SUPABASE_URL= $PY/python test_fallback.py || R=1; DATABASE_URL= SUPABASE_URL= $PY/python test_no_supporter_words.py || R=1; DATABASE_URL= SUPABASE_URL= $PY/python test_print_sign_post.py || R=1; exit $R

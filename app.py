@@ -85,6 +85,17 @@ async def _canonical_host(request:Request, call_next):
         q=("?"+request.url.query) if request.url.query else ""
         return RedirectResponse(PUBLIC+p+q,301)
     return await call_next(request)
+@app.middleware("http")
+async def _https_only(request:Request, call_next):
+    """30 Oct 2026 ('Not Secure' in Brave): the pages themselves load nothing over http, so tell browsers to always use https
+    for this host (HSTS) and send any plain-http request that reaches us to the https address. Only when PUBLIC_URL is https (not local runs)."""
+    if PUBLIC.startswith("https://") and request.headers.get("x-forwarded-proto","").split(",")[0].strip()=="http" and request.method in ("GET","HEAD") \
+       and not (request.url.path=="/healthz" or request.url.path.startswith(("/webhooks","/cron"))):
+        q=("?"+request.url.query) if request.url.query else ""
+        return RedirectResponse(PUBLIC+request.url.path+q,301)
+    r=await call_next(request)
+    if PUBLIC.startswith("https://"): r.headers["Strict-Transport-Security"]="max-age=31536000"
+    return r
 from fastapi.staticfiles import StaticFiles
 app.mount("/static",StaticFiles(directory=os.path.join(HERE,"static")),name="static")
 PREVIEW="<div class=panel><p><strong>Preview mode:</strong> no payment is taken and answers are sample drafts.</p></div>"
@@ -115,7 +126,7 @@ def home(form:str="", tier:str=""):
     return order_summary(form,tier if tier in FORMS[form]["tiers"] else "",pv)
 PRICING_URL="https://formsorted.com/#prices"
 DWP_LINE="You can claim directly from DWP for free; FormSorted is a paid online form-filling service."
-TAPLINE="<div class=promise><strong>About 10 minutes. You only tap, we do the writing.</strong> Skip anything you're not sure about, and save your progress to finish later.</div>"
+TAPLINE="<div class=promise><strong>About 10 minutes. Tap what fits, add a few words if you like. We do the writing.</strong> Skip anything you're not sure about, and save your progress to finish later.</div>"
 TRUST="<div class=trust><h2 class=h3>Our promise</h2><ul class=ticks><li><strong>Fixed price.</strong> You pay this once. Never a percentage of any award.</li><li><strong>You approve everything</strong> before you sign. Nothing is sent without you.</li><li>You get a copy of every page to keep for reviews.</li></ul></div>"
 def chat_url(o): return f"/bb/{o['token']}" if o["form"]=="bb" else f"/intake/{o['token']}" if (o["form"] or "aa") in INTAKE.FORMS_V3 else f"/static/chat.html#{o['token']}"
 def pack_items(form,tier):
@@ -749,14 +760,14 @@ def intake_page(token:str, s:str="", r:str=""):
     left=WF.minutes_left(form,d,sec) if d.get("wf_v") else max(1,round(10*(len(ids)-i)/len(ids)))
     bar="".join(f'<li class="{"done" if j<i else "now" if j==i else ""}">{esc(l)}</li>' for j,(k,l) in enumerate(secs))
     refused=REFUSED_BOX if r else ""
-    reassure="<p class=reassure>It's normal for this to feel hard. You only tap, we do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
-    first=(f'<p class=one>About {left} minutes. You only tap, we do the writing. Skip anything you\'re not sure about.</p>'+HONEST_LINE) if i==0 else ''
+    reassure="<p class=reassure>It's normal for this to feel hard. Tap what fits and add a few words where you can. We do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
+    first=(f'<p class=one>About {left} minutes. Tap what fits and add a few words where you can. We do the writing.</p>'+HONEST_LINE) if i==0 else ''
     return page(prog(3,f"Part {i+1} of {len(secs)}: {secs[i][1]}",f"About {left} minute{'s' if left!=1 else ''} left")+f"""<div class=intake>
 {refused}{'<h1>We\'ll fill in your whole form for you</h1>' if i==0 else f'<h1>{esc(secs[i][1])}</h1>'}{first}<p class=qcount id=qcount aria-live=polite hidden></p>
 <form method=post action=/intake/{token}><input type=hidden name=sec value={sec}><div class=qs id=qs>{INTAKE.section_body(form,sec,d)}</div>
 {QHELP}<div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==len(ids)-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
 <p class=saved>Your answers are saved each time you finish a part.</p><button class="linkbtn" name=nav value=save>Save and finish later</button></form></div>{QS_JS}""",secs[i][1],minimal=True)
-QHELP=more("Help with this question","""<ul class=tips><li>Think about a normal week, including the bad days.</li><li>If it changes from day to day, pick what happens on most days.</li><li>Not sure? Skip it and carry on. You can go back.</li><li>None of the answers fit? Tap <strong>Something else</strong> and type it in your own words.</li><li>You check every answer before anything is final.</li></ul>""")
+QHELP=more("Help with this question","""<ul class=tips><li>Think about a normal week, including the bad days.</li><li>If it changes from day to day, pick what happens on most days.</li><li>Not sure? Skip it and carry on. You can go back.</li><li>None of the answers fit? Tap <strong>Something else</strong> and type it in your own words. (Simple Yes or No questions don't have it.)</li><li>Under anything you tap you can add a few words. Your own words make the form stronger.</li><li>You check every answer before anything is final.</li></ul>""")
 # One question per screen: the server still gets the whole part in one POST (nothing else changes). Without JavaScript every question shows at once.
 QS_JS="""<script>(function(){var box=document.getElementById('qs');if(!box)return;var form=box.closest('form'),nav=form.querySelector('.navrow'),sub=nav.querySelector('button[value=next]'),sback=nav.querySelector('button[value=back]'),cnt=document.getElementById('qcount');
 var kids=[].slice.call(box.children).filter(function(e){return !/^(SCRIPT|STYLE|INPUT)$/.test(e.tagName)}),steps=[],pre=[];

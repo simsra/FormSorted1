@@ -126,6 +126,13 @@ def me(d,form): return I.is_me(d,form)
 def _you(d,form): return "you" if me(d,form) else nm(d,form)
 def _your(d,form): return "your" if me(d,form) else (nm(d,form)+"'s" if form!="dla" or I.name(d,form)!="your child" else "your child's")
 def _do(d,form): return "do you" if me(d,form) else f"does {nm(d,form)}"
+def PR(d,form):
+    """Wording for the person the form is about (30 Oct: 'Does you...', 'when they fall' for 'Me' orders).
+    me: you/your; someone else: their name (or 'your parent' etc.) with the right verb forms."""
+    m=me(d,form); n=nm(d,form)
+    if m: return {"subj":"you","obj":"you","poss":"your","do":"do you","be":"are you","have":"have you","were":"were you","refl":"yourself","dont":"don't","s":lambda v:v}
+    return {"subj":n,"obj":n,"poss":_your(d,form),"do":f"does {n}","be":f"is {n}","have":f"has {n}","were":f"was {n}","refl":"themselves","dont":"doesn't","s":lambda v:v+("es" if v.endswith(("sh","ch")) else "s")}
+def cap(t): return t[:1].upper()+t[1:]
 def _ac(d,form,tok): return tok if me(d,form) else "off"
 def conds(d): return [c for c in d.get("conds") or [] if c.get("name")][:6 if True else 5]
 def aids(d): return I.aids_list(d)[:6]
@@ -163,7 +170,7 @@ ACT_OFTEN=[("daily","Every day"),("few","A few times a week"),("weekly","Once a 
 ACT_LONG=[("30","30 minutes"),("1h","1 hour"),("2h","2 hours"),("half","Half a day or more")]
 # ---------- the questions ----------
 def questions(form,sec,d):
-    w=d.get("wf") or {}; you=_you(d,form); do=_do(d,form); your=_your(d,form); qs=[]
+    w=d.get("wf") or {}; you=_you(d,form); do=_do(d,form); your=_your(d,form); qs=[]; P=PR(d,form)
     if sec in ("you","child"):
         child=form=="dla"; who="your child" if child else you
         t=lambda x:_ac(d,form,x) if not child else "off"
@@ -181,7 +188,7 @@ def questions(form,sec,d):
         if not child:
             qs+= [Q("phone","Daytime phone","tel",ac=t("tel"),maxlen=20),Q("mobile","Mobile (optional)","tel",ac=t("tel"),maxlen=20),
                   Q("welsh","Letters in Welsh?","radio",[("no","English is fine"),("yes","Welsh, please (Wales only)")])]
-        qs.append(Q("eea_before",f"Was {who} living in the UK before 1 January 2021?","radio",[("yes","Yes"),("no","No"),("ns","Not sure")],dep=("nat",["EEA"])))
+        qs.append(Q("eea_before",f"{cap(P['were'])} living in the UK before 1 January 2021?","radio",[("yes","Yes"),("no","No"),("ns","Not sure")],dep=("nat",["EEA"])))
     elif sec=="helper":
         qs+= [Q("h_name","Your full name","text",ac="name",maxlen=80),Q("h_dob","Your date of birth","date",ac="bday"),
               Q("h_same",f"Do you live at the same address as {nm(d,form)}?","radio",YN),
@@ -224,7 +231,7 @@ def questions(form,sec,d):
                   Q("pr_hosp","Hospital number (optional)","text",maxlen=20,hint="On appointment letters."),
                   Q("pr_cond","What for?","radio",[(c["name"],c["name"]) for c in conds(d)][:6]),
                   Q("pr_often","How often?","radio",HOWOFTEN),Q("pr_seen","Last seen","radio",SEEN)]
-        else: qs.append(Q("pr_any",f"Apart from the GP, has {you} seen anyone about this in the last 12 months?","radio",YN,hint="For example a consultant, nurse or therapist."))
+        else: qs.append(Q("pr_any",f"Apart from the GP, {P['have']} seen anyone about this in the last 12 months?","radio",YN,hint="For example a consultant, nurse or therapist."))
         if form=="aa":
             carer=d.get("who") not in ("me","") or "Family carer" in (d.get("people") or [])
             hpo=([("me","Yes, me (the person filling this in)"),("yes","Yes, someone else")] if not me(d,form) else [("yes","Yes")])+[("no","No")]
@@ -233,15 +240,15 @@ def questions(form,sec,d):
                   Q("hp_name","Their name","text",maxlen=60,dep=("hp_any",mine)),Q("hp_pc","Their postcode","pc",maxlen=9,dep=("hp_any",mine)),Q("hp_addr","Their house number and street","text",maxlen=60,dep=("hp_any",mine)),
                   Q("hp_town","Their town","text",maxlen=40,dep=("hp_any",mine)),Q("hp_tel","Their phone (optional)","tel",maxlen=20,dep=("hp_any",mine)),
                   Q("hp_rel","Who are they?","radio",[("Partner","Partner"),("Son or daughter","Son or daughter"),("Friend","Friend"),("Neighbour","Neighbour"),("Paid carer","Paid carer")],dep=("hp_any",["yes","me"])),
-                  Q("hp_what","What do they help with?","checks",[("personal care","Washing and dressing"),("meals","Meals"),("medicines","Medicines"),("getting about","Getting about"),("keeping an eye","Keeping an eye on them")],dep=("hp_any",["yes","me"])),
+                  Q("hp_what","What do they help with?","checks",[("personal care","Washing and dressing"),("meals","Meals"),("medicines","Medicines"),("getting about","Getting about"),("keeping an eye",f"Keeping an eye on {P['obj']}")],dep=("hp_any",["yes","me"])),
                   Q("hp_often","How often?","radio",[("every day","Every day"),("most days","Most days"),("a few times a week","A few times a week"),("weekly","Once a week")],dep=("hp_any",["yes","me"]))]
         qs.append(Q("tests",f"Any tests, scans or assessments for {'your' if me(d,form) else 'their'} conditions{' (done or booked)' if form=='dla' else ''}?","radio",YN))
         qs+=rep("test",2 if form=="aa" else 5,"tests",lambda i,dp:[Q(f"test{i}","Which test, and when?","text",maxlen=80,ph="e.g. MRI scan, March 2026",dep=dp),
               Q(f"test{i}r","What did it show?","radio",[("waiting","Still waiting for results"),("see letter","It's in the letter we're sending")],dep=dp)],"Another test?")
         if form=="aa":
-            qs.append(Q("surg",f"Is {you} on a waiting list for surgery?","radio",YN))
+            qs.append(Q("surg",f"{cap(P['be'])} on a waiting list for surgery?","radio",YN))
             qs+=rep("surg",2,"surg",lambda i,dp:[Q(f"surg{i}_what","What surgery?","text",maxlen=80,ph="e.g. right hip replacement",dep=dp),
-                  Q(f"surg{i}_when","When were they put on the list?","month",dep=dp),Q(f"surg{i}_date","Date planned (if known)","month",dep=dp)],"Another operation?")
+                  Q(f"surg{i}_when",f"When {P['were']} put on the list?","month",dep=dp),Q(f"surg{i}_date","Date planned (if known)","month",dep=dp)],"Another operation?")
             qs+= [
                   Q("care_start",f"Roughly when did {you} start needing this help?","month",hint="A rough month is fine. DWP needs it to be at least 6 months ago.")]
         else:
@@ -259,45 +266,45 @@ def questions(form,sec,d):
         qs.append(Q("consent",f"Can DWP ask {'your' if me(d,form) else 'their'} doctors and others for more information?","radio",[("yes","Yes"),("no","No")],hint="This usually helps the claim go faster. It's your choice."))
     elif sec=="home":
         if form=="aa":
-            qs+= [Q("acc","Where does "+("you" if me(d,form) else nm(d,form))+(" live?" if me(d,form) else " live?"),"radio",[("house","House"),("bungalow","Bungalow"),("flat","Flat"),("sheltered","Sheltered housing"),("care","Care home")]),
+            qs+= [Q("acc",f"Where {P['do']} live?","radio",[("house","House"),("bungalow","Bungalow"),("flat","Flat"),("sheltered","Sheltered housing"),("care","Care home")]),
                   Q("liveswith","Who else lives there?","radio",[("alone","Lives alone"),("partner","Partner"),("family","Family"),("carer","Live-in carer")]),
-                  Q("toiletat","Where is the toilet?","checks",[("up","Upstairs"),("down","Downstairs")]),Q("sleepat","Where do they sleep?","radio",[("up","Upstairs"),("down","Downstairs")])]
-            qs+=aid_qs(form,d,[("h","How do the aids help?",AID_H_AA),("d","Any problems using them?",AID_D_AA)])
+                  Q("toiletat","Where is the toilet?","checks",[("up","Upstairs"),("down","Downstairs")]),Q("sleepat",f"Where {P['do']} sleep?","radio",[("up","Upstairs"),("down","Downstairs")])]
+            qs+=aid_qs(form,d,[("h","How do the aids help?",[(v,t.replace("them",P["obj"]).replace("their own",P["poss"]+" own")) for v,t in AID_H_AA]),("d","Any problems using them?",AID_D_AA)])
             if "Wheelchair" in aids(d) and "indoors" in {r[0] for r in bad_rows(form,d)}:   # aids are tapped after the 'often' part, so this is asked here
                 qs.append(Q("wchair","Getting in or out of the wheelchair","radio",[("diff","Has difficulty"),("help","Needs help")]))
         else:
-            qs+=aid_qs(form,d,[("h","What help do they need with them?",AID_H_DLA)])
+            qs+=aid_qs(form,d,[("h",f"What help {P['do']} need with them?",AID_H_DLA)])
         ev=[("abroad","Been abroad for more than 4 weeks in the last 3 years"),("eeaben","Gets a pension or benefit from an EU/EEA country or Switzerland"),("eeawork","Works in or pays insurance to an EU/EEA country or Switzerland"),("scot","Moved here from Scotland"),("notgb","Doesn't normally live in "+("England or Wales" if form=="dla" else "Great Britain"))]
         ev+= [("padp","Gets or has claimed Pension Age Disability Payment"),("warcaa","Gets War Pension Constant Attendance Allowance"),("iicaa","Gets Industrial Injuries Constant Attendance Allowance")] if form=="aa" else [("cdp","Gets or has claimed Child Disability Payment"),("newuk","Came to live in the UK in the last 3 years")]
-        ev+= [("sr","Has been told they may have 12 months or less to live")]
-        qs.append(Q("checks",f"Do any of these apply to {you}{' or your partner' if form=='aa' else ' or you'}? Tap any, or None of these.","checks",ev+[("none","None of these")],hint="Most people tap None of these."))
-        qs+=rep("ab",1 if form=="aa" else 5,("checks","abroad"),lambda i,dp:[Q(f"ab{i}_left","Date they left","date",dep=dp),Q(f"ab{i}_back","Date they came back","date",dep=dp),
-              Q(f"ab{i}_where","Where did they go?","text",maxlen=60,dep=dp),Q(f"ab{i}_why","Why?","radio",[("Holiday","Holiday"),("Visiting family","Visiting family"),("Medical treatment","Medical treatment"),("Work","Work")],dep=dp)],"Another trip?")
-        qs+= [Q("scot_date","Date they moved from Scotland","date",dep=("checks",["scot"]))]
-        if form=="dla": qs+= [Q("uk_date","Date they came to live in the UK","date",dep=("checks",["newuk"])),Q("uk_passport","Passport number (optional)","text",maxlen=20,dep=("checks",["newuk"]))]
+        ev+= [("sr",f"{cap(P['have'])} been told {P['subj']} may have 12 months or less to live")]
+        qs.append(Q("checks",f"Do any of these apply to {P['obj']}{(' or '+P['poss']+' partner') if form=='aa' else ' or you'}? Tap any, or None of these.","checks",ev+[("none","None of these")],hint="Most people tap None of these."))
+        qs+=rep("ab",1 if form=="aa" else 5,("checks","abroad"),lambda i,dp:[Q(f"ab{i}_left",f"Date {P['subj']} left","date",dep=dp),Q(f"ab{i}_back",f"Date {P['subj']} came back","date",dep=dp),
+              Q(f"ab{i}_where",f"Where did {P['subj']} go?","text",maxlen=60,dep=dp),Q(f"ab{i}_why","Why?","radio",[("Holiday","Holiday"),("Visiting family","Visiting family"),("Medical treatment","Medical treatment"),("Work","Work")],dep=dp)],"Another trip?")
+        qs+= [Q("scot_date",f"Date {P['subj']} moved from Scotland","date",dep=("checks",["scot"]))]
+        if form=="dla": qs+= [Q("uk_date",f"Date {P['subj']} came to live in the UK","date",dep=("checks",["newuk"])),Q("uk_passport","Passport number (optional)","text",maxlen=20,dep=("checks",["newuk"]))]
         hq="Is "+("you" if me(d,form) else nm(d,form))+" in hospital, a care home or a hospice now?" if form=="aa" else "Is your child in hospital now?"
         qs+= [Q("hosp",("Are you" if me(d,form) else f"Is {nm(d,form)}")+" in hospital, a care home or similar now?" if form=="aa" else hq,"radio",([("no","No"),("hosp","In hospital"),("care","In a care home or hospice")] if form=="aa" else [("no","No"),("hosp","Yes")])),
-              Q("h_in","Date they went in","date",dep=("hosp",["hosp","care"])),Q("h_place","Name of the hospital or home","text",maxlen=80,dep=("hosp",["hosp","care"])),
+              Q("h_in",f"Date {P['subj']} went in","date",dep=("hosp",["hosp","care"])),Q("h_place","Name of the hospital or home","text",maxlen=80,dep=("hosp",["hosp","care"])),
               Q("h_pc","Its postcode","pc",maxlen=9,dep=("hosp",["hosp","care"])),Q("h_town","Its town","text",maxlen=40,dep=("hosp",["hosp","care"])),
-              Q("h_why","Why did they go in?","text",maxlen=100,dep=("hosp",["hosp"]))]+([Q("h_tel","Hospital phone (optional)","tel",maxlen=20,dep=("hosp",["hosp"]))] if form=="dla" else [])
+              Q("h_why",f"Why did {P['subj']} go in?","text",maxlen=100,dep=("hosp",["hosp"]))]+([Q("h_tel","Hospital phone (optional)","tel",maxlen=20,dep=("hosp",["hosp"]))] if form=="dla" else [])
         if form=="aa":
             qs+= [Q("h_pays","Does a council, NHS or government department pay towards the stay?","radio",YNS,dep=("hosp",["hosp","care"])),Q("h_payer","Which one?","text",maxlen=60,dep=("h_pays",["yes"])),
-                  Q("out6",f"Has {you} come out of hospital or a care home in the last 6 weeks?","radio",YN),
-                  Q("o_in","Date they went in","date",dep=("out6",["yes"])),Q("o_out","Date they came out","date",dep=("out6",["yes"])),Q("o_place","Name of the place","text",maxlen=80,dep=("out6",["yes"])),
-                  Q("o_pc","Its postcode","pc",maxlen=9,dep=("out6",["yes"])),Q("o_town","Its town","text",maxlen=40,dep=("out6",["yes"])),Q("o_why","Why did they go in?","text",maxlen=100,dep=("out6",["yes"]))]
+                  Q("out6",f"{cap(P['have'])} come out of hospital or a care home in the last 6 weeks?","radio",YN),
+                  Q("o_in",f"Date {P['subj']} went in","date",dep=("out6",["yes"])),Q("o_out",f"Date {P['subj']} came out","date",dep=("out6",["yes"])),Q("o_place","Name of the place","text",maxlen=80,dep=("out6",["yes"])),
+                  Q("o_pc","Its postcode","pc",maxlen=9,dep=("out6",["yes"])),Q("o_town","Its town","text",maxlen=40,dep=("out6",["yes"])),Q("o_why",f"Why did {P['subj']} go in?","text",maxlen=100,dep=("out6",["yes"]))]
         else:
             qs+= [Q("h_nhs","Is the NHS paying for the stay?","radio",YNS,dep=("hosp",["hosp"])),
-                  Q("stays","In the last year, have they stayed in a hospice, respite or residential home?","radio",YN),
-                  Q("s_in","Date they went in","date",dep=("stays",["yes"])),Q("s_out","Date they came out","date",dep=("stays",["yes"])),Q("s_place","Name of the place","text",maxlen=80,dep=("stays",["yes"])),
+                  Q("stays",f"In the last year, {P['have']} stayed in a hospice, respite or residential home?","radio",YN),
+                  Q("s_in",f"Date {P['subj']} went in","date",dep=("stays",["yes"])),Q("s_out",f"Date {P['subj']} came out","date",dep=("stays",["yes"])),Q("s_place","Name of the place","text",maxlen=80,dep=("stays",["yes"])),
                   Q("s_pc","Its postcode","pc",maxlen=9,dep=("stays",["yes"])),Q("s_town","Its town","text",maxlen=40,dep=("stays",["yes"])),Q("s_tel","Its phone (optional)","tel",maxlen=20,dep=("stays",["yes"])),Q("s_pays","Who paid towards it?","radio",[("la","Local authority"),("ha","Health authority"),("gov","Government department"),("nhs","NHS"),("none","None of these")],dep=("stays",["yes"])),
                   Q("s_payer","Name of the authority (optional)","text",maxlen=60,dep=("s_pays",["la","ha","gov"]))]
-        qs+= [Q("stmt",f"Who knows {you} well enough to write a short statement for the form?","radio",[("family","A family member"),("friend","A friend"),("carer","A carer"),("prof","A professional"),("noone","No one")],hint="They write it themselves on the form. We'll print a note for them."),
+        qs+= [Q("stmt",f"Who could write a short statement about {P['obj']} for the form?","radio",[("family","A family member"),("friend","A friend"),("carer","A carer"),("prof","A professional"),("noone","No one")],hint="They write it themselves on the form. We'll print a note for them."),
               Q("stmt_name","Their name (optional)","text",maxlen=60,dep=("stmt",["family","friend","carer","prof"])),
               Q("asked","When did you ask DWP for this form?","date",hint="The date on DWP's letter, if they sent one. Skip if you printed it yourself.")]
     elif sec=="often": qs+=often_qs(form,d)
     return qs
 def often_qs(form,d):
-    w=d.get("wf") or {}; you=_you(d,form); qs=[]; R=d.get("rows") or {}; bad={r[0] for r in bad_rows(form,d)}
+    w=d.get("wf") or {}; you=_you(d,form); qs=[]; R=d.get("rows") or {}; bad={r[0] for r in bad_rows(form,d)}; P=PR(d,form); DO=cap(P['do'])
     if form=="aa":
         prt=[]
         for rid,subs in AA_SUB.items():
@@ -307,32 +314,32 @@ def often_qs(form,d):
             qs.append(Q(f"sub_{rid}",f"{lab}: which parts? (tap all)","checks",opts,pre=pre))
             qs+=times_qs(rid,lab,subs)
             if "prompt" not in c: prt.append((rid,lab))
-        if prt: qs.append(Q("pr_tasks",f"Does {you} also need reminding or encouraging with any of these? (tap any)","checks",prt+[("none","None of these")]))
-        if "bed" in bad: qs.append(Q("bed_enc",f"Does {you} need encouraging to get up or go to bed?","checks",[("up","To get up"),("down","To go to bed")]))
-        if "indoors" in bad: qs.append(Q("pr_indoors",f"Does {you} need encouraging to move about?","radio",YN))
-        if "comm" in bad: qs.append(Q("comm2","Also hard: (tap any)","checks",[("und","Being understood by people they don't know"),("ask","Asking for help when needed")]))
+        if prt: qs.append(Q("pr_tasks",f"{DO} also need reminding or encouraging with any of these? (tap any)","checks",prt+[("none","None of these")]))
+        if "bed" in bad: qs.append(Q("bed_enc",f"{DO} need encouraging to get up or go to bed?","checks",[("up","To get up"),("down","To go to bed")]))
+        if "indoors" in bad: qs.append(Q("pr_indoors",f"{DO} need encouraging to move about?","radio",YN))
+        if "comm" in bad: qs.append(Q("comm2","Communicating: is any of this also hard? (tap any)","checks",[("und",f"Being understood by people {P['subj']} {P['dont']} know"),("ask","Asking for help when needed")]))
         if "social" in bad:
-            qs.append(Q("acts","Which activities do they need help to do? (up to 6)","checks",ACTS_AA))
+            qs.append(Q("acts",f"Which activities {P['do']} need help to do? (up to 6)","checks",ACTS_AA))
             qs+=act_qs(ACTS_AA,[("ah","what help?",ACT_HELP),("ao","how often?",ACT_OFTEN)])
-        if d.get("falls") in ("1-2","3-5","6+"): qs+= [Q("falls_m","Falls in the last month","radio",[("0","None"),("1","1"),("2","2"),("3+","3 or more")],cls=" nums"),Q("fall_what","What usually happens when they fall?","radio",[("legs","Legs give way"),("trip","Trips"),("dizzy","Dizzy or blacks out"),("balance","Loses balance")])]
+        if d.get("falls") in ("1-2","3-5","6+"): qs+= [Q("falls_m","Falls in the last month","radio",[("0","None"),("1","1"),("2","2"),("3+","3 or more")],cls=" nums"),Q("fall_what",f"What usually happens when {P['subj']} {P['s']('fall')}?","radio",[("legs","Legs give way"),("trip","Trips"),("dizzy","Dizzy or blacks out"),("balance","Loses balance")])]
         qs+= [Q("stum_m",f"Stumbles or near-falls in the last month","radio",[("0","None"),("1-2","1–2"),("3-5","3–5"),("6+","6 or more")],cls=" nums"),
               Q("stum_y","And in the last year","radio",[("0","None"),("1-5","1–5"),("6-20","6–20"),("20+","More than 20")],cls=" nums"),
               Q("stum_last","Last stumble","radio",[("week","This week"),("month","This month"),("months","1–6 months ago"),("year","Over 6 months ago")],dep=("stum_m",["1-2","3-5","6+"]))]
         if d.get("eye") or d.get("alone") in ("lt1","never","hours"):
-            qs+= [Q("eye2","Someone also needs to keep an eye on them because they: (tap any)","checks",[("prevent","Could put themselves or others in danger"),("neglect","May neglect themselves"),("harm","May harm themselves"),("aggr","Can be aggressive or antisocial"),("voices","Hear voices or have disturbing thoughts")]),
-                  Q("eye_days","Days a week someone needs to keep an eye on them","radio",I.DAYS[:7],cls=" nums")]
+            qs+= [Q("eye2",f"Why does someone need to keep an eye on {P['obj']}? (tap any)","checks",[("prevent",f"Could put {P['refl']} or others in danger"),("neglect",f"May neglect {P['refl']}"),("harm",f"May harm {P['refl']}"),("aggr","Can be aggressive or antisocial"),("voices","Hear voices or have disturbing thoughts")]),
+                  Q("eye_days",f"Days a week someone needs to keep an eye on {P['obj']}","radio",I.DAYS[:7],cls=" nums")]
         if d.get("watch") in ("some","most"):
-            qs+= [Q("w_times","Times a night someone has to be awake to watch over them","radio",[("1","1"),("2","2"),("3","3"),("4+","4 or more")],cls=" nums"),
+            qs+= [Q("w_times",f"Times a night someone has to be awake to watch over {P['obj']}","radio",[("1","1"),("2","2"),("3","3"),("4+","4 or more")],cls=" nums"),
                   Q("w_long","How long each time?","radio",[("10 minutes","10 min"),("20 minutes","20 min"),("30 minutes","30 min"),("an hour","1 hour"),("over an hour","Over an hour")]),
-                  Q("w_nights","Nights a week","radio",I.DAYS[:7],cls=" nums")]
+                  Q("w_nights","Nights a week someone stays awake for this","radio",I.DAYS[:7],cls=" nums")]
         if "toilet" in (d.get("night") or []) and "acc" in set((R.get("toilet") or {}).get("c") or []): qs.append(Q("n_incont","At night, is it also incontinence (accidents or pads)?","radio",YN))
         if "meds" in (d.get("night") or []): qs.append(Q("n_treat","At night, is it also treatment or therapy (e.g. oxygen, creams)?","radio",YN))
-        if d.get("night") and ("prompt" in set((R.get("toilet") or {}).get("c") or []) or "confused" in (d.get("night") or [])): qs.append(Q("n_prompt","At night, do they need reminding or encouraging? (tap any)","checks",[("toilet","To use the toilet"),("meds","To take medicines")]))
+        if d.get("night") and ("prompt" in set((R.get("toilet") or {}).get("c") or []) or "confused" in (d.get("night") or [])): qs.append(Q("n_prompt",f"At night, {P['do']} need reminding or encouraging? (tap any)","checks",[("toilet","To use the toilet"),("meds","To take medicines")]))
     else:
         for rid,subs in DLA_SUB.items():
             if rid!="bed" and rid not in bad: continue
             if rid=="bed":
-                qs.append(Q("bed","During the day, does your child need help or encouraging to get in or out of bed, or settle?","radio",YN)); dp=("bed",["yes"])
+                qs.append(Q("bed",f"During the day, {P['do']} need help or encouraging to get in or out of bed, or settle?","radio",YN)); dp=("bed",["yes"])
             else: dp=None
             c=set((R.get(rid) or {}).get("c") or []); pre=[k for k,*_ in subs if k in {x for kk in c for x in DLA_PRE.get(rid,{}).get(kk,[])}]
             lab={"bed":"Bed","wash":"Washing","dress":"Dressing","eat":"Eating and drinking","meds":"Medicines and therapy"}[rid]
@@ -342,15 +349,15 @@ def often_qs(form,d):
         if "toilet" in bad: qs.append(Q("toilet2","Toilet: which parts need help? (tap all)","checks",[(k,l) for k,l in DLA_TOILET if k not in [DLA_TOILET_PRE[c] for c in (R["toilet"].get("c") or []) if c in DLA_TOILET_PRE]]))
         if "indoors" in bad: qs.append(Q("indoors2","Moving about indoors: which parts need help? (tap all)","checks",[(k,l) for k,l in DLA_INDOORS if k not in [x for c in (R["indoors"].get("c") or []) for x in DLA_INDOORS_PRE.get(c,[])]]))
         G=lambda id,label,rows:Q(id,label+" (tap any that apply)","tap",rows=rows,hint="Anything you leave untapped goes on the form as not a problem.")
-        if "see" in bad: qs+= [Q("sight_cert","Are they certified as","radio",[("severe","Severely sight impaired"),("si","Sight impaired"),("neither","Neither")]),G("see_g","Even with glasses",[("61_2","Can't see keyboard keys or large print","can"),("61_3","Can't see a TV well enough to follow a story","can"),("61_4","Can't see the shape of furniture","can"),("61_5","Can't recognise a face across a room","can"),("61_6","Can't recognise someone across a street","can")])]
+        if "see" in bad: qs+= [Q("sight_cert",f"{cap(P['be'])} certified as","radio",[("severe","Severely sight impaired"),("si","Sight impaired"),("neither","Neither")]),G("see_g","Even with glasses",[("61_2","Can't see keyboard keys or large print","can"),("61_3","Can't see a TV well enough to follow a story","can"),("61_4","Can't see the shape of furniture","can"),("61_5","Can't recognise a face across a room","can"),("61_6","Can't recognise someone across a street","can")])]
         if "hear" in bad: qs.append(G("hear_g","Hearing",[("62_1","Had a hearing test in the last 6 months","need"),("62_2","Can't hear a whisper in a quiet room","can"),("62_3","Can't hear a normal voice in a quiet room","can"),("62_4","Can't hear a loud voice in a quiet room","can"),("62_5","Can only hear the TV at very loud volume","need"),("62_6","Can't hear a school bell or car horn","can")]))
         if "speak" in bad: qs.append(G("speak_g","Speaking",[("63_1","Can't speak clearly in sentences","can"),("63_2","Can't put words together in simple sentences","can"),("63_3","Can't say single words","can"),("63_4","Can't talk with someone they know","can"),("63_5","Can't talk with someone they don't know","can")]))
-        if "comm" in bad: qs+= [Q("comm_how","How do they communicate? (tap any)","checks",[("64_1","Writing"),("64_1_2","BSL"),("64_1_3","Lip reading"),("64_1_4","Gestures and body language"),("64_1_5","Makaton"),("64_1_6","Signed Supported English"),("64_1_7","Signed English"),("64_1_8","Finger spelling"),("64_1_9","PECS (pictures)"),("64_1_10","Tadoma")]),
+        if "comm" in bad: qs+= [Q("comm_how",f"How {P['do']} communicate? (tap any)","checks",[("64_1","Writing"),("64_1_2","BSL"),("64_1_3","Lip reading"),("64_1_4","Gestures and body language"),("64_1_5","Makaton"),("64_1_6","Signed Supported English"),("64_1_7","Signed English"),("64_1_8","Finger spelling"),("64_1_9","PECS (pictures)"),("64_1_10","Tadoma")]),
                                 G("comm_g","Communicating",[("64_3","Can't communicate with someone they know","can"),("64_4","Can't communicate with someone they don't know","can")])]
         if d.get("fits") in ("month","week","day"):
             Y3=[("yes","Yes"),("no","No"),("some","Sometimes")]
             qs+= [Q("fit_type","What type?","checks",[("tonic-clonic seizures","Tonic-clonic"),("absence seizures","Absences"),("focal seizures","Focal"),("blackouts","Blackouts"),("drop attacks","Drop attacks")]),
-                  Q("fit_warn","Any warning before one?","radio",Y3),Q("fit_tell","Can they spot a warning and tell an adult?","radio",Y3),Q("fit_act","Can they spot a warning and get safe?","radio",Y3),
+                  Q("fit_warn","Any warning before one?","radio",Y3),Q("fit_tell",f"Can {P['subj']} spot a warning and tell an adult?","radio",Y3),Q("fit_act",f"Can {P['subj']} spot a warning and get safe?","radio",Y3),
                   G("fit_g","Fits",[("65_5","Seriously injured by a fit in the last 6 months","need"),("65_6","At risk of harm after a fit","need"),("65_11","Status epilepticus in the last 12 months","need")]),
                   Q("fit_days","Days a month with fits","radio",[("1","1"),("2-4","2–4"),("5-10","5–10"),("11-20","11–20"),("20+","Over 20")],cls=" nums"),Q("fit_per","Fits on those days","radio",[("1","1"),("2","2"),("3-5","3–5"),("6+","6 or more")],cls=" nums"),
                   Q("fit_nights","Nights a month with fits","radio",[("0","None"),("1","1"),("2-4","2–4"),("5-10","5–10"),("10+","Over 10")],cls=" nums"),Q("fit_nper","Fits on those nights","radio",[("1","1"),("2","2"),("3+","3 or more")],cls=" nums",dep=("fit_nights",["1","2-4","5-10","10+"]))]
@@ -362,18 +369,18 @@ def often_qs(form,d):
         if "notatschool" not in (d.get("school") or []):
             qs.append(G("school_g","At school or nursery, they need help to",[(f,l,"need") for f,l in [("68_1","Go to and use the toilet"),("68_2","Move safely between lessons"),("68_3","Change for PE"),("68_4","Eat meals"),("68_5","Take medicine or manage therapy"),("68_6","Communicate")]]))
         if d.get("age")!="u3" and "walk" in bad:
-            qs+= [Q("canwalk","Can they physically walk?","radio",YN),
-                  Q("dist","How far can they walk before they need to stop?","radio",[("200+","Over 200 metres"),("51-200","51 to 200 metres"),("50","50 metres or less"),("few","A few steps")],dep=("canwalk",["yes"])),
+            qs+= [Q("canwalk",f"Can {P['subj']} physically walk?","radio",YN),
+                  Q("dist",f"How far can {P['subj']} walk before needing to stop?","radio",[("200+","Over 200 metres"),("51-200","51 to 200 metres"),("50","50 metres or less"),("few","A few steps")],dep=("canwalk",["yes"])),
                   Q("wtime","How long does that take?","radio",[("5+","Over 5 minutes"),("3-4","3 to 4 minutes"),("1-2","1 to 2 minutes"),("lt1","Under a minute")],dep=("canwalk",["yes"])),
                   Q("speed","Walking speed compared with other children","radio",[("normal","Normal"),("slow","Slow (twice as long)"),("vslow","Very slow (can't keep up)")],dep=("canwalk",["yes"])),
                   Q("walk_other","Any other problems during or after walking, like pain, breathlessness or exhaustion?","radio",YN),
-                  Q("gait","The way they walk","radio",[("normal","Normally"),("limp","With a limp"),("shuffle","Shuffle"),("drag","Drag a leg"),("in","Feet turned in"),("toes","On their toes"),("balance","Poor balance"),("unable","Times they can't walk"),("refuse","Refuse or get distressed")],dep=("canwalk",["yes"]))]
+                  Q("gait",f"The way {P['subj']} {P['s']('walk')}","radio",[("normal","Normally"),("limp","With a limp"),("shuffle","Shuffle"),("drag","Drag a leg"),("in","Feet turned in"),("toes","On their toes"),("balance","Poor balance"),("unable","Times they can't walk"),("refuse","Refuse or get distressed")],dep=("canwalk",["yes"]))]
         if d.get("age")!="u3" and "out" in bad:
             c=set(R["out"].get("c") or []); known={f for cid,_,tk,_ in I.DLA_MOB[1][4] if cid in c for f,_ in tk}
             rows=[(f,l,pl) for f,l,pl in [("49_1","Can't find their way around places they know","can"),("49_2","Can't ask for and follow directions","can"),("49_3","Can't walk safely next to a busy road","can"),("49_4","Can't cross a road safely","can"),("49_5","Don't understand common dangers outdoors","can"),("49_6","Often get anxious, distressed or disorientated outside","need"),("49_7","Often behave unpredictably outside","need"),("49_8","Often need physical restraint","need")] if f not in known]
             if rows: qs.append(G("out_g","Outdoors",rows))
             if "falls" in c: qs+= [Q("falls_m","Falls a month","radio",[("1","1"),("2-4","2–4"),("5-10","5–10"),("10+","Over 10")],cls=" nums"),G("falls_g","After a fall",[("50_2","Can't get up without help","can"),("50_3","Injuries that needed hospital treatment","need")])]
-        qs.append(Q("hobby","Do they need help to join in hobbies, clubs or activities?","radio",YN))
+        qs.append(Q("hobby",f"{DO} need help to join in hobbies, clubs or activities?","radio",YN))
         qs.append(Q("acts","Which ones? (tap up to 6)","checks",ACTS_DLA,dep=("hobby",["yes"])))
         qs+=act_qs(ACTS_DLA,[("ah","what help?",ACT_HELP),("ao","how often?",ACT_OFTEN),("al","how long each time?",ACT_LONG)])
     return qs
@@ -397,7 +404,9 @@ def aid_qs(form,d,parts):
     if not A: return qs
     qs.append(Q("aid_p","Which were given or recommended by a doctor, nurse or occupational therapist? (tap any)","checks",[(str(i),a) for i,a in enumerate(A)]+([("all","All of them")] if len(A)>1 else [])+[("none","None of them")]))
     for k,label,O in parts:
-        if len(A)==1: qs.append(Q(f"aid_{k}",f"{A[0]}: {label[0].lower()+label[1:]}","radio",O)); continue
+        if len(A)==1:
+            one={"How do the aids help?":"how does it help?","Any problems using them?":"any problems using it?"}.get(label) or (label[0].lower()+label[1:]).replace(" with them?"," with it?")
+            qs.append(Q(f"aid_{k}",f"{A[0]}: {one}","radio",O)); continue
         qs+= [Q(f"aid_{k}",label,"radio",O,hint="For all of them."),Q(f"aid_{k}_diff","Different for some aids?","checks",[("1","Yes, set each one")],other=False)]
         qs+= [Q(f"aid_{k}_{i}",a,"radio",O,dep=(f"aid_{k}_diff",["1"])) for i,a in enumerate(A)]
     return qs
@@ -432,8 +441,13 @@ def is_wf_section(sec): return sec in {"you","child","helper","parent","health",
 def section_body(form,sec,d):
     w=W(d); pre=prefill(form,d)
     for k,v in pre.items(): w.setdefault(k,v)
-    h="".join(render_q(q,w) for q in questions(form,sec,d))
-    return h+DEP_JS
+    hs=[]
+    for q in questions(form,sec,d):
+        if q["id"].endswith("_diff") and hs:   # 30 Oct: 'Different for some parts?' rides on the question above (one screen, not two)
+            inner=I._checks(q["id"],q["opts"],w.get(q["id"]) if isinstance(w.get(q["id"]),list) else [],None)
+            k=hs[-1].rfind("</fieldset>"); hs[-1]=hs[-1][:k]+f'<div class=diffopt>{inner}</div>'+hs[-1][k:]; continue
+        hs.append(render_q(q,w))
+    return "".join(hs)+DEP_JS
 def save(form,sec,d,fm):
     w=W(d); qs=questions(form,sec,d)
     for q in qs: save_q(q,fm,w)
@@ -593,7 +607,7 @@ def pdf_values(form,d,uploads=None):
         # Q17 professional, Q18 helper, Q19 GP
         p=prof(form,d)
         if p:
-            t("x17","/Yes"); v("17_1",w.get("pr_name") or f"Their {p.lower()}"); v("17_2",p); addr(["17_3","17_4","17_5"],[w.get("pr_where"),w.get("pr_town")])
+            t("x17","/Yes"); v("17_1",w.get("pr_name") or f"My {p.lower()}"); v("17_2",p); addr(["17_3","17_4","17_5"],[w.get("pr_where"),w.get("pr_town")])
             v("17_6",w.get("pr_pc")); v("17_7",w.get("pr_tel")); v("17_8",w.get("pr_hosp")); v("17_9",lab([(x,x) for x in [c["name"] for c in conds(d)]],w.get("pr_cond"),w.get("pr_cond_x")))
             v("17_10",lab(HOWOFTEN,w.get("pr_often"),w.get("pr_often_x"))); v("17_11",seen_txt(w.get("pr_seen"),w.get("pr_seen_x")))
         elif w.get("pr_any"): t("x17",yn(w["pr_any"]))
@@ -606,7 +620,7 @@ def pdf_values(form,d,uploads=None):
                 else: addr(["18_2","18_3","18_4"],[w.get("h_addr1"),w.get("h_town")]); v("18_5",w.get("h_pc"))
             else:
                 v("18_1",w.get("hp_name")); addr(["18_2","18_3","18_4"],[w.get("hp_addr"),w.get("hp_town")]); v("18_5",w.get("hp_pc")); v("18_6",w.get("hp_tel"))
-            what=[dict([("personal care","Washing and dressing"),("meals","Meals"),("medicines","Medicines"),("getting about","Getting about"),("keeping an eye","Keeping an eye on them")])[x] for x in w.get("hp_what") or []]+([w["hp_what_x"]] if w.get("hp_what_x") else [])
+            what=[dict([("personal care","Washing and dressing"),("meals","Meals"),("medicines","Medicines"),("getting about","Getting about"),("keeping an eye","Keeping an eye on me")])[x] for x in w.get("hp_what") or []]+([w["hp_what_x"]] if w.get("hp_what_x") else [])
             v("18_7",", ".join(what)); v("18_8",w.get("hp_rel_x") or w.get("hp_rel")); v("18_9",w.get("hp_often_x") or w.get("hp_often"))
         elif hp=="no": t("x18","/No")
         if w.get("gp_name"):
@@ -637,8 +651,8 @@ def pdf_values(form,d,uploads=None):
         for i,a in enumerate(aids(d)):
             base=4*i+1
             if w.get(f"aid_p_{i}")=="yes": t(f"27-{base+1}","/Yes")
-            v(f"27-{base+2}",lab([("safer","Keeps me safer" if me_ else "Keeps them safer"),("indep","Lets me do more on my own" if me_ else "Lets them do more on their own"),("pain","Less pain"),("atall","Couldn't manage without it")],w.get(f"aid_h_{i}"),w.get(f"aid_h_{i}_x")))
-            v(f"27-{base+3}",lab([("none","No problems using it"),("help","Needs help to use it"),("still","Still struggles even with it"),("pain","Painful or tiring to use")],w.get(f"aid_d_{i}"),w.get(f"aid_d_{i}_x")))
+            v(f"27-{base+2}",lab([("safer","Keeps me safer"),("indep","Lets me do more on my own"),("pain","Less pain"),("atall","Couldn't manage without it")],w.get(f"aid_h_{i}"),w.get(f"aid_h_{i}_x")))
+            v(f"27-{base+3}",lab([("none","No problems using it"),("help","I need help to use it"),("still","I still struggle even with it"),("pain","Painful or tiring to use")],w.get(f"aid_d_{i}"),w.get(f"aid_d_{i}_x")))
         v("28",ukd(w.get("care_start")))
         if w.get("care_start"): t("363","/Yes")
         # how often each day
@@ -668,7 +682,7 @@ def pdf_values(form,d,uploads=None):
             for j,k in enumerate(grp):
                 f=start+3*j; v(f"39-{f}",dict(ACTS_AA)[k]); v(f"39-{f+1}",lab(ACT_HELP,w.get(f"ah_{k}"),w.get(f"ah_{k}_x"))); v(f"39-{f+2}",lab(ACT_OFTEN,w.get(f"ao_{k}"),w.get(f"ao_{k}_x")))
         if w.get("acts_x") and len(home)<3: v(f"39-{1+3*len(home)}",w["acts_x"])
-        v("34-1",lab([("legs","My legs give way" if me_ else "Their legs give way"),("trip","Trips"),("dizzy","Gets dizzy or blacks out"),("balance","Loses balance")],w.get("fall_what"),w.get("fall_what_x")))
+        v("34-1",lab([("legs","My legs give way"),("trip","I trip"),("dizzy","I get dizzy or black out"),("balance","I lose balance")],w.get("fall_what"),w.get("fall_what_x")))
         v("34-7",lab([("0","None"),("1","1"),("2","2"),("3+","3 or more")],w.get("falls_m")))
         v("34-9",lab([("0","None"),("1-2","1 to 2"),("3-5","3 to 5"),("6+","6 or more")],w.get("stum_m"))); v("34-10",lab([("0","None"),("1-5","1 to 5"),("6-20","6 to 20"),("20+","More than 20")],w.get("stum_y")))
         v("34-6",lab([("week","This week"),("month","This month"),("months","In the last 6 months"),("year","Over 6 months ago")],w.get("stum_last"),w.get("stum_last_x")))
@@ -677,7 +691,7 @@ def pdf_values(form,d,uploads=None):
             t(em[k][0],"/Yes")
             if d.get("watch") in ("some","most") and em[k][1]: t(em[k][1],"/Yes")
         if d.get("watch") in ("some","most") and "danger" in (d.get("eye") or []): t("304","/Yes")
-        v("41",w.get("eye_days")); other("Keeping an eye on them","eye2")
+        v("41",w.get("eye_days")); other("Keeping an eye on me","eye2")
         v("310",lab([("1","Once"),("2","Twice"),("3","3 times"),("4+","4 or more times")],w.get("w_times"),w.get("w_times_x"))); v("311",w.get("w_long_x") or w.get("w_long")); v("314",w.get("w_nights"))
         nt={"1":"/Once","2":"/Twice","3":"/Three","4+":"/Three"}.get(d.get("ntimes")); nmn=I.TIME_T.get(d.get("nmins"),"")
         night=set(d.get("night") or []); np_=set(w.get("n_prompt") or [])
