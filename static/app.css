@@ -279,3 +279,59 @@ details.more>summary{color:var(--ink);font-weight:600}details.more>summary:befor
 .cond select,.cond input[type=text],.cond input:not([type]){border-color:var(--muted)}
 a{color:var(--brand)}a:hover{color:var(--brand-dk)}
 .inset{border-left:0;background:#f3f4f6;border-radius:var(--r);padding:1.2rem 1.5rem}
+
+/* compact (30 Oct 2026, branch ui-compact): normal size on laptops/desktops, same brand. Simon: "the ui looks so massive on the screen".
+   Desktop body 18px, buttons stay 48px+, phone layout kept (only oversized bits trimmed). Shared by the site's styles.css and the app's app.css. */
+body{line-height:1.5}
+h1{font-size:1.6rem;line-height:1.2;letter-spacing:-.02em}h2{font-size:1.2rem;margin:1.8em 0 .6em}
+main{padding:18px 0 48px}
+.hero{padding:24px 22px 24px;margin:.4rem 0 1.6rem}.hero .one,.hero p{font-size:1.05rem}
+.hero .btn{font-size:1.05rem;min-height:48px;padding:.55em 1.3em;margin-top:.6rem}
+.stepper li{padding-top:14px}.stepper li:before,.stepper li.past:before,.stepper li.now:before{height:6px}
+.stepnow{margin:.2rem 0 .8rem}
+.fcards{gap:14px}.fcard{padding:1.1rem 1.2rem 1.2rem}.fcard .fn{font-size:1.25rem}
+.pkg{padding:1.2rem 1.25rem 1.3rem}
+.needhelp{margin-top:2.2rem;padding:1.1rem 1.25rem}
+#faq{margin-top:2em}
+.ftr{padding:28px 0 36px}
+@media(min-width:641px){body{font-size:19px}}
+@media(min-width:821px){
+ body{font-size:18px}
+ h1{font-size:2.05rem;line-height:1.18;letter-spacing:-.025em;margin:.1em 0 .4em}
+ h2{font-size:1.3rem;margin:1.8em 0 .6em}
+ p,li{max-width:40em}
+ main{padding:20px 0 56px}
+ .hdr .wrap{padding-top:12px;padding-bottom:12px}.logo img{height:24px}.hdr nav a{font-size:.95rem;padding:.5rem .1rem}
+ .indep,.indep .tag{font-size:.85rem}.indep .wrap{padding-top:6px;padding-bottom:6px}
+ /* step bar: thin, one line per step */
+ .stepper{gap:6px;margin:0 0 .2rem}.stepper li{padding-top:12px;font-size:.9rem;flex-direction:row;align-items:baseline;gap:.4em}
+ .stepper .n{font-size:.9rem}
+ .stepnow{font-size:.95rem;margin:.15rem 0 .9rem}
+ /* hero: about a third of the screen */
+ .hero{padding:26px 34px 28px;margin:.3rem 0 1.5rem}
+ .hero-lt .dots{width:150px}
+ .hero .dots{width:180px;right:-6px;top:-10px}
+ .hero h1,.hero .caption{max-width:calc(100% - 170px)}
+ .hero .one,.hero p{font-size:1.1rem;max-width:30em;margin-bottom:.4rem}
+ .hero .caption{font-size:.85rem;margin-bottom:.4rem}
+ .hero .btn{font-size:1.05rem;margin-top:.6rem;padding:.55em 1.4em}
+ .btn{min-height:48px;padding:.6em 1.3em}.btn-big{font-size:1.1rem;padding:.65em 1em;margin:.8rem 0}
+ /* form cards: icon beside the title */
+ .fcards{gap:16px;margin:.6rem 0 1.1rem}
+ .fcard{display:grid;grid-template-columns:40px 1fr;column-gap:14px;row-gap:.3rem;align-content:start;padding:1.1rem 1.3rem 1.2rem}
+ .fcard:before{width:40px;height:40px;background-size:40px;margin:0;grid-row:1 / span 3;align-self:start}
+ .fcard .fn{font-size:1.2rem;line-height:1.3;padding-top:.3rem}.fcard .fw{font-size:1rem;line-height:1.45}
+ .fcard .fp{justify-self:start;margin-top:.5rem;padding:0 1.3rem;font-size:1rem}
+ .alsoform,.hint{font-size:.95rem}
+ /* package cards */
+ .pkgs{gap:16px}.pkg{padding:1.2rem 1.4rem 1.3rem}.pkg h2{font-size:1.2rem}.pkg .pr{font-size:1.85rem}
+ .panel{padding:1.1rem 1.4rem}.promise,.reassure,.honest{padding:.8rem 1.1rem}.inset{padding:1rem 1.3rem}
+ details.more{padding:.35rem 0;margin:.3rem 0}
+ #faq{font-size:1.15rem;margin-top:2em}
+ .needhelp{margin-top:2.2rem;padding:1.1rem 1.4rem}.needhelp h2{font-size:1.1rem}
+ .ftr{padding:28px 0 36px;font-size:.95rem}
+ /* app: questions, pay, get your form */
+ .qcount{font-size:.95rem;margin:.3rem 0 .4rem}
+ .qs fieldset.iq legend,.qs .card h3{font-size:1.15rem}
+ .total{font-size:1.15em}
+}
