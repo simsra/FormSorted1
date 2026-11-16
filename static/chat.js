@@ -5,12 +5,20 @@ var $=function(s,r){return (r||document).querySelector(s)},$$=function(s,r){retu
 function el(t,c,h){var e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e}
 function txt(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 var ORB='<span class=orb aria-hidden=true></span>';
+function svg(p,c){return '<svg class=ic viewBox="0 0 24 24" width=16 height=16 fill=none stroke=currentColor stroke-width=2.4 stroke-linecap=round stroke-linejoin=round aria-hidden=true style="color:'+c+'">'+p+'</svg>'}
+var IC={check:svg('<path d="M20 6 9 17l-5-5"/>','#079455'),x:svg('<path d="M18 6 6 18M6 6l12 12"/>','#D92D20')};
+var RM=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function typing(){return el('div','turn bot new',ORB+'<div class="bub typing" role=status aria-label="FormSorted assistant is typing"><i></i><i></i><i></i></div>')}
+/* Yes / No answers get a check or a cross, like the reference buttons (look only) */
+$$('label.chip').forEach(function(c){var sp=c.querySelector('span');if(!sp)return;var t=sp.textContent.trim();if(/^yes([,.!]|$)/i.test(t))c.classList.add('yes');else if(/^no([,.!]|$)/i.test(t))c.classList.add('no')});
+/* Help: the footer link opens the help list */
+$$('[data-help]').forEach(function(a){a.addEventListener('click',function(e){var h=document.getElementById('help');if(!h)return;e.preventDefault();h.open=true;scrollTo(h);var s=h.querySelector('summary');if(s)s.focus({preventScroll:true})})});
 function botBubble(html){var t=el('div','turn bot new',ORB+'<div class=bub>'+html+'</div>');return t}
 function meBubble(s){return el('div','turn me new','<div class=bub>'+txt(s)+'</div>')}
 function scrollTo(e){if(!e)return;try{e.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(_){e.scrollIntoView()}}
 /* ---- reveal buttons (home: Not sure / Something else) ---- */
 $$('[data-show]').forEach(function(b){b.addEventListener('click',function(){var t=document.getElementById(b.getAttribute('data-show'));if(!t)return;
- $$('.reveal').forEach(function(r){if(r!==t)r.hidden=true});t.hidden=false;var i=$('input',t);scrollTo(t);if(i)setTimeout(function(){i.focus({preventScroll:true})},250)})});
+ $$('.reveal').forEach(function(r){if(r!==t)r.hidden=true});t.hidden=false;var i=$('input,textarea',t);scrollTo(t);if(i)setTimeout(function(){i.focus({preventScroll:true})},250)})});
 /* ---- help answers: a fixed list, matched by words (no free-form answers are made up) ---- */
 var FAQ=[];try{FAQ=JSON.parse(($('#cfaq')||{}).textContent||'[]')}catch(_){}
 var SYN={pay:'pay paid paying payment cost costs price much fee charge money card when',stop:'stop later come back save pause finish leave',
@@ -30,10 +38,11 @@ function replyHelp(q,where){var f=answer(q),w=where||$('#replies')||$('#thread')
 var ROUTE=[];try{ROUTE=JSON.parse(($('#croute')||{}).textContent||'[]')}catch(_){}
 function route(s){var t=' '+s.toLowerCase().replace(/[^a-z0-9 ]/g,' ')+' ';for(var i=0;i<ROUTE.length;i++){for(var j=0;j<ROUTE[i].w.length;j++){if(t.indexOf(' '+ROUTE[i].w[j]+' ')>=0||(ROUTE[i].w[j].indexOf(' ')>0&&t.indexOf(ROUTE[i].w[j])>=0))return ROUTE[i]}}return null}
 function replyRoute(s,where){var r=route(s),w=where||$('#replies')||$('#thread');w.appendChild(meBubble(s));
- var b=r?botBubble('<p>It sounds like you need the <strong>'+txt(r.name)+'</strong> form.</p><div class=qchips><a class=qchip href="'+r.href+'">Yes, '+txt(r.name)+'</a><button type=button class="qchip alt" data-again=1>No, something else</button></div>')
+ var b=r?botBubble('<p>It sounds like you need the <strong>'+txt(r.name)+'</strong> form.</p><div class=qchips><a class="qchip c5" href="'+r.href+'">'+IC.check+'Yes, '+txt(r.name)+'</a><button type=button class="qchip alt" data-again=1>'+IC.x+'No, something else</button></div>')
   :botBubble('<p>I can fill in these forms at the moment: Attendance Allowance, PIP, PIP review, DLA for a child, Blue Badge and Access to Work. Tap one above. If yours isn\'t one of these, email <a href="mailto:hello@formsorted.com">hello@formsorted.com</a>.</p>');
  w.appendChild(b);var a=$('[data-again]',b);if(a)a.addEventListener('click',function(){var c=$('#cmsg')||$('#selse_t');if(c)c.focus()});scrollTo(b)}
-$$('form.elseask').forEach(function(f){f.addEventListener('submit',function(e){e.preventDefault();var i=$('input',f),v=i.value.trim();if(!v){i.focus();return}i.value='';
+$$('form.elseask').forEach(function(f){var i0=$('input,textarea',f);if(i0)i0.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();f.requestSubmit?f.requestSubmit():f.dispatchEvent(new Event('submit',{cancelable:true}))}});
+ f.addEventListener('submit',function(e){e.preventDefault();var i=$('input,textarea',f),v=i.value.trim();if(!v){i.focus();return}i.value='';
  if(isQuestion(v)&&!route(v))replyHelp(v,f.closest('.reveal'));else replyRoute(v,f.closest('.reveal'))})});
 /* ---- questions, one at a time, as a conversation ---- */
 var Q=null;(function(){var box=$('#qs');if(!box)return;var form=box.closest('form'),nav=form.querySelector('.navrow'),sub=nav.querySelector('button[value=next]'),sback=nav.querySelector('button[value=back]'),cnt=$('#qcount');
@@ -43,6 +52,14 @@ kids.forEach(function(e){if(/^(P|H2|H3)$/.test(e.tagName)&&!e.querySelector('inp
 var last=steps[steps.length-1],sm=simple(e);if(sm&&last&&last.sm&&last.els.length<3&&!pre.length){last.els.push(e);return}steps.push({els:pre.concat([e]),sm:sm});pre=[]});
 if(pre.length&&steps.length)steps[steps.length-1].els=steps[steps.length-1].els.concat(pre);
 if(!steps.length)return;
+var TIC={"user": "<path d=\"M20 21c0-1.396 0-2.093-.172-2.661a4 4 0 0 0-2.667-2.667c-.568-.172-1.265-.172-2.661-.172h-5c-1.396 0-2.093 0-2.661.172a4 4 0 0 0-2.667 2.667C4 18.907 4 19.604 4 21M16.5 7.5a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z\"/>", "cal": "<path d=\"M21 10H3m13-8v4M8 2v4m2.5 8 1.5-1v5m-1.25 0h2.5M7.8 22h8.4c1.68 0 2.52 0 3.162-.327a3 3 0 0 0 1.311-1.311C21 19.72 21 18.88 21 17.2V8.8c0-1.68 0-2.52-.327-3.162a3 3 0 0 0-1.311-1.311C18.72 4 17.88 4 16.2 4H7.8c-1.68 0-2.52 0-3.162.327a3 3 0 0 0-1.311 1.311C3 6.28 3 7.12 3 8.8v8.4c0 1.68 0 2.52.327 3.162a3 3 0 0 0 1.311 1.311C5.28 22 6.12 22 7.8 22Z\"/>", "pin": "<path d=\"M12 12.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z\"/><path d=\"M12 22c2-4 8-6.582 8-12a8 8 0 1 0-16 0c0 5.418 6 8 8 12Z\"/>", "edit": "<path d=\"M11 4H6.8c-1.68 0-2.52 0-3.162.327a3 3 0 0 0-1.311 1.311C2 6.28 2 7.12 2 8.8v8.4c0 1.68 0 2.52.327 3.162a3 3 0 0 0 1.311 1.311C4.28 22 5.12 22 6.8 22h8.4c1.68 0 2.52 0 3.162-.327a3 3 0 0 0 1.311-1.311C20 19.72 20 18.88 20 17.2V13M8 16h1.675c.489 0 .733 0 .963-.055.204-.05.4-.13.579-.24.201-.123.374-.296.72-.642L21.5 5.5a2.121 2.121 0 0 0-3-3l-9.563 9.563c-.346.346-.519.519-.642.72a2 2 0 0 0-.24.579c-.055.23-.055.474-.055.963V16Z\"/>"};
+function cardIcon(t){t=t.toLowerCase();return /date|born|birth|when|age/.test(t)?TIC.cal:/address|postcode|town|street|live/.test(t)?TIC.pin:/name|called/.test(t)?TIC.user:TIC.edit}
+var H1=$('.turn.bot.intro h1');
+steps.forEach(function(st){if(!st.sm)return;var real=st.els.filter(function(e){return !e.hasAttribute('data-qpre')});if(!real.length)return;
+ var lg=real[0].querySelector('legend,label,.q');var q=lg?lg.textContent.trim():'';
+ var c=el('div','qcard'),hd=el('div','qch','<span class=otile aria-hidden=true><svg viewBox="0 0 24 24" width=24 height=24 fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round>'+cardIcon(q+' '+(H1?H1.textContent:''))+'</svg></span>'+
+  '<span class=qct>'+txt(real.length>1&&H1?H1.textContent.trim():q)+'</span><span class=qcs>'+(real.length>1?'Type them as they should appear on the form.':'Type it as it should appear on the form.')+'</span>');
+ c.appendChild(hd);st.els[0].parentNode.insertBefore(c,st.els[0]);st.els.forEach(function(e){c.appendChild(e)});st.card=c});
 function ok(st){return st.els.some(function(e){return !e.hidden&&!e.hasAttribute('data-qpre')})}
 var cur=0,qb=el('button','btn btn-2','Back'),qn=el('button','btn btn-start','Next question');qb.type=qn.type='button';qb.setAttribute('aria-label','Back');qn.setAttribute('aria-label','Next question');
 if(steps.length>1){nav.insertBefore(qb,nav.firstChild);nav.appendChild(qn)}
@@ -55,17 +72,23 @@ function summ(st){var out=[];st.els.forEach(function(e){if(e.hidden)return;$$('i
  if(i.classList.contains('elsebox'))return;if(i.tagName=='SELECT'){if(i.value&&i.selectedIndex>0)out.push(i.options[i.selectedIndex].text);return}
  if(i.value&&i.value.trim())out.push(i.type=='date'?fmtDate(i.value):i.value.trim())})});
  var t=out.join(' · ');if(t.length>180)t=t.slice(0,177)+'…';return t||'Skipped'}
-function hist(st){if(!st.h){st.h=el('div','chist');st.els[0].parentNode.insertBefore(st.h,st.els[0])}
+function hist(st){if(!st.h){st.h=el('div','chist');var a=st.card||st.els[0];a.parentNode.insertBefore(st.h,a)}
  st.h.innerHTML='<div class="turn bot">'+ORB+'<div class=bub>'+txt(qtext(st)||'Question')+'</div></div><div class="turn me"><button type=button class=bub>'+txt(summ(st))+'<span class=chg>Change</span></button></div>';
  st.h.querySelector('button').onclick=function(){cur=steps.indexOf(st);show(true)};st.h.hidden=false}
 function show(focus){var L=live();if(L.indexOf(steps[cur])<0){for(var j=cur;j<steps.length&&!ok(steps[j]);j++);cur=j<steps.length?j:steps.indexOf(L[L.length-1])}
-var k=L.indexOf(steps[cur]);steps.forEach(function(st,j){st.els.forEach(function(e){e.classList.toggle('qoff',j!==cur);e.classList.toggle('qnow',j===cur);e.classList.remove('qfirst')});var f0=st.els.filter(function(e){return !e.hidden})[0];if(j===cur&&f0)f0.classList.add('qfirst');
+var k=L.indexOf(steps[cur]);steps.forEach(function(st,j){if(st.card){st.card.classList.toggle('qoff',j!==cur);st.card.classList.toggle('qnow',j===cur);st.card.classList.toggle('qfirst',j===cur)}st.els.forEach(function(e){e.classList.toggle('qoff',j!==cur);e.classList.toggle('qnow',j===cur);e.classList.remove('qfirst')});var f0=st.els.filter(function(e){return !e.hidden})[0];if(j===cur&&f0)f0.classList.add('qfirst');
  if(j<cur&&ok(st))hist(st);else if(st.h)st.h.hidden=true});
 cnt.hidden=L.length<2;cnt.textContent='Question '+(k+1)+' of '+L.length;var lastq=k===L.length-1;qn.hidden=lastq;sub.hidden=!lastq;qb.hidden=k===0;if(sback)sback.hidden=k>0;
 side.innerHTML='';
 if(focus){var h=steps[cur].els.filter(function(e){return !e.hidden})[0];var t=h&&h.querySelector('legend,h3,.q');if(t){t.setAttribute('tabindex','-1');t.focus({preventScroll:true})}
  var top=steps[cur].h||h;setTimeout(function(){var r=h.getBoundingClientRect();if(r.top<90||r.top>window.innerHeight*0.55)window.scrollBy({top:r.top-110,behavior:'smooth'})},30)}}
-function go(d){var L=live(),k=L.indexOf(steps[cur])+d;if(k<0||k>=L.length)return;cur=steps.indexOf(L[k]);show(true)}
+var waiting=0;
+function go(d){var L=live(),k=L.indexOf(steps[cur])+d;if(k<0||k>=L.length||waiting)return;cur=steps.indexOf(L[k]);
+ if(d<0||RM){show(true);return}
+ /* a short typing indicator between questions (look only; nothing is sent) */
+ show(false);var st=steps[cur],parts=(st.card?[st.card]:[]).concat(st.els);parts.forEach(function(e){e.classList.add('qwait')});nav.classList.add('qwait');
+ var t=typing();side.innerHTML='';side.appendChild(t);scrollTo(t);waiting=1;
+ setTimeout(function(){waiting=0;if(t.parentNode)t.parentNode.removeChild(t);parts.forEach(function(e){e.classList.remove('qwait')});nav.classList.remove('qwait');show(true)},520)}
 qn.addEventListener('click',function(){go(1)});qb.addEventListener('click',function(){go(-1)});
 form.addEventListener('keydown',function(ev){if(ev.key==='Enter'&&ev.target.tagName==='INPUT'&&!qn.hidden){ev.preventDefault();go(1)}});
 document.addEventListener('change',function(){setTimeout(function(){show(false)},0)});

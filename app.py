@@ -19,11 +19,11 @@ import bluebadge as BB, printmail
 import evidence as EVID, honesty as HONEST, fraud as FRAUD
 import wholeform as WF, secure as SECURE
 import accounts as ACCT
-import chatui as CHAT
+import chatui as CHAT, uikit as UI, html
 BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STRIPE_SECRET_KEY_PLACEHOLDER")
 PUBLIC=os.getenv("PUBLIC_URL","http://localhost:8000"); DEV=STRIPE.endswith("PLACEHOLDER")
 HERE=os.path.dirname(os.path.abspath(__file__)); OUT=store.OUT; DB=store.SQLITE_PATH
-import hashlib as _hl; CSS_V=_hl.sha256(open(os.path.join(HERE,"static","app.css"),"rb").read()+open(os.path.join(HERE,"static","chat.css"),"rb").read()+open(os.path.join(HERE,"static","chat.js"),"rb").read()).hexdigest()[:10]   # cache-bust: browsers keep old app.css otherwise (30 Oct 2026)
+import hashlib as _hl; CSS_V=_hl.sha256(open(os.path.join(HERE,"static","app.css"),"rb").read()+open(os.path.join(HERE,"static","chat.css"),"rb").read()+open(os.path.join(HERE,"static","ui.css"),"rb").read()+open(os.path.join(HERE,"static","chat.js"),"rb").read()).hexdigest()[:10]   # cache-bust: browsers keep old app.css otherwise (30 Oct 2026)
 ICON_V=_hl.sha256(open(os.path.join(HERE,"static","logo-white.svg"),"rb").read()+open(os.path.join(HERE,"static","favicon.svg"),"rb").read()).hexdigest()[:10]   # brand logo/favicon cache-bust
 DOTS='<svg class="dots" aria-hidden="true" focusable="false" viewBox="0 0 240 220" fill="#9db1f9"><circle cx="78" cy="10" r="8"/><circle cx="112" cy="10" r="8"/><circle cx="146" cy="10" r="8"/><circle cx="61" cy="40" r="8"/><circle cx="95" cy="40" r="8"/><circle cx="163" cy="40" r="8"/><circle cx="197" cy="40" r="8"/><circle cx="78" cy="70" r="8"/><circle cx="112" cy="70" r="8"/><circle cx="146" cy="70" r="8"/><circle cx="214" cy="70" r="8"/><circle cx="27" cy="100" r="8"/><circle cx="61" cy="100" r="8"/><circle cx="95" cy="100" r="8"/><circle cx="163" cy="100" r="8"/><circle cx="197" cy="100" r="8"/><circle cx="78" cy="130" r="8"/><circle cx="112" cy="130" r="8"/><circle cx="146" cy="130" r="8"/><circle cx="214" cy="130" r="8"/><circle cx="61" cy="160" r="8"/><circle cx="95" cy="160" r="8"/><circle cx="163" cy="160" r="8"/><circle cx="197" cy="160" r="8"/><circle cx="78" cy="190" r="8"/><circle cx="112" cy="190" r="8"/><circle cx="146" cy="190" r="8"/></svg>'   # decorative brand dot motif (aria-hidden), same as the site's brand_edits.dots()
 os.makedirs(OUT,exist_ok=True)
@@ -58,20 +58,34 @@ HELP_FAQ=[("When do I pay?","Only at the end, after the questions. You see the p
 def need_help():
     """Small help area at the bottom of every screen: common questions behind a toggle, plus the email address. No promise that a person checks anything."""
     qa="".join(f"<details class=qa><summary>{esc(q)}</summary><p>{esc(a)}</p></details>" for q,a in HELP_FAQ)
+    if CHAT.on():
+        return f"""<details class=helpbox id=help><summary>{UI.icon("help",18)}<span id=nh>Need help? Questions people ask</span></summary>{qa}<p>Or email <a href="mailto:hello@formsorted.com">hello@formsorted.com</a></p></details>"""
     return f"""<section class=needhelp aria-labelledby=nh><h2 id=nh>Need help?</h2><details class=more><summary>Questions people ask</summary>{qa}</details><p>Or email <a href="mailto:hello@formsorted.com">hello@formsorted.com</a></p></section>"""
+CARD_PAGES=(("action=/pay/","pay"),("action=/details/","details"),("action=/approve/","approve"),("action=/ticks/","ticks"),("action=/deadline/","deadline"),("action=/uploads/","uploads"),
+ ("action=/confirm/","confirm"),("action=/check/","check"),("action=/delete/","delete"),("action=/account/","save"))
 def chat_page(body,title,minimal):
-    """Chat look (16 Nov 2026): slim header with the assistant and a quiet progress line, one conversation column,
-    a message bar at the bottom, the same footer words and links. Pages that don't build their own turns become one assistant message."""
-    pr,body=CHAT.split_prog(body)
-    if 'class="turn ' not in body: body=CHAT.bot(body)
+    """Untitled UI look (Simon, 16 Nov 2026): onboarding-style step list on the left (desktop) or a slim progress line (phone),
+    and a full-height chat panel: the assistant, the conversation, a message bar with 'Save and finish later' and 'Help' under it.
+    Pages that don't build their own turns become one assistant message, or an onboarding card when they are a form to fill in."""
+    n,sub,srline,body=CHAT.split_prog(body)
+    if 'class="turn ' not in body:
+        kind=next((k for m,k in CARD_PAGES if m in body),None)
+        body=CHAT.card(body,kind) if kind else CHAT.bot(body)
     # the message bar: not on pages that ask for NI numbers or bank details (those go only into the PDF), nor on payment confirmation pages
-    bar,faq=("","") if ("action=/details/" in body or "/success" in body) else CHAT.composer(HELP_FAQ)
+    bar,faq=("","") if ("action=/details/" in body or "/success" in body) else CHAT.composer(HELP_FAQ,placeholder="Ask a question or name your form" if "id=croute" in body else "Type an answer or ask a question")
     contact="" if minimal else '<a data-contact href="mailto:hello@formsorted.com">Contact</a>'
-    return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg?v={ICON_V} type=image/svg+xml><link rel=icon href=/static/favicon-32.png?v={ICON_V} sizes=32x32 type=image/png><link rel=apple-touch-icon href=/static/apple-touch-icon.png?v={ICON_V}><meta name=theme-color content='#ffffff'><link rel=stylesheet href=/static/app.css?v={CSS_V}><link rel=stylesheet href=/static/chat.css?v={CSS_V}><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body class=chat><a href="#main" class="skip">Skip to main content</a>
-<header class=chdr><div class=cwrap><a class=logo href="/"><img src="/static/logo.svg?v={ICON_V}" alt="FormSorted home" width="160" height="20"></a><div class=who>{CHAT.ORB}<span><strong>{CHAT.NAME}</strong><span class=indep2>Independent. Not affiliated with DWP or GOV.UK.</span></span></div></div>{f'<div class=cwrap>{pr}</div>' if pr else ''}</header>
-<main id=main><div class="cwrap thread" id=thread>{body}</div><div class=cwrap>{need_help()}</div></main>
-{f'<div class=cbarwrap><div class=cwrap>{bar}</div></div>' if bar else ''}
-<footer class="ftr cftr"><div class=cwrap><p><strong>FormSorted</strong> is an independent online form-filling service. Not affiliated with DWP, GOV.UK or any government body. We can't guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a>{contact}</p></div></footer>
+    save=(f'<button type=submit form=qform name=nav value=save>{UI.icon("save",16)}Save and finish later</button>') if "id=qform" in body else ""
+    crow=f'<div class=crow><div class=cl>{save}<a href="#help" data-help>{UI.icon("help",16)}Help</a></div><span class=priv>{UI.icon("lock",14)} Private to you</span></div>'
+    cur=UI.STEPS[n-1][0] if n else ""
+    side=f'''<aside class=uside aria-label="Your progress">{UI.logo("/")}{UI.steplist(n,html.unescape(sub)) if n else ""}<div class=sidefoot><p>Independent. Not affiliated with DWP or GOV.UK.</p><p><a href="mailto:hello@formsorted.com">hello@formsorted.com</a></p></div></aside>'''
+    mbar=(f'''<div class=mbar aria-hidden=true><div class=mrow>{UI.logo("/")}<span class=mstep><strong>{esc(cur)}</strong> · {n}/5</span></div><div class=mtrack>{"".join(f'<i class="{"on" if j<=n else ""}"></i>' for j in range(1,6))}</div></div>'''
+          if n else f'<div class=mbar aria-hidden=true><div class=mrow>{UI.logo("/")}</div></div>')
+    return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg?v={ICON_V} type=image/svg+xml><link rel=icon href=/static/favicon-32.png?v={ICON_V} sizes=32x32 type=image/png><link rel=apple-touch-icon href=/static/apple-touch-icon.png?v={ICON_V}><meta name=theme-color content='#ffffff'><link rel=preload href=/static/inter-var.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/static/ui.css?v={CSS_V}><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body class="uapp chat"><a href="#main" class="skip">Skip to main content</a>
+<div class=ushell>{side}<div class=umain>{mbar}<section class=upanel aria-label="{CHAT.NAME}"><header class=phead><div class=who>{CHAT.ORB}<span><strong>{CHAT.NAME}</strong><span class=st>Independent form-filling service</span></span></div><nav class=plinks aria-label=Help><a href="#help" data-help>{UI.icon("help",18)}<span>Help</span></a></nav></header>
+<main id=main class=thread>{srline}<div id=thread>{body}</div>{need_help()}</main>
+{f'<div class=pfoot><div class=inner>{bar}{crow}</div></div>' if bar else f'<div class=pfoot><div class=inner>{crow}</div></div>'}
+</section>
+<footer class="ftr uftr"><p><strong>FormSorted</strong> is an independent online form-filling service. Not affiliated with DWP, GOV.UK or any government body. We can't guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a>{contact}</p></footer></div></div>
 {faq}<script src=/static/chat.js?v={CSS_V}></script></body></html>""")
 def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
     if CHAT.on(): return chat_page(body,title,minimal)
@@ -89,6 +103,16 @@ def stripe(method,path,data=None):
         headers={"Authorization":"Basic "+base64.b64encode((STRIPE+":").encode()).decode()})
     return json.load(urllib.request.urlopen(req,timeout=30))
 app=FastAPI()
+from starlette.exceptions import HTTPException as _StarHTTP
+from fastapi.exception_handlers import http_exception_handler as _default_http
+@app.exception_handler(_StarHTTP)
+async def _friendly_errors(request:Request, exc:_StarHTTP):
+    """Untitled UI look: a browser that opens a missing or expired link gets a plain page in the same style (API calls keep JSON)."""
+    p=request.url.path
+    if CHAT.on() and request.method=="GET" and exc.status_code in (404,410) and "text/html" in request.headers.get("accept","") and not p.startswith(("/api/","/static/","/webhooks","/cron","/download/")):
+        r=page("<h1>Sorry, we can't find that page</h1><p class=one>The link may be old or mistyped. If you started a form, use the private link we gave you. Or start again below.</p><p><a class='btn btn-2' href='/'>Go to the start</a></p>","Page not found")
+        r.status_code=exc.status_code; return r
+    return await _default_http(request,exc)
 @app.middleware("http")
 async def _timing(request:Request, call_next):
     t=time.time(); r=await call_next(request); dt=time.time()-t
@@ -286,8 +310,12 @@ def preview(token:str):
     if CHAT.on(): head="<p class=bt><strong>That's all the questions.</strong> Here is your order.</p><h1 class=bt>Check your order and pay</h1><p class=one>Nothing is filled in until you pay. Then you check every answer.</p>"
     return page(prog(4)+f"""<div class=summary>{head}{rows}
 <form method=post action=/pay/{token}>{KEEP_OPT if is_premium(o["tier"]) else ""}<div class=total><span>Total to pay</span><strong id=paytotal>£{p//100}</strong></div><div class=paybox><label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
-<button class="btn btn-big" id=paybtn>Pay £{p//100} and get my form</button><p class=hint>Have a discount code? You can enter it on the next screen, when you add your card.</p></div></form>
+<button class="btn btn-big" id=paybtn>Pay £{p//100} and get my form</button>{DCODE()}</div></form>
 {extra}<p class=hint>{esc(DWP_LINE)}</p></div>""","Check your order and pay",minimal=True)
+def DCODE():
+    """The discount box itself is on the checkout screen (unchanged). The chat look shows where it is, with the tag icon."""
+    if CHAT.on(): return f'<p class=dcode>{UI.icon("tag",18)}<span>Have a discount code? You can enter it on the next screen, when you add your card.</span></p>'
+    return "<p class=hint>Have a discount code? You can enter it on the next screen, when you add your card.</p>"
 KEEP_OPT="<label class=cb><input type=checkbox name=keep value=1><span>Keep my answers for 3 years, so you can help with a reconsideration or my renewal without asking again. I can delete them at any time. (Optional. Without this we delete them after 90 days.)</span></label>"
 THREE_YEARS=3*365*86400
 @app.post("/pay/{token}")
@@ -1715,18 +1743,23 @@ def bb_addon_box(o):
 # ---------- Chat look (16 Nov 2026, Simon): the same steps, shown as a conversation. Nothing here changes what is asked, saved or charged. ----------
 ROUTES=[("bb",["blue badge","parking","badge"]),("pipr",["ar1","pip review","review form","renew"]),("dla",["dla","child","son","daughter","kid","baby","under 16"]),
  ("atw",["access to work","at work","my job","employer"]),("pip",["pip","pip2","personal independence"]),("aa",["attendance","aa1","aa","pension age","elderly","older","care at home","help with care","mum","dad","gran","nan","grandma","grandad"])]
+FORM_ICON={"aa":("heart","c2"),"pip":("user","c1"),"pipr":("fcheck","c3"),"dla":("baby","c2"),"bb":("car","c3"),"atw":("brief","c4")}
 def chat_home(pv=""):
-    """Step 1: 'How can I help?' with one chip per form, plus 'Not sure which form?' and 'Something else'."""
-    chips="".join(f'<a class=qchip href="/?form={k}">{esc("DLA for a child" if k=="dla" else t)}</a>' for k,t,w in FORM_CARDS)
-    ns="".join(f'<li><span>{esc(q)}</span> <a class=qchip href="/?form={k}">{esc(a.split(" (")[0])}</a></li>' for q,a,k in NOT_SURE)
+    """Step 1, the empty assistant state (Untitled UI): orb, 'Hi there,', 'How can I help with your form?', a chip per form,
+    plus 'Not sure which form?' and 'Something else'. The message bar takes a question or a form name."""
+    def chip(k,t,extra=""):
+        ic,c=FORM_ICON[k]; return f'<a class="qchip {c}" href="/?form={k}">{UI.icon(ic,16)}{esc(t)}</a>'
+    chips="".join(chip(k,"DLA for a child" if k=="dla" else t) for k,t,w in FORM_CARDS)
+    ns="".join(f'<li><span>{esc(q)}</span> {chip(k,a.split(" (")[0])}</li>' for q,a,k in NOT_SURE)
     route=json.dumps([{"k":k,"w":w,"href":f"/?form={k}","name":("DLA for a child" if k=="dla" else next(t for kk,t,_ in FORM_CARDS if kk==k))} for k,w in ROUTES])
-    hello=CHAT.bot(f"""<p class=hi>Hello. I fill in disability benefit forms from your answers. You answer simple questions, mostly taps. Then you check the form, sign it and send it yourself.</p>
-<h1 class=greet>How can I help?</h1><div class=qchips>{chips}<button type=button class="qchip alt" data-show=notsure>Not sure which form?</button><button type=button class="qchip alt" data-show=selse>Something else</button></div>""")
+    hello=f"""<div class=empty><span class="orb big" aria-hidden=true></span><p class=hi>Hi there,</p><h1 class=greet>How can I help with your form?</h1>
+<p class=subl>I fill in disability benefit forms from your answers. You answer simple questions, mostly taps. Then you check the form, sign it and send it yourself.</p>
+<div class=qchips>{chips}<button type=button class="qchip alt c7" data-show=notsure>{UI.icon("question",16)}Not sure which form?</button><button type=button class="qchip alt c7" data-show=selse>{UI.icon("chat",16)}Something else</button></div></div>"""
     notsure=f'<div id=notsure class=reveal hidden>{CHAT.me("Not sure which form?")}{CHAT.bot("<p>Answer yes to one of these, then tap the form.</p><ul class=notsure>"+ns+"</ul><p class=hint>Still not sure? Look at the letter or form DWP sent you. The form&#39;s name is on the first page.</p>")}</div>'
     ask=('<p>Tell me which form you need, or what it is for, in a few words.</p><form class=elseask><label class=sr for=selse_t>Which form do you need?</label>'
-         '<input id=selse_t maxlength=200 placeholder="For example: my mum needs help with care at home"><button class="btn btn-sm">Send</button></form>')
+         '<div class=composer><textarea id=selse_t rows=1 maxlength=200 placeholder="For example: my mum needs help with care at home"></textarea><button class=send aria-label=Send>'+UI.icon("send",20)+'</button></div></form>')
     selse=f'<div id=selse class=reveal hidden>{CHAT.me("Something else")}{CHAT.bot(ask)}</div>'
-    return page(prog(1)+pv+hello+notsure+selse+'<div id=replies aria-live=polite></div>'+CHAT.note("England and Wales only. You only pay at the end, after the questions.")+f'<script type=application/json id=croute>{route}</script>',"Choose your form",minimal=True)
+    return page(prog(1)+pv+'<div class="turn home">'+hello+'</div>'+notsure+selse+'<div id=replies aria-live=polite></div>'+CHAT.note("England and Wales only. You only pay at the end, after the questions.")+f'<script type=application/json id=croute>{route}</script>',"Choose your form",minimal=True)
 def chat_package(form,f,cards,up,pv=""):
     """Step 2: the form they tapped (their bubble, tap to change), then the two packages inside the assistant's message."""
     body=(f"""<p class=bt><strong>Which package would you like?</strong></p><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p>
@@ -1741,7 +1774,7 @@ def chat_consent(o,lead):
 <div class=warning>Giving false information on a benefit claim is an offence.</div>
 <button class="btn btn-big">Start the questions</button></form>{more("How we look after your information","<p>If you don't pay, we delete your information after 7 days. If you do, after 90 days, or sooner if you ask. <a href='https://formsorted.com/privacy.html'>Privacy notice</a></p>")}"""
     mine=CHAT.me(f"{FORMS[form]['short']} · {tn}") if o["status"]=="free" else ""
-    return page(prog(3,"Before you start")+mine+CHAT.bot(body),"Before we start")
+    return page(prog(3,"Before you start")+mine+CHAT.card(body,"consent"),"Before we start")
 def chat_intake(o,token,form,d,secs,ids,sec,i,left,refused,first):
     """Step 3 as a conversation. The part's questions are the same HTML as before (intake.section_body), in the same form post.
     static/chat.js shows them one at a time as assistant messages, turns each answer into the customer's bubble, and lets them
@@ -1752,4 +1785,4 @@ def chat_intake(o,token,form,d,secs,ids,sec,i,left,refused,first):
     return page(prog(3,f"Part {i+1} of {n}: {lab}",f"About {left} minute{'s' if left!=1 else ''} left")+f"""{done}{refused}{intro}<div class="intake cintake">
 <form method=post action=/intake/{token} id=qform><input type=hidden name=sec value={sec}><p class=qcount id=qcount aria-live=polite hidden></p><div class=qs id=qs>{INTAKE.section_body(form,sec,d)}</div>
 <div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==n-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
-<div class=qtools>{QHELP}<p class=saved>Your answers are saved each time you finish a part.</p><button class="linkbtn" name=nav value=save>Save and finish later</button></div></form></div>""",lab,minimal=True)
+<div class=qtools>{QHELP}<p class=saved>Your answers are saved each time you finish a part.</p></div></form></div>""",lab,minimal=True)

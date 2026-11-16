@@ -32,7 +32,9 @@ def clean(h,where):
     check(not links,f"{where}: no outbound links {links[:2]}")
     check("Sidechain" not in h and "14661600" not in h,f"{where}: no company details")
 h=C.get("/").text; clean(h,"home")
-check("How can I help?" in h and "Something else" in h and "Not sure which form?" in h and set(re.findall(r'class=qchip href="/\?form=(\w+)"',h))=={"aa","pip","pipr","dla","bb","atw"},"home: greeting, a chip per form, Not sure and Something else")
+check("Hi there," in h and "How can I help with your form?" in h and "Something else" in h and "Not sure which form?" in h and set(re.findall(r'class="qchip[^"]*" href="/\?form=(\w+)"',h))=={"aa","pip","pipr","dla","bb","atw"},"home: empty assistant state, a chip per form, Not sure and Something else")
+check("/static/ui.css" in h and "app.css" not in h and "chat.css" not in h and "class=hdr" not in h and 'class="indep"' not in h and "Lexend" not in h,"home: Untitled UI stylesheet only, none of the old template")
+check("class=vsteps" in h and "class=mbar" in h and 'placeholder="Ask a question or name your form"' in h,"home: step list (desktop), slim progress (phone), message bar wording")
 check("Step 1 of 5: <strong>Choose your form</strong>" in h and "class=stepper" not in h and "id=composer" in h and "id=cfaq" in h,"home: quiet progress, no stepper, message bar")
 check("£" not in visible(h),"home: no prices on step 1")
 p=C.get("/?form=dla").text; clean(p,"package")
@@ -42,6 +44,7 @@ s=C.get(f"/start/{tok}").text; clean(s,"before you start"); check(f"action=/cons
 C.post(f"/consent/{tok}",data={"health":"1","truth":"1"},follow_redirects=False)
 i=C.get(f"/intake/{tok}").text; clean(i,"questions")
 check("Part 1 of 10" in i and "Save and finish later" in i and "Help with this question" in i and "Something else" in i and f"action=/intake/{tok}" in i,"questions: part progress, save later, help, Something else, same post")
+check('form=qform name=nav value=save' in i and "class=crow" in i,"questions: Save and finish later sits under the message bar, same post")
 check("QS_JS" not in i and "/static/chat.js" in i and "id=qs" in i,"questions: chat script runs the one-at-a-time view")
 # placeholders on the typed follow-ups are real examples (unchanged)
 d=C.post(f"/intake/{tok}",data={"sec":"about","rel":"Mum","name":"Leo","age":"5to15","nav":"next"},follow_redirects=True).text
@@ -51,7 +54,14 @@ import app as A
 os.environ["CHAT_UI"]="1"
 fake=A.chat_page('<form method=post action=/details/x><input name=ni></form>',"Last details",True).body.decode()
 check("id=composer" not in fake and "id=cfaq" not in fake,"details page: no message bar")
+# a missing or expired link in a browser: a page in the same look, not raw JSON
+try: urllib.request.urlopen(urllib.request.Request(B+"/start/nope",headers={"Accept":"text/html"})); nf=""
+except urllib.error.HTTPError as e: nf=e.read().decode() if e.code==404 else ""
+check("can't find that page" in nf and "/static/ui.css" in nf,"404: friendly page in the new look")
+try: urllib.request.urlopen(B+"/api/nope/info"); aj=""
+except urllib.error.HTTPError as e: aj=e.read().decode()
+check(aj.startswith("{"),"404 on the API stays JSON")
 # switch back to the old look without a code change
 if B0:
-    o=Client(B0).get("/").text; check("class=stepper" in o and "How can I help?" not in o and "chat.css" not in o,"CHAT_UI=0: step-by-step look")
+    o=Client(B0).get("/").text; check("class=stepper" in o and "How can I help" not in o and "chat.css" not in o and "ui.css" not in o,"CHAT_UI=0: step-by-step look")
 print("FAILED" if FAIL else "all ok"); raise SystemExit(1 if FAIL else 0)

@@ -1,0 +1,74 @@
+/* ---------- formsorted.com shell (Untitled UI marketing/support layout) ---------- */
+body.usite{background:#fff}
+.tbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--g200)}
+.tin{max-width:1280px;margin:0 auto;padding:0 32px;height:72px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.tlinks{display:flex;gap:4px}.tlinks a{color:var(--g600);font-size:16px;font-weight:600;padding:8px 12px;border-radius:var(--r8)}
+.tlinks a:hover,.tlinks a[aria-current]{color:var(--g900);background:var(--g50);text-decoration:none}
+.tmenu{display:none;position:relative}.tmenu>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:8px 14px;border:1px solid var(--g300);border-radius:var(--r8);box-shadow:var(--xs);font-weight:600;color:var(--g700);font-size:16px}
+.tmenu>summary::-webkit-details-marker{display:none}.tmenu>summary .ic{transform:rotate(90deg)}
+.tmenu nav{position:absolute;right:0;top:calc(100% + 8px);min-width:240px;background:#fff;border:1px solid var(--g200);border-radius:var(--r12);box-shadow:var(--lg);padding:6px}
+.tmenu nav a{display:block;padding:12px 14px;border-radius:6px;color:var(--g700);font-size:16px}.tmenu nav a:hover{background:var(--g50);text-decoration:none}
+@media(max-width:900px){.tlinks{display:none}.tmenu{display:block}.tin{padding:0 16px;height:64px}}
+.smain{display:block}
+/* home: the assistant */
+.hassist{background:radial-gradient(1200px 400px at 50% -120px,var(--b50),rgba(249,245,255,0) 70%),#fff;padding:48px 32px 64px;border-bottom:1px solid var(--g200)}
+.hcard{max-width:820px;margin:0 auto;background:#fff;border:1px solid var(--g200);border-radius:var(--r16);box-shadow:var(--lg);overflow:hidden}
+.hcard .thread{max-width:none;padding:32px 32px 8px}.hcard .empty{padding-top:24px}
+.hcard .pfoot{position:static;background:#fff;padding:8px 32px 20px}
+.hcard .reveal{max-width:640px;margin-left:auto;margin-right:auto}
+#replies{max-width:640px;margin:0 auto}
+.sec{max-width:1280px;margin:0 auto;padding:64px 32px 0}
+.sechead{text-align:center;max-width:768px;margin:0 auto 32px}
+.eyebrow{font-size:14px;line-height:20px;font-weight:600;color:var(--b700);margin:0 0 12px}
+.sechead h2{font-size:30px;line-height:38px;letter-spacing:-.02em;margin:0 0 12px}.supp{font-size:18px;line-height:28px;color:var(--g600);margin:0}
+.gcards{list-style:none;padding:0;margin:0;display:grid;gap:16px;grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1000px){.gcards{grid-template-columns:1fr 1fr}}@media(max-width:600px){.gcards{grid-template-columns:1fr}}
+.gcards li{margin:0;max-width:none}
+.gcard{display:flex;flex-direction:column;gap:6px;height:100%;padding:24px;background:#fff;border:1px solid var(--g200);border-radius:var(--r12);box-shadow:var(--xs);color:var(--g600)!important;font-weight:400;text-decoration:none!important;transition:box-shadow .15s,border-color .15s}
+.gcard:hover{border-color:var(--g300);box-shadow:var(--md)}
+.gcard .otile{display:grid;place-items:center;width:48px;height:48px;border-radius:10px;border:1px solid var(--g200);box-shadow:var(--xs);color:var(--g700);margin:0 0 12px}
+.gt{font-size:18px;line-height:28px;font-weight:600;color:var(--g900)}.gw{font-size:16px;line-height:24px;flex:1}.gl{display:inline-flex;align-items:center;gap:6px;color:var(--b700);font-weight:600;margin-top:12px}
+.faqsec .faqlist{max-width:768px;margin:0 auto}
+.faqlist details.more>summary{font-size:18px;line-height:28px;font-weight:500;padding:20px 0}
+.faqlist details.more>*:not(summary){font-size:16px}
+.sec .needhelp,.swrap .needhelp{max-width:1216px;margin:0 auto;background:var(--g50);border-radius:var(--r16);padding:32px;text-align:center}
+.needhelp h2{font-size:20px;line-height:30px;margin:0 0 8px}.needhelp>p{color:var(--g600);margin:16px 0 0}
+.needhelp>details.more{max-width:640px;margin:0 auto;text-align:left;border-color:var(--g200)}
+.needhelp details.qa{border-color:var(--g200)}
+/* content pages: guides, Terms, Privacy */
+.swrap{max-width:768px;margin:0 auto;padding:48px 32px 0}
+.crumb{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--g600);margin:0 0 24px}.crumb a{color:var(--g600);font-weight:500}.crumb .ic{color:var(--g300)}
+.sbadge{display:inline-flex;align-items:center;gap:6px;padding:2px 10px 2px 8px;border:1px solid var(--g300);border-radius:6px;box-shadow:var(--xs);font-size:14px;font-weight:500;color:var(--g700);margin:0 0 16px}
+.sdotb{width:8px;height:8px;border-radius:50%;background:var(--b600)}
+.phdr{padding:0 0 32px;border-bottom:1px solid var(--g200);margin:0 0 32px}.phdr h1{font-size:36px;line-height:44px;letter-spacing:-.02em}
+.prose{font-size:16px;line-height:26px;color:var(--g600)}
+.prose h1{font-size:36px;line-height:44px;letter-spacing:-.02em;color:var(--g900);margin:0 0 16px}
+.prose h2{font-size:24px;line-height:32px;color:var(--g900);margin:40px 0 12px}.prose h2.h3{font-size:20px;line-height:30px}
+.prose h3{font-size:18px;line-height:28px;color:var(--g900);margin:24px 0 8px}
+.prose p,.prose li{max-width:none}.prose strong{color:var(--g700)}
+.prose .lead,.prose .one{font-size:18px;line-height:28px;color:var(--g600)}
+.prose .hero{background:none;border:0;padding:0;margin:0 0 32px}.prose .hero h1{margin:0 0 16px}.prose .hero .caption{font-size:14px;font-weight:600;color:var(--b700);margin:0 0 12px}
+.prose .pkgs{margin:24px 0}.prose .pkg h2{margin:0 0 4px}
+.prose details.more{margin:0}.prose .compare{margin:16px 0}.prose .options{margin:16px 0}
+.prose .change{margin:24px 0}.prose .btn{margin:8px 8px 8px 0}
+.prose .promise-h{font-weight:600;color:var(--g900)}
+.legal .prose h2{font-size:20px;line-height:30px;margin:32px 0 8px}
+/* footer */
+.sfoot{margin-top:96px;border-top:1px solid var(--g200);background:var(--g50)}
+.fin{max-width:1280px;margin:0 auto;padding:48px 32px 64px;display:grid;grid-template-columns:minmax(0,2fr) repeat(2,minmax(0,1fr));gap:48px}
+.fbrand p{font-size:14px;line-height:20px;color:var(--g600);margin:16px 0 0;max-width:520px}.fbrand strong{color:var(--g700)}
+.fbrand .ulogo{margin-bottom:4px}
+.fcol h2{font-size:14px;line-height:20px;font-weight:600;color:var(--g500);margin:0 0 16px;letter-spacing:0}
+.fcol ul{list-style:none;padding:0;margin:0}.fcol li{margin:0 0 12px}.fcol a{color:var(--g600);font-weight:600;font-size:16px}.fcol a:hover{color:var(--g800)}
+@media(max-width:900px){.fin{grid-template-columns:1fr 1fr;gap:32px}.fbrand{grid-column:1/-1}}
+@media(max-width:760px){
+ .hassist{padding:16px 0 32px;border-bottom:0}.hcard{border-radius:0;border-left:0;border-right:0;box-shadow:none}
+ .hcard .thread{padding:16px 16px 8px}.hcard .pfoot{padding:8px 12px 16px}
+ .sec{padding:48px 16px 0}.sechead h2{font-size:24px;line-height:32px}.supp{font-size:16px}
+ .swrap{padding:32px 16px 0}.phdr h1,.prose h1{font-size:30px;line-height:38px}.prose h2{font-size:20px;line-height:30px}
+ .fin{grid-template-columns:1fr;padding:40px 16px 48px}.sfoot{margin-top:64px}
+ .sec .needhelp,.swrap .needhelp{padding:24px 16px}
+ .crow{flex-direction:column;align-items:flex-start}
+}
+
+.usite .prose details.more>summary,.usite .prose details.more>*:not(summary),.usite .needhelp details>summary{font-size:16px}
