@@ -361,3 +361,47 @@ fieldset.iq>legend{float:left;width:100%}fieldset.iq>legend+*{clear:both}
  dl.order>div{display:block}dl.order dd{text-align:left;margin-top:2px}
 }
 @media(max-width:760px){.cnote,.uftr,.sidefoot,.qcount,.fdesc,.crow,.small,small,.hint,.pill,.compare th,.ocard .legal{font-size:14px}.hint{line-height:20px}}
+/* Conversational intake: the question is the bubble; replies live below it, never in a form card. */
+.convo .cintake :is(fieldset.iq,.card,.cond,.gq,.fu,.lt){border:0!important;box-shadow:none!important;background:none!important;padding:0!important;margin:0!important;border-radius:0!important;max-width:none!important}
+.convo .cintake .cq{float:none!important;clear:both;width:auto!important;position:relative;display:block;font:500 16px/24px var(--ui)!important;color:var(--g900);background:var(--g50);border:1px solid var(--g200);border-radius:4px 12px 12px 12px;padding:12px 16px;margin:12px 0 10px 44px!important;max-width:620px;min-height:48px}
+.convo .cq:before{content:"";position:absolute;left:-45px;top:0;width:32px;height:32px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#fff 0,transparent 26%),radial-gradient(circle at 78% 72%,#2E90FA 0,transparent 52%),radial-gradient(circle at 22% 78%,#EE46BC 0,transparent 55%),linear-gradient(140deg,#D444F1,#7A5AF8 50%,#2E90FA);box-shadow:inset 0 -4px 10px #42307d55}
+.convo .cintake .chips{margin:0 0 10px 44px;display:flex!important;flex-wrap:wrap;gap:8px}
+.convo .cintake .chips .chips{margin-left:0}.convo .cintake .chip span{border-radius:999px;font-weight:500;font-size:16px;min-height:44px}
+.convo .cintake .chips.two,.convo .cintake .chips.lvl{display:flex!important}.convo .cintake .chips .chip span{width:auto}
+.convo .cintake .cond{display:contents}.convo .cintake .cond>.chip{margin:0 6px 8px 44px}
+.convo .cintake .cact{display:flex;align-items:center;gap:10px;margin:8px 0 16px 44px;clear:both}
+.convo .cintake .cskip{font:inherit;font-size:16px;min-height:44px;border:0;background:none;color:var(--g600);padding:8px;cursor:pointer;text-decoration:underline}
+.convo .cintake .cinrow{display:flex;gap:8px;align-items:flex-end;margin:4px 0 8px 44px;max-width:620px}
+.convo .cintake .cinrow input,.convo .cintake .cinrow textarea{flex:1;min-width:0;width:100%;font-size:16px;min-height:44px;margin:0}
+.convo .cintake :is(.hint,.tip,.carry){font-size:16px;margin:0 0 10px 44px;max-width:620px}
+.convo .cintake .cme{margin:8px 0 16px 44px}.convo .cintake .cme .bub{min-height:44px}
+.convo .cintake select{margin:4px 0 8px 44px;max-width:calc(100% - 44px);font-size:16px;min-height:44px}
+.convo .cintake .elsebox{font-size:16px;min-height:44px}
+.convo .cintake .fuw{display:contents}.convo .cintake .lastq .ltw{display:contents}.convo .cintake .lastq .kn{margin-left:0;max-width:none}
+.convo .cintake .cfut,.convo .cintake .coff,.convo .cintake .cwait{display:none!important}
+.convo .cintake .cnav-wait{display:none}.convo .cintake .cend[hidden]{display:none}
+.convo .cintake .qtools{font-size:16px}.convo .cintake .saved{font-size:16px}
+.convo .cintake .cside{clear:both}.convo .cintake .cside .turn{margin-top:12px}
+.convo .cintake .ltq~.chips.starters{margin-left:44px}.convo .cintake .starter{font-size:16px}
+.convo .cintake .chide{display:none!important}
+/* 'Here's what you told me' before paying */
+.tellsum{margin:0 0 20px}.tellsum>p{margin:0 0 12px}
+.tellsec{border:1px solid var(--g200);border-radius:var(--r12);background:#fff;margin:0 0 8px;padding:0 14px}
+.tellsec>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:48px;cursor:pointer;font-weight:600;font-size:16px;color:var(--g900)}
+.tellsec>summary::-webkit-details-marker{display:none}.tellsec .tn{font-weight:400;color:var(--g600);font-size:16px;white-space:nowrap}
+dl.tell{margin:0 0 10px}dl.tell>div{padding:8px 0;border-top:1px solid var(--g100)}dl.tell dt{font-size:16px;color:var(--g600);margin:0}dl.tell dd{margin:2px 0 0;font-size:16px;font-weight:500;color:var(--g900)}
+.tellsec .tchg{margin:0 0 12px;text-decoration:none}
+.convo .cintake .cq:focus{outline:0}.convo .cintake .cq:focus-visible{outline:2px solid var(--b300);outline-offset:2px}
+.convo .cintake .cpre{font-weight:400!important;color:var(--g700)}
+.ctold .bub{max-width:620px}.ctold .tellsum{margin:8px 0 0}.tellsec .tnote{font-size:16px;color:var(--g600);margin:0 0 12px}
+/* follow-ups that sit inside a list of taps (care cards, 'who knows'): full width, lined up with the other messages */
+.convo .cintake .chips>.fu,.convo .cintake .chips>.kn{flex:0 0 calc(100% + 44px);width:calc(100% + 44px);max-width:none!important;margin-left:-44px!important}
+.convo .cintake .chips .fu .chips,.convo .cintake .chips .kn .chips{margin-left:44px}
+.convo .cintake .cq:focus,.convo .cintake .cq:focus-visible{outline:0}
+.convo .cintake .condlist{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px 44px}
+.convo .cintake .condlist .cond>.chip{margin:0}
+.convo .cintake .condlist .cond:has(.k input:checked)>.more{display:contents}
+.convo .cintake .condlist :is(.cq,.cme,.cact,.cinrow,.chips,select){flex:0 0 100%;margin-left:0!important;max-width:620px}
+.convo .cintake .condlist .cme{max-width:none}
+.convo .cintake .condlist .cond.other{display:contents}
+.convo .cintake .cq .hint{display:inline;margin:0!important;font-size:inherit;color:var(--g600);font-weight:400}

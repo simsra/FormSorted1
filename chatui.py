@@ -4,6 +4,9 @@ is the same server code as before. CHAT_UI=0 brings back the step-by-step look w
 import os, re, json
 from html import escape as esc
 def on(): return os.getenv("CHAT_UI","1")!="0"
+def convo():
+    """The questions as a conversation (convo.js). CONVO=0 goes back to the one-question-at-a-time cards inside the chat."""
+    return on() and os.getenv("CONVO","1")!="0"
 NAME="FormSorted assistant"
 import uikit as UI
 ORB=UI.ORB

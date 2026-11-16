@@ -45,10 +45,11 @@ function ask(v,where,unclear){var w=where||$('#replies')||$('#thread');if(Q&&w==
  w.appendChild(meBubble(v));var t=typing();w.appendChild(t);scrollTo(t);busy=1;
  var c=Q?Q.ctx():{q:'',hint:'',options:[],box:false},body={text:v,token:token(),form:formKey(),q:c.q,hint:c.hint,options:c.options,box:c.box};
  var ac=window.AbortController?new AbortController():null,tm=setTimeout(function(){if(ac)ac.abort()},25000);
- function done(html,after){clearTimeout(tm);busy=0;if(t.parentNode)t.parentNode.removeChild(t);var b=botBubble(html);w.appendChild(b);if(after)after(b);scrollTo(w.lastElementChild||b)}
+ function done(html,after){clearTimeout(tm);busy=0;if(t.parentNode)t.parentNode.removeChild(t);var b=botBubble(html);w.appendChild(b);if(after)after(b);if(Q&&Q.convo&&window.FS.scrollPair)window.FS.scrollPair(w.lastElementChild||b);else scrollTo(w.lastElementChild||b)}
  fetch('/api/assist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ac?ac.signal:undefined})
  .then(function(r){if(!r.ok)throw r.status;return r.json()})
  .then(function(j){
+  if(j.kind==='answer'&&Q&&Q.convo){done('<p>That sounds like an answer rather than a question. Tap one of the answers, or type it again and I\'ll check with you before using it.</p>',function(){var g=Q.again();if(g)w.appendChild(g)});return}
   if(j.kind==='answer'&&Q){clearTimeout(tm);busy=0;if(t.parentNode)t.parentNode.removeChild(t);w.innerHTML='';w.appendChild(meBubble(v));
    w.appendChild(botBubble(unclear?'<p>Please tap one of the answers above. If none of them fit, tap <strong>Something else</strong> and type it there.</p>':'<p>Thanks. Please put that in the answer above.</p>'));return}
   done('<p>'+txt(j.reply||'')+'</p>',function(b){
@@ -73,7 +74,7 @@ $$('form.elseask').forEach(function(f){var i0=$('input,textarea',f);if(i0)i0.add
  f.addEventListener('submit',function(e){e.preventDefault();var i=$('input,textarea',f),v=i.value.trim();if(!v){i.focus();return}i.value='';
  if(isQuestion(v)&&!route(v))ask(v,f.closest('.reveal'));else replyRoute(v,f.closest('.reveal'))})});
 /* ---- questions, one at a time, as a conversation ---- */
-var Q=null;(function(){var box=$('#qs');if(!box)return;var form=box.closest('form'),nav=form.querySelector('.navrow'),sub=nav.querySelector('button[value=next]'),sback=nav.querySelector('button[value=back]'),cnt=$('#qcount');
+var Q=null;(function(){var box=$('#qs');if(!box||document.body.classList.contains('convo'))return;var form=box.closest('form'),nav=form.querySelector('.navrow'),sub=nav.querySelector('button[value=next]'),sback=nav.querySelector('button[value=back]'),cnt=$('#qcount');
 var kids=[].slice.call(box.children).filter(function(e){return !/^(SCRIPT|STYLE|INPUT)$/.test(e.tagName)}),steps=[],pre=[];
 function simple(e){return /^(FIELDSET|DIV)$/.test(e.tagName)&&!e.querySelector('.chips,.card,.cond,textarea,select,input[type=radio],input[type=checkbox],input[type=file],button')&&!!e.querySelector('input')}
 kids.forEach(function(e){if(/^(P|H2|H3)$/.test(e.tagName)&&!e.querySelector('input,select,textarea')){e.setAttribute('data-qpre','1');pre.push(e);return}
@@ -148,12 +149,15 @@ Q={side:side,ctx:ctx,addBox:addBox,again:again,focus:function(){show(true)},take
  if(dt){var m=/^(\d{1,2})[\/\.\- ](\d{1,2})[\/\.\- ](\d{4})$/.exec(s.trim());if(m){dt.value=m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2);fire(dt);return 'box'}return 'date'}
  return 'none'}};
 })();
+/* shared with convo.js (the questions as a conversation) */
+window.FS={el:el,txt:txt,ORB:ORB,RM:RM,typing:typing,botBubble:botBubble,meBubble:meBubble,ask:ask,isQuestion:isQuestion,setQ:function(q){Q=q}};
 /* ---- the message bar ---- */
 var cf=$('#composer');if(cf){var ta=$('#cmsg');
  ta.addEventListener('input',function(){ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,140)+'px'});
  ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();cf.requestSubmit?cf.requestSubmit():cf.dispatchEvent(new Event('submit',{cancelable:true}))}});
  cf.addEventListener('submit',function(e){e.preventDefault();var v=ta.value.trim();if(!v){ta.focus();return}ta.value='';ta.style.height='auto';
   if(busy)return;
+  if(Q&&Q.say){Q.say(v);return}
   if(Q){if(isQuestion(v)){ask(v,Q.side);return}var r=Q.take(v);
    if(r=='date'){Q.side.innerHTML='';Q.side.appendChild(botBubble('<p>Please use the date box above. For example 04/05/2016.</p>'))}
    else if(r=='none'){ask(v,Q.side,1)}   /* not a clear answer: the server decides if it's a question */
