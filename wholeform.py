@@ -479,12 +479,19 @@ def save(form,sec,d,fm):
         if sec=="health" and w.get("gp") and not w.get("gp_x"): gp_detail(w)
     if sec in ("you","child","parent") and w.get("pc") and not w.get("gp_list"): gp_options(w)
     return d
+KIN_WORDS=("mum","dad","mom","mam","nan","gran","nana","grandma","grandad")
 def prefill(form,d):
-    p={}; n=(d.get("name") or "").strip()
-    n,where=prof_split(form,d)   # typed on the last screen: shown filled in, they can change it
-    if n: p["pr_name"]=n
+    """Boxes shown already filled in, only from the customer's own earlier answers (they can change them).
+    16 Nov 2026 fix: the claimant's / child's first-names box comes ONLY from the name given for the person the form is
+    about (d['name']). It used to be overwritten by the professional's name typed on the last screen, so the child's
+    name box showed e.g. the health visitor's name. Surname is never guessed. The person filling in (carer / parent)
+    has their own boxes (p_first, h_name) and is never used here."""
+    p={}
+    pro,where=prof_split(form,d)   # typed on the last screen ('Who knows about...'): only for the professional's boxes
+    if pro: p["pr_name"]=pro
     if where: p["pr_where"]=where
-    if n and (form=="dla" or not me(d,form)) and n.lower() not in ("mum","dad","mom","mam","nan","gran","nana","grandma","grandad"): p["first"]=n
+    n=(d.get("name") or "").strip()   # the name of the person the form is about (the child, for DLA)
+    if n and (form=="dla" or not me(d,form)) and n.lower() not in KIN_WORDS: p["first"]=n
     return p
 DEP_JS="""<script>(function(){function upd(){document.querySelectorAll('[data-dep]').forEach(function(e){var n=e.getAttribute('data-dep'),v=e.getAttribute('data-vals').split(' '),on=false;document.querySelectorAll('[name="'+n+'"]').forEach(function(i){if(i.checked&&v.indexOf(i.value)>=0)on=true});e.hidden=!on})}
 document.addEventListener('change',upd);upd();
