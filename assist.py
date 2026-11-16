@@ -47,10 +47,21 @@ def allow(key):
         k=(key,day); n=_SEEN.get(k,0)
         if n>=PER_DAY: return False
         _SEEN[k]=n+1; return True
+LOG_DAYS=int(os.getenv("ASSIST_LOG_DAYS","90"))   # Privacy notice: the question log is deleted after 90 days
+_PRUNED={"day":""}
+def prune(p,now=None):
+    """Drop logged questions older than LOG_DAYS (runs at most once a day, on the next write)."""
+    now=now or time.time(); cut=now-LOG_DAYS*86400
+    try:
+        keep=[l for l in open(p) if l.strip() and json.loads(l).get("t",now)>=cut]
+        tmp=p+".tmp"; open(tmp,"w").writelines(keep); os.replace(tmp,p)
+    except (OSError,ValueError) as e: print("assist log not pruned",e,flush=True)
 def log(rec):
     p=os.getenv("ASSIST_LOG") or os.path.join(os.getenv("OUT_DIR","/tmp"),"assist_log.jsonl")
     try:
         os.makedirs(os.path.dirname(p),exist_ok=True)
+        day=time.strftime("%Y-%m-%d")
+        if _PRUNED["day"]!=day and os.path.exists(p): prune(p); _PRUNED["day"]=day
         with open(p,"a") as f: f.write(json.dumps(rec,ensure_ascii=False)+"\n")
     except OSError as e: print("assist log not written",e,flush=True)
 # ---------- the fixed post-check ----------

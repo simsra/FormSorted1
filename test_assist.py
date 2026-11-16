@@ -45,6 +45,11 @@ check(code==200 and j.get("limited"),"daily limit (ASSIST_PER_DAY) gives a polit
 log=open(LOG).read()
 check("QQ 12 34 56 C" not in log and "QQ123456C" not in log and "[NI number]" in log,"question log masks NI numbers")
 check(all(set(json.loads(l))>={"q","reply","model","ms"} for l in log.splitlines() if '"error"' not in l),"each logged question has the reply, model and time (for new help entries)")
+# ---- the question log is deleted after 90 days (Privacy notice) ----
+import time as _t
+lp=os.path.join(tempfile.mkdtemp(),"q.jsonl"); open(lp,"w").write(json.dumps({"t":_t.time()-91*86400,"q":"old"})+"\n"+json.dumps({"t":_t.time()-2*86400,"q":"new"})+"\n")
+A.prune(lp); kept=[json.loads(l)["q"] for l in open(lp)]
+check(kept==["new"],f"questions older than 90 days are deleted from the log ({kept})")
 # ---- the browser side ----
 js=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),"static","chat.js")).read()
 check("/api/assist" in js and "Add this to your answer?" in js and "data-add" in js,"chat.js asks the helper and offers 'Add this to your answer?'")
