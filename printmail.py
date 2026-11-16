@@ -24,3 +24,12 @@ def queue(c,token,address,files):
         except Exception as ex: job["status"]="failed"; job["error"]=str(ex)[:200]
         c.execute("update settings set v=? where k=?",(json.dumps(job),f"printjob_{token}")); c.commit()
     return job
+
+def job(c,token):
+    r=c.execute("select v from settings where k=?",(f"printjob_{token}",)).fetchone()
+    return json.loads(r[0]) if r else None
+def mark(c,token,status):
+    j=job(c,token) or {"token":token,"files":[],"at":time.time()}
+    j["status"]=status; j[f"{status}_at"]=time.time()
+    c.execute("insert into settings(k,v) values(?,?) on conflict(k) do update set v=excluded.v",(f"printjob_{token}",json.dumps(j))); c.commit()
+    return j

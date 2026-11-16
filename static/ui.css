@@ -461,3 +461,10 @@ h1.turn.part-divider{margin:24px 0 8px;font:600 12px/18px var(--ui);letter-spaci
 .convo .cintake .cme{margin:2px 0 10px}
 .convo .cintake .cq{margin-top:16px!important}
 .convo .cintake .cq{min-height:32px;margin-bottom:8px!important;padding-top:4px!important}.convo .cintake .cq+.cme.coff+:is(.chips,.hint,.tip){margin-top:0}
+/* Nov 2026 pricing: the 2 options on the pay step (Download, Posted to you, with support) */
+.opts{border:0;padding:0;margin:16px 0;display:grid;gap:12px}.opts legend{font:600 16px/24px var(--ui);color:var(--g900);margin:0 0 8px;padding:0}
+label.opt{display:flex;gap:12px;align-items:flex-start;cursor:pointer;min-height:44px;border:1px solid var(--g200);border-radius:var(--r12);padding:16px;background:#fff}
+label.opt.on{border-color:var(--b600,#7F56D9);box-shadow:0 0 0 1px var(--b600,#7F56D9)}label.opt input{margin-top:4px;width:20px;height:20px;flex:none;accent-color:var(--b600,#7F56D9)}
+.opt .ob{flex:1;display:block}.opt .oh{display:flex;justify-content:space-between;gap:8px;font-size:16px}.opt .op{font-weight:600;color:var(--g900);white-space:nowrap}
+.opt .ticks{margin:8px 0 0;font-size:14px;color:var(--g600)}.postaddr{margin:8px 0 16px}.postaddr[hidden]{display:none}
+.postgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:640px){.postgrid{grid-template-columns:1fr}.opt .ticks{font-size:16px}}

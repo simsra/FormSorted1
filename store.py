@@ -42,7 +42,7 @@ SCHEMA=[f"create table if not exists orders(token text primary key, tier text, s
         f"create table if not exists account_saved(account_id text, form text, data text, from_order text, saved_at {_REAL}, primary key(account_id, form))",
         f"create table if not exists account_sessions(sid_hash text primary key, account_id text, created {_REAL}, expires {_REAL})",
         f"create table if not exists account_links(tok_hash text primary key, account_id text, email text, created {_REAL}, expires {_REAL}, used_at {_REAL}, ip text)"]
-COLS=(("form","text default 'aa'"),("draft","text"),("deadline","text default '{}'"),("approved_at",_REAL),("save_code","text"),("review_of","text"),("details_at",_REAL),("paid_at",_REAL),("ip","text"),("interview_done_at",_REAL),("turns","integer default 0"),("intake","text"),("keep_until",_REAL),("post_pack","integer default 0"),("appeal","text"),("hold","text"),("stripe_customer","text"),("card_fp","text"),("account_id","text"))
+COLS=(("form","text default 'aa'"),("draft","text"),("deadline","text default '{}'"),("approved_at",_REAL),("save_code","text"),("review_of","text"),("details_at",_REAL),("paid_at",_REAL),("ip","text"),("interview_done_at",_REAL),("turns","integer default 0"),("intake","text"),("keep_until",_REAL),("post_pack","integer default 0"),("appeal","text"),("hold","text"),("stripe_customer","text"),("card_fp","text"),("account_id","text"),("post_to","text"))
 _ready=False
 def _migrate(c):
     for s in SCHEMA: c.execute(s)

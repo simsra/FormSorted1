@@ -38,7 +38,7 @@ check("class=vsteps" in h and "class=mbar" in h and 'placeholder="Ask a question
 check("Step 1 of 5: <strong>Choose your form</strong>" in h and "class=stepper" not in h and "id=composer" in h and "id=cfaq" in h,"home: quiet progress, no stepper, message bar")
 check("£" not in visible(h),"home: no prices on step 1")
 p=C.get("/?form=dla").text; clean(p,"package")
-check("Step 2 of 5: <strong>Choose your package</strong>" in p and p.count("action=/checkout")==2 and "Which package would you like?" in p and 'class="turn me"' in p,"package: the form as their bubble, both packages, same /checkout posts")
+check("Step 2 of 5: <strong>Before you start</strong>" in p and p.count("action=/checkout")==1 and "Which package would you like?" not in p and 'class="turn me"' in p and "from £19.99" in p,"start (Nov 2026): the form as their bubble, no package choice, one /checkout post with the consent boxes")
 r=C.post("/checkout",data={"form":"dla","tier":"99"},follow_redirects=False); tok=r.headers["location"].rsplit("/",1)[1]
 s=C.get(f"/start/{tok}").text; clean(s,"before you start"); check(f"action=/consent/{tok}" in s and "name=health" in s and "name=truth" in s,"consent: same two boxes, same post")
 C.post(f"/consent/{tok}",data={"health":"1","truth":"1"},follow_redirects=False)

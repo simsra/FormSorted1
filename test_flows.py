@@ -5,6 +5,7 @@ Covers: conversation -> deadline tracker -> strength check -> approval (required
 import json, urllib.request, urllib.parse, sys, re
 from datetime import date
 from forms import FORMS, tier_info, is_full
+from forms import TWO_OPTION_FORMS
 import quality, deadlines, letters
 B=sys.argv[1] if len(sys.argv)>1 else "http://localhost:8011"
 class NoRedir(urllib.request.HTTPRedirectHandler):
@@ -75,11 +76,17 @@ codes={}; atw_tokens={}
 for form,f in FORMS.items():
     if form=="bb": continue   # Blue Badge has its own flow: test_bluebadge.py
     assert req(f"/?form={form}").status==200
-    hb=req(f"/?form={form}&tier=bogus").read().decode(); assert "Choose your package" in hb and "Your choice" not in hb   # invalid tier -> package step, nothing preselected
-    for t,(n,p,_) in f["tiers"].items():
+    if form in TWO_OPTION_FORMS:   # Nov 2026: no package step; Download or Posted is chosen when paying
+        for q in ("","&tier=bogus","&tier=99","&tier=199"):
+            h=req(f"/?form={form}{q}").read().decode()
+            assert "Step 2 of 5: <strong>Before you start</strong>" in h and h.count("<form method=post action=/checkout>")==1 and "from £19.99" in h and "Choose your package" not in h, (form,q)
+            assert h.count("You can claim directly from DWP for free; FormSorted is a paid online form-filling service.")==1 and "stripe" not in h.lower() and "£99" not in h and "£199" not in h
+    else:
+        hb=req(f"/?form={form}&tier=bogus").read().decode(); assert "Choose your package" in hb and "Your choice" not in hb   # invalid tier -> package step, nothing preselected
+    for t,(n,p,_) in (f["tiers"].items() if form not in TWO_OPTION_FORMS else []):
         h=req(f"/?form={form}&tier={t}").read().decode()   # valid -> single order summary
         assert "Choose your package" in h and f"£{p//100}" in h and h.count(f"Continue with {n}")==1 and h.count("<form method=post action=/checkout>")==len(f["tiers"]) and "Nothing to pay now" in h, (form,t)
-        assert f'name=tier value={t}>' in h and "Step 2 of 5: <strong>Choose your package</strong>" in h and "Your choice" in h
+        assert f'name=tier value={t}>' in h and "Step 2 of 5: <strong>Before you start: Choose your package</strong>" in h and "Your choice" in h
         assert h.count("You can claim directly from DWP for free; FormSorted is a paid online form-filling service.")==1, (form,t)
         low=h.lower().replace("you can claim directly from dwp for free; formsorted is a paid online form-filling service.","").replace("freepost",""); assert "we claim for you" not in low and "we submit your claim" not in low
         assert "stripe" not in low and " ai " not in low and "free" not in low and "citizens advice" not in low, (form,t)

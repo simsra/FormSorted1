@@ -58,7 +58,7 @@ MARK=_MK
 def logo(href="/"):
     return f'<a class=ulogo href="{href}" aria-label="FormSorted home">{mark()}<span>FormSorted</span></a>'
 ORB='<span class=orb aria-hidden=true></span>'
-STEPS=[("Choose your form","AA, PIP, child DLA and more","file"),("Choose your package","Nothing to pay yet","tag"),
+STEPS=[("Choose your form","AA, PIP, child DLA and more","file"),("Before you start","Nothing to pay yet","tag"),
        ("Answer the questions","Mostly taps. Stop any time","chat"),("Pay","Once, at the end","card"),("Get your form","Check it, sign it, send it","download")]
 def steplist(n,sub=""):
     """The onboarding-style step list (left sidebar on desktop). n: current step 1-5 (0 = none). sub: what's happening in the current step."""

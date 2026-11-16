@@ -56,30 +56,40 @@ ATW_TOPICS=[
  ("support","What would help","What support do you think would help? For example equipment or software, a support worker (how many hours a week), taxis to work, or changes to the workplace. Include any costs or quotes you know."),
  ("contact","Workplace contact","Who at work could confirm you work there (their role, not personal details)? Are you employed or self-employed?"),
 ]
+
+# Nov 2026 pricing (Simon, 16 Nov 2026): two options per form, chosen at the pay step, paid once at the end.
+#   "1999" £19.99  Download: the filled-in form as a PDF to print, sign and send yourself.
+#   "2999" £29.99 Posted to you, with support: we print the finished form and post it to the customer with a prepaid
+#          envelope addressed to the right DWP office and sign-here markers. The customer signs and posts it themselves.
+#          Support until their decision, for up to SUPPORT_DAYS (fixed, no auto-renew).
+# £99 "Done for you" and £199 "Done for you Plus" are now legacy_tiers: they only describe orders bought before this change.
+SUPPORT_DAYS=183
+def gbp(p): return f"£{p//100}" if p%100==0 else f"£{p//100}.{p%100:02d}"   # "up to 6 months" (flagged for Simon to confirm)
+_DL_WHAT={"aa":"the whole AA1 form filled in","dla":"the whole DLA1A form filled in","pip":"typed answers for every PIP2 activity, with extra sheets","pipr":"typed answers for every AR1 activity, with extra sheets"}
+def DOWNLOAD(form):
+    return ("Download",1999,f"Download {_DL_WHAT[form]}, as a PDF to print, sign and send yourself. Plus an evidence checklist and a request letter for your GP.")
+def POSTED(form):
+    return ("Posted to you, with support",2999,f"Everything in Download, plus we print it and post it to you, with sign-here markers and a prepaid envelope addressed to the right DWP office. You sign it and post it back yourself. Support until your decision, for up to 6 months: help with any question, reminders about your decision, and plain-English help with DWP letters.")
 FORMS={
  "aa":{"name":"Attendance Allowance","short":"Attendance Allowance (AA1)","form":"AA1","gov":"https://www.gov.uk/attendance-allowance",
    "who":"State Pension age and over","topics":AA_TOPICS,"pdf":"aa1.pdf","pdf_out":"AA1-filled.pdf",
-   "tiers":{"99":("Done for you",9900,"We fill in the official AA1 form for you, ready to print and sign. Plus answers to every care question in your own words, an evidence checklist, and a request letter for your GP."),
-            "199":("Done for you Plus",19900,_plus_summary("aa"))},
-   "legacy_tiers":{"49":("Claim Answers",4900,""),"79":("Form pack",7900,"")},
+   "tiers":{"1999":DOWNLOAD("aa"),"2999":POSTED("aa")},
+   "legacy_tiers":{"49":("Claim Answers",4900,""),"79":("Form pack",7900,""),"99":("Done for you",9900,"We fill in the official AA1 form for you, ready to print and sign. Plus answers to every care question in your own words, an evidence checklist, and a request letter for your GP."),"199":("Done for you Plus",19900,_plus_summary("aa"))},
    "subject":"the person claiming"},
  "dla":{"name":"Child DLA","short":"Disability Living Allowance for children (DLA1A)","form":"DLA1A","gov":"https://www.gov.uk/disability-living-allowance-children",
    "who":"children under 16","topics":DLA_TOPICS,"pdf":"dla1a.pdf","pdf_out":"DLA1A-filled.pdf",
-   "tiers":{"99":("Done for you",9900,"We fill in the official DLA1A form for you, ready to check, sign and post free. Plus answers to every question in your own words, mapped to the question numbers, and a school and medical evidence checklist."),
-            "199":("Done for you Plus",19900,_plus_summary("dla"))},
-   "legacy_tiers":{"49":("Answers",4900,""),"79":("Form pack",7900,"")},
+   "tiers":{"1999":DOWNLOAD("dla"),"2999":POSTED("dla")},
+   "legacy_tiers":{"49":("Answers",4900,""),"79":("Form pack",7900,""),"99":("Done for you",9900,"We fill in the official DLA1A form for you, ready to check, sign and post free. Plus answers to every question in your own words, mapped to the question numbers, and a school and medical evidence checklist."),"199":("Done for you Plus",19900,_plus_summary("dla"))},
    "subject":"the child"},
  "pip":{"name":"PIP","short":"PIP: How your disability affects you (PIP2)","form":"PIP2","gov":"https://www.gov.uk/pip",
    "who":"16 to State Pension age","topics":PIP_TOPICS,"pdf":None,
-   "tiers":{"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each PIP2 question, PIP extra sheets ready to print and send with your form, an evidence checklist, a phone-call prep sheet, assessment notes and a request letter for your GP."),
-            "199":("Done for you Plus",19900,_plus_summary("pip"))},
-   "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,"")},
+   "tiers":{"1999":DOWNLOAD("pip"),"2999":POSTED("pip")},
+   "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,""),"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each PIP2 question, PIP extra sheets ready to print and send with your form, an evidence checklist, a phone-call prep sheet, assessment notes and a request letter for your GP."),"199":("Done for you Plus",19900,_plus_summary("pip"))},
    "subject":"you (or the person you help)"},
  "pipr":{"name":"PIP review","short":"PIP review form (AR1)","form":"AR1","gov":"https://www.gov.uk/pip/when-your-pip-claim-is-reviewed",
    "who":"people already getting PIP","topics":PIP_TOPICS,"pdf":None,
-   "tiers":{"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each AR1 activity section, extra sheets ready to send, an evidence checklist, a 'what has changed' summary, an assessment-call prep sheet and a request letter for your GP."),
-            "199":("Done for you Plus",19900,_plus_summary("pipr"))},
-   "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,"")},
+   "tiers":{"1999":DOWNLOAD("pipr"),"2999":POSTED("pipr")},
+   "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,""),"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each AR1 activity section, extra sheets ready to send, an evidence checklist, a 'what has changed' summary, an assessment-call prep sheet and a request letter for your GP."),"199":("Done for you Plus",19900,_plus_summary("pipr"))},
    "subject":"you (or the person you help)"},
  "atw":{"name":"Access to Work","short":"Access to Work application","form":"AtW","gov":"https://www.gov.uk/access-to-work",
    "who":"people in or starting paid work","topics":ATW_TOPICS,"pdf":None,
@@ -106,10 +116,21 @@ def tick_list(form, answers):
 
 # One "done for you" product per form (priced at FULL). A premium tier (e.g. "199") can be added to a form's "tiers" later;
 # anything in FULL_TIERS gets the complete pack. "legacy_tiers" only describe orders bought before the price change.
-FULL_TIERS={"79","99","199"}
+FULL_TIERS={"79","99","199","1999","2999"}
 def is_full(tier): return str(tier) in FULL_TIERS
 def tier_info(form,tier):
     f=FORMS[form]; return f["tiers"].get(tier) or f.get("included_tiers",{}).get(tier) or f.get("legacy_tiers",{}).get(tier) or next(iter(f["tiers"].values()))
 def default_tier(form): return list(FORMS[form]["tiers"])[0]
 PREMIUM_TIERS={"199"}
 def is_premium(tier): return str(tier) in PREMIUM_TIERS
+POSTED_TIERS={"2999"}
+def is_posted(tier): return str(tier) in POSTED_TIERS
+TWO_OPTION_FORMS=("aa","dla","pip","pipr")
+def options(form): return list(FORMS[form]["tiers"]) if form in TWO_OPTION_FORMS else []
+
+# Where the prepaid envelope in the posted pack is addressed. DWP Freepost addresses need no stamp, licence or postcode:
+# "Do not write anything except the freepost address" (GOV.UK). None = not confirmed: the fulfilment queue says to check.
+RETURN_ADDR={"aa":"Freepost DWP Attendance Allowance",       # gov.uk/attendance-allowance/how-to-claim
+             "dla":"Freepost DWP DLA Child",                  # gov.uk/disability-service-centre
+             "pip":"Freepost RTEU-HBEC-RGTG\nPersonal Independence Payment\nMail Handling Site A\nWolverhampton\nWV98 1AA",   # PIP2 booklet
+             "pipr":None}                                     # AR1: use the return address printed on the customer's review form

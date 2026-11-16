@@ -3,7 +3,7 @@ reconsideration letter voice, 'next form included' entitlement (one per Plus ord
 DEV server:  python test_plus_next.py URL"""
 import sys, re, json, time, urllib.request, urllib.parse
 import plus as PLUS, letters, printmail
-from forms import FORMS
+from forms import FORMS, tier_info
 B=sys.argv[1]
 class NR(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*a,**k): return None
@@ -17,7 +17,7 @@ DWP="You can claim directly from DWP for free; FormSorted is a paid online form-
 BANNED=["bought one by one","bought separately","you save","saving","save £","worth £","only today","limited time","hurry","ends soon","countdown"," ai ","stripe","we claim","we submit","we appeal for you","tribunal","sscs1","appeal form","guarantee an award","win "]
 # ---- 1. copy
 for f in PLUS.PLUS_FORMS:
-    txt=" ".join(PLUS.flat(f)+PLUS.notes(f)+[PLUS.summary(f),PLUS.FOOT,FORMS[f]["tiers"]["199"][2]]).lower()
+    txt=" ".join(PLUS.flat(f)+PLUS.notes(f)+[PLUS.summary(f),PLUS.FOOT,tier_info(f,"199")[2]]).lower()
     for b in BANNED: assert b not in " "+txt+" ", (f,b)
     assert "reconsideration letter" in txt and "check, sign and send" in txt and "same price whatever dwp decides" in txt
     assert ("1 in 4" in txt)==(f in ("pip","pipr")), f
@@ -26,7 +26,7 @@ for f in PLUS.PLUS_FORMS:
 assert "may never need this" in " ".join(PLUS.flat("aa")) and "higher rate" in " ".join(PLUS.flat("aa"))
 assert "renewal" in " ".join(PLUS.flat("dla")).lower() and "PIP claim at 16" in " ".join(PLUS.flat("dla"))
 assert "review form" in " ".join(PLUS.flat("pip")) and "next PIP review form" in " ".join(PLUS.flat("pipr"))
-for f in ("aa","dla","pip","pipr"): assert "Renewal included" not in FORMS[f]["tiers"]["199"][2] and "Freepost" not in FORMS[f]["tiers"]["199"][2]
+for f in ("aa","dla","pip","pipr"): assert "Renewal included" not in tier_info(f,"199")[2] and "Freepost" not in tier_info(f,"199")[2]
 for l,d,b,p in PLUS.compare_rows("aa"): assert b in (0,1,"£15 extra") and p==1   # nothing priced that can't be bought on its own
 # ---- 2. reconsideration letter voice
 L=lambda f,w: letters.mr_letter(f,{"name":"Margaret Tester","address":"1 Test St","decision_date":"1 October 2026","points":[],"for":w})
@@ -45,20 +45,20 @@ def intake_order(tier,form="aa",who="parent"):
 import app as A0
 t9=intake_order("99"); pv=body(f"/preview/{t9}"); low=pv.lower()
 assert "Check your order and pay" in pv and "Your package" in pv and pv.count(DWP)==1 and "Pay £99" in pv
-assert "name=pack" not in pv and "Done for you</strong> · £99" in pv and f'href="/package/{t9}">Change package' in pv and "Keep my answers" not in pv   # step 4: summary of the step-2 choice, no cards (Simon, 30 Oct 2026)
+assert "name=pack" not in pv and "Done for you</strong> · £99" in pv and f'href="/package/{t9}">Change package' not in pv and "Keep my answers" not in pv   # step 4: summary of the step-2 choice, no cards (Simon, 30 Oct 2026)
 assert not re.search(r"type=checkbox[^>]*checked",pv)   # nothing ticked for them
 for b in BANNED[:10]: assert b not in low, b
-assert "1 in 4" not in low and "May never need this".lower() in body("/?form=aa").lower() and "1 in 4" not in body("/?form=aa")
-tp=intake_order("99","pip","me"); assert "1 in 4 of these requests leads to a change in award" in body("/?form=pip") and "1 in 4" not in body(f"/preview/{tp}")   # comparison lives on step 2 only
+assert "1 in 4" not in low and "Done for you Plus" not in body("/?form=aa") and "1 in 4" not in body("/?form=aa")   # Nov 2026: Plus is no longer sold
+tp=intake_order("99","pip","me"); assert "1 in 4" not in body("/?form=pip") and "1 in 4" not in body(f"/preview/{tp}")   # Nov 2026: the Plus comparison (and its statistic) is no longer shown
 t1=intake_order("199"); p1=body(f"/preview/{t1}"); assert "Done for you Plus</strong> · £199" in p1 and "Pay £199" in p1   # picked Plus at the start: stays Plus
-# Change package from the pay screen: back to the package cards, answers kept, then back to pay
-tc=intake_order("99"); i0=A0.get(tc)["intake"]; cp=body(f"/package/{tc}"); assert "Change your package" in cp and "Step 2 of 5" in cp and f"action=/package/{tc}" in cp
-assert loc(req(f"/package/{tc}",{"tier":"199"}))==f"/preview/{tc}" and A0.get(tc)["tier"]=="199" and A0.get(tc)["intake"]==i0 and "Pay £199" in body(f"/preview/{tc}")
-req(f"/package/{tc}",{"tier":"0"}); assert A0.get(tc)["tier"]=="199"   # a made-up package is ignored
+# Nov 2026: no package step any more. Old £99/£199 orders keep their package; the change-package page goes back to pay
+tc=intake_order("99"); assert loc(req(f"/package/{tc}"))==f"/preview/{tc}"
+assert loc(req(f"/package/{tc}",{"tier":"199"}))==f"/preview/{tc}" and A0.get(tc)["tier"]=="99"
 import app as A
-assert loc(req(f"/pay/{t9}",{"waive":"on","pack":"199","keep":"1"}))==f"/start/{t9}"; o=A.get(t9); assert o["tier"]=="199" and o["keep_until"]>time.time()+2.9*365*86400
-tq=intake_order("199"); req(f"/pay/{tq}",{"waive":"on","pack":"99","keep":"1"}); o=A.get(tq); assert o["tier"]=="99" and o["keep_until"] is None
-assert req(f"/pay/{intake_order('99')}",{"waive":"on","pack":"0"}).status==303 and A.get(t9)["tier"]=="199"   # a made-up pack is ignored
+assert loc(req(f"/pay/{t9}",{"waive":"on","pack":"199","keep":"1"}))==f"/start/{t9}"; o=A.get(t9); assert o["tier"]=="99" and o["keep_until"] is None   # can't switch to Plus
+c9=A.db(); c9.execute("update orders set tier='199', keep_until=? where token=?",(time.time()+3*365*86400,t9)); c9.commit()   # the rest tests an existing Plus order
+tq=intake_order("199"); req(f"/pay/{tq}",{"waive":"on","keep":"1"}); o=A.get(tq); assert o["tier"]=="199" and o["keep_until"]>time.time()+2.9*365*86400   # existing Plus orders keep the 3-year option
+assert req(f"/pay/{intake_order('99')}",{"waive":"on","pack":"0"}).status==303
 # ---- 4. next form included: one per Plus order, same benefit, same person
 def finish(tok,form="aa"):
     req(f"/start/{tok}"); req(f"/uploads/{tok}/done",{}); req(f"/prepare/{tok}")
