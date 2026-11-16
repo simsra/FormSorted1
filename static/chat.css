@@ -116,3 +116,9 @@ form.elseask{display:flex;gap:8px;margin:.5rem 0 0;flex-wrap:wrap}form.elseask i
 .chat .ready,.chat .ready h1,.chat .ready p{color:inherit;background:transparent}
 .chat .qs>.qnow.iq{margin:0 0 0 44px}
 @media(max-width:520px){.chat .qs>.qnow.iq{margin-left:0}}
+/* the typed conversation used by the PIP review (AR1) and Access to Work forms (static/chat.html) */
+.chat #ask .progress{font-size:.85rem;color:var(--c-muted);margin:0 0 4px}.chat #ask .bar{height:4px;background:var(--c-line);border-radius:4px;margin:0 0 12px}.chat #ask .bar span{display:block;height:100%;background:linear-gradient(90deg,#9db1f9,#7f56d9);border-radius:4px}
+.chat #ask .promise{background:transparent;border:0;padding:0;font-size:.95rem;margin:0 0 10px}.chat #ask .caption{font-size:.85rem;margin:0 0 10px}
+.chat #ask .turn .q{font-weight:600;display:block}.chat #ask .field{margin:12px 0 0 44px}.chat #ask textarea{width:100%;font:inherit;font-size:1rem;border:1px solid var(--c-line2);border-radius:14px;padding:10px 12px}
+.chat #ask #send{margin-left:44px}@media(max-width:520px){.chat #ask .field,.chat #ask #send{margin-left:0}}
+.chat #ask .turn .q{font-size:1.1rem;line-height:1.4;margin:0}
