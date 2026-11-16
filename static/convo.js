@@ -45,7 +45,7 @@ while((n=walk.nextNode())){if(/^(SCRIPT|STYLE|OPTION)$/.test(n.tagName))continue
  if(n.matches(TP)&&!n.closest('label.chip'))top.tips.push(n)}
 units.forEach(function(u){var ins=[];u.ctrls.forEach(function(c){ins=ins.concat(c.matches('input,select,textarea')?[c]:$$('input,select,textarea',c))});u.ins=ins;
  u.radios=ins.filter(function(i){return i.type=='radio'});u.checks=ins.filter(function(i){return i.type=='checkbox'&&!/_xon$/.test(i.name)});
- u.xon=ins.filter(function(i){return /_xon$/.test(i.name)})[0]||null;u.ebox=u.xon?u.xon.closest('.else').querySelector('.elsebox'):null;
+ u.xon=ins.filter(function(i){return /_xon$/.test(i.name)&&!!i.closest('.else')})[0]||null;u.ebox=u.xon?u.xon.closest('.else').querySelector('.elsebox'):null;
  u.boxes=ins.filter(function(i){return i.tagName=='TEXTAREA'||(i.tagName=='INPUT'&&!/^(radio|checkbox|date|file)$/.test(i.type)&&!i.classList.contains('elsebox'))});
  u.date=ins.filter(function(i){return i.type=='date'})[0]||null;u.sel=ins.filter(function(i){return i.tagName=='SELECT'})[0]||null;
  u.kind=u.radios.length?'radio':u.checks.length||u.xon?'multi':u.sel?'select':u.date?'date':u.boxes.length?'text':'info';
@@ -90,27 +90,55 @@ var endb=el('div','turn bot cend',ORB+'<div class=bub><p><strong>Thanks, that\'s
 var cnt=$('#qcount');if(cnt)cnt.hidden=true;
 var front=null,seen=-1,busyT=0;
 function parts(u){return [u.q,u.me,u.act].concat(u.ctrls,u.tips,u.pre,u.row?[u.row]:[])}
+/* v2: keep the live-main question groups intact. A care card's taps, dependent follow-ups and optional words
+   are one assistant exchange, with one Send for the entire group (not one Send per field). Single-choice
+   questions outside a group still move on with the tap. The original section POST is unchanged. */
+var clusters=[],preRoot=[],lastSimple=null;
+function topRoot(n){while(n.parentNode&&n.parentNode!==box)n=n.parentNode;return n}
+[].slice.call(box.children).forEach(function(e){if(/^(SCRIPT|STYLE|INPUT)$/.test(e.tagName))return;
+ if(/^(P|H2|H3)$/.test(e.tagName)&&!e.querySelector('input,select,textarea')){preRoot.push(e);return}
+ var us=units.filter(function(u){return topRoot(u.q)===e});if(!us.length)return;
+ var simple=!e.querySelector('.chips,.card,.cond,textarea,select,input[type=radio],input[type=checkbox],input[type=file]')&&!!e.querySelector('input');
+ var c=(simple&&lastSimple&&lastSimple.roots.length<3&&!preRoot.length)?lastSimple:{roots:[],us:[],done:false};
+ if(clusters.indexOf(c)<0)clusters.push(c);c.roots.push(e);c.us=c.us.concat(us);us.forEach(function(u){u.cluster=c});c.pre=(c.pre||[]).concat(preRoot);preRoot=[];lastSimple=simple?c:null;
+});
+clusters.forEach(function(c){var node=c.roots[c.roots.length-1];c.send=el('button','qchip cluster-send','Send');c.send.type='button';
+ var row=el('div','cluster-actions');row.appendChild(c.send);node.parentNode.insertBefore(row,node.nextSibling);c.row=row;
+ c.send.onclick=function(){c.done=true;c.us.forEach(function(u){u.done=true;u.reopen=false});render()};
+ c.auto=c.us.length===1&&c.us[0].kind==='radio'&&!c.us[0].checks.length&&!c.us[0].boxes.length;
+ if(c.auto){c.send.className='cskip';c.send.textContent='Skip this question'}
+});
+var currentCluster=null;
 function render(anim){
  units.forEach(function(u){parts(u).forEach(function(e){e.classList.remove('cfut','coff','cnow','cwait')})});
- units.forEach(function(u){u.live=shown(u.q)&&(u.kind=='info'||u.ctrls.some(shown)||(u.row&&shown(u.row)))});
- var f=null;for(var i=0;i<units.length;i++){var u=units[i];if(u.live&&!answered(u)){f=u;break}}
- units.forEach(function(u){
-  if(f&&u.i>f.i){parts(u).forEach(function(e){e.classList.add('cfut')});return}
-  if(u===f){u.q.classList.add('cnow');u.me.innerHTML='';u.me.classList.add('coff');
-   if(u.dbtn)u.dbtn.textContent=(u.checks.some(function(i){return i.checked})||(u.xon&&u.xon.checked))?'Done':'None of these';
-   if(u.ebtn)u.ebtn.classList.toggle('chide',!u.xon.checked);return}
-  if(!u.live){u.me.classList.add('coff');return}
-  u.ctrls.concat(u.tips,[u.act],u.row?[u.row]:[]).forEach(function(e){e.classList.add('coff')});
-  if(u.kind=='info'){u.me.classList.add('coff');return}
-  var s=summary(u);u.me.innerHTML='<button type=button class=bub aria-label="Change your answer: '+txt(T(u.q))+'">'+txt(s||'Skipped')+'<span class=chg>Change</span></button>';
-  u.me.firstChild.onclick=function(){u.reopen=true;u.done=false;u.edone=false;render();focusQ(u)}});
- /* the end of the part */
- endb.hidden=!!f;sub.hidden=!!f;nav.classList.toggle('cnav-wait',!!f);
- if(!f)showTold();else if(told){told.parentNode.removeChild(told);told=null;endb.classList.remove('chide')}
- var host=f?f.act:null;if(host&&side.previousSibling!==host){host.parentNode.insertBefore(side,host.nextSibling)}
- if(!f&&side.parentNode!==nav.parentNode)nav.parentNode.insertBefore(side,endb);
- var changed=f!==front;front=f;
- if(changed){side.innerHTML='';if(f&&f.i>seen&&anim!==false&&!RM&&seen>=0){wait(f)}else{if(f)focusQ(f,seen<0);else scrollIn(endb)}if(f)seen=Math.max(seen,f.i);offerReuse(f)}}
+ clusters.forEach(function(c){c.row.hidden=false;c.pre.forEach(function(e){e.classList.remove('cfut')})});
+ units.forEach(function(u){u.live=shown(u.q)&&(u.kind==='info'||u.ctrls.some(shown)||(u.row&&shown(u.row)))});
+ var active=null;
+ clusters.forEach(function(c){c.live=c.us.some(function(u){return u.live&&u.kind!=='info'});
+  if(!active&&c.live&&!c.done){if(c.auto&&answered(c.us[0]))c.done=true;else active=c}});
+ var liveCl=clusters.filter(function(c){return c.live}),lastLive=active&&active===liveCl[liveCl.length-1];
+ var f=active&&(active.us.filter(function(u){return u.live&&u.kind!=='info'&&!answered(u)})[0]||active.us.filter(function(u){return u.live&&u.kind!=='info'})[0]);
+ clusters.forEach(function(c){var future=active&&clusters.indexOf(c)>clusters.indexOf(active);
+  c.row.hidden=c!==active||(c===active&&lastLive&&!form.hasAttribute('data-last'));
+  if(c.auto){var x0=c.us[0].xon&&c.us[0].xon.checked;c.send.className=x0?'qchip cluster-send':'cskip';c.send.textContent=x0?'Send':'Skip this question'}c.pre.forEach(function(e){e.classList.toggle('cfut',!!future)});
+  c.us.forEach(function(u){
+   if(future){parts(u).forEach(function(e){e.classList.add('cfut')});return}
+   if(c===active){u.me.innerHTML='';u.me.classList.add('coff');u.act.classList.add('coff');
+    if(u.row){var ok=u.row.querySelector('.cok');if(ok)ok.classList.add('coff')}
+    if(u===f)u.q.classList.add('cnow');return}
+   if(!u.live){u.me.classList.add('coff');return}
+   u.ctrls.concat(u.tips,[u.act],u.row?[u.row]:[]).forEach(function(e){e.classList.add('coff')});
+   if(u.kind==='info'){u.me.classList.add('coff');return}
+   var ss=summary(u);u.me.innerHTML='<button type=button class=bub>'+txt(ss||'Skipped')+'<span class=chg>Change</span></button>';
+   u.me.firstChild.onclick=function(){c.done=false;u.reopen=true;u.done=false;u.edone=false;render();focusQ(u)};
+  });
+ });
+ var showSub=!active||(lastLive&&!form.hasAttribute('data-last'));endb.hidden=!!active;sub.hidden=!showSub;nav.classList.toggle('cnav-wait',!showSub);
+ if(!active)showTold();else if(told){told.parentNode.removeChild(told);told=null;endb.classList.remove('chide')}
+ var host=active?active.row:endb;if(side.previousSibling!==host)host.parentNode.insertBefore(side,host.nextSibling);
+ var changed=active!==currentCluster;currentCluster=active;front=f;
+ if(changed){side.innerHTML='';if(f)focusQ(f,seen<0);else scrollIn(endb);if(f)seen=Math.max(seen,f.i);offerReuse(f)}
+}
 function wait(u){var ps=parts(u).filter(function(e){return !e.classList.contains('coff')});ps.forEach(function(e){e.classList.add('cwait')});
  var t=FS.typing();u.q.parentNode.insertBefore(t,u.q);clearTimeout(busyT);
  busyT=setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);ps.forEach(function(e){e.classList.remove('cwait')});focusQ(u)},480)}
@@ -185,12 +213,12 @@ form.addEventListener('change',function(e){var u=units.filter(function(x){return
  if(u&&e.target.tagName=='SELECT'){u.done=!!e.target.value}
  if(u&&e.target.classList.contains('elsebox'))return;
  setTimeout(render,0)});
-form.addEventListener('keydown',function(e){if(e.key!=='Enter'||e.target.tagName!=='INPUT')return;var u=units.filter(function(x){return x.ins.indexOf(e.target)>=0})[0];if(!u)return;e.preventDefault();
+form.addEventListener('keydown',function(e){if(e.key!=='Enter'||e.target.tagName!=='INPUT')return;var u=units.filter(function(x){return x.ins.indexOf(e.target)>=0})[0];if(!u)return;e.preventDefault();if(u.cluster&&!u.cluster.auto){u.cluster.send.click();return}
  if(e.target.classList.contains('elsebox')){if(e.target.value.trim()){u.edone=true;if(u.kind=='multi')u.done=true;render()}return}commit(u)});
 document.addEventListener('click',function(e){if(e.target.closest('button.starter'))setTimeout(render,0)});
 box.addEventListener('click',function(e){var c=e.target.closest('label.chip');if(!c)return;var i=c.querySelector('input');var u=units.filter(function(x){return x.ins.indexOf(i)>=0})[0];
  if(u&&u.reopen&&i&&i.type=='radio'&&i.checked){u.reopen=false;setTimeout(render,0)}});
 window.qsShowAll=function(){units.forEach(function(u){parts(u).forEach(function(e){e.classList.remove('cfut','coff')})});sub.hidden=false};
-window.__convo={units:units,front:function(){return front},render:render};
+window.__convo={units:units,clusters:clusters,current:function(){return currentCluster},front:function(){return front},render:render};
 render(false);
 })();

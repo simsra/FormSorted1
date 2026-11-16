@@ -84,7 +84,7 @@ input.filled{border-color:var(--b400);box-shadow:var(--ring)}
  .card:has(.lvl input:checked) .more{display:block}.card:has(.lvl input[value=ok]:checked) .more{display:none}
  .gq .dep{display:none}.gq:has(.g input:checked:not([value="0"])) .dep{display:block}
  .card:has(.lvl input[value=cant]:checked) .fx-every,.card:has(.lvl input[value=slow]:checked) .fx-every,.card:has(.lvl input[value=slow]:checked) .fx-nobody{display:none}
- .cond.other:has(input[name^=oc_]:placeholder-shown) select,.cond.other:has(input[name^=oc_]:placeholder-shown) .chips{display:none}}
+ .cond.other:has(input[aria-label="Another condition"]:placeholder-shown) select,.cond.other:has(input[aria-label="Another condition"]:placeholder-shown) .chips{display:none}}
 .qoff{display:none!important}
 /* ---------- question blocks ---------- */
 fieldset{border:0;padding:0;margin:0;min-width:0}legend{padding:0}
@@ -405,3 +405,11 @@ dl.tell{margin:0 0 10px}dl.tell>div{padding:8px 0;border-top:1px solid var(--g10
 .convo .cintake .condlist .cme{max-width:none}
 .convo .cintake .condlist .cond.other{display:contents}
 .convo .cintake .cq .hint{display:inline;margin:0!important;font-size:inherit;color:var(--g600);font-weight:400}
+/* v2: one Send per original question group; no per-follow-up Send/Skip clicks */
+.convo .cintake .cluster-actions{margin:12px 0 20px 44px}.convo .cintake .cluster-actions[hidden]{display:none!important}
+.convo .cintake .cluster-actions .cluster-send{background:var(--b600);border-color:var(--b600);color:#fff;min-width:100px}
+.convo .cintake .condlist:not(:has(input[name=oc_xon]:checked)) .cond.other{display:none!important}
+.convo .cintake .condlist .ocon{flex:0 0 auto}
+.convo .cintake .cinrow .cok.coff{display:none!important}
+.convo .cintake .fu.dup .futaps,.convo .cintake .fu.dup .fuq,.convo .cintake .fu.dup .carry{display:none!important}
+.convo .cintake button.qchip.cluster-send,.convo .cintake button.qchip.cluster-send:hover{color:#fff!important;background:var(--b600)!important;border-color:var(--b600)!important;font-weight:600}

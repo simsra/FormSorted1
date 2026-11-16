@@ -7,9 +7,7 @@ os.environ["WF_LOOKUPS"]="0"
 import intake as I, wholeform as W
 from test_personas import FM, walk, AA_STEPS, PIP_STEPS, DLA_STEPS
 EXEMPT={  # name pattern -> why it can't have one
- r"who":"Who the form is for: 'Someone else' is itself the open choice and goes straight on to typing their name",
- r"cond_\d+":"One tick per named condition; the list's own typed choice is the 'Another condition (type it)' box under it",
- r"\w+_more\d+":"'Another one? Yes / No' repeater (another test, hospital stay or address): Yes opens boxes to type it",
+ r"cond_\d+":"One tick per named condition; the list's own Something else (oc_xon) opens the 'Another condition (type it)' boxes",
  r"\w+_diff":"single 'It's different for some of these' toggle that opens the per-item version of the same question",
 }
 def groups(body):

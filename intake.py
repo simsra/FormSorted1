@@ -97,9 +97,9 @@ def is_me(d,form): return form!="dla" and d.get("who","me") in ("me","")
 def _chk(n,v,txt,on,cls=""): return f'<label class="chip{cls}"><input type=checkbox name="{n}" value="{esc(v)}" {"checked" if on else ""}><span>{esc(txt)}</span></label>'
 def _rad(n,v,txt,cur): return f'<label class=chip><input type=radio name="{n}" value="{esc(v)}" {"checked" if cur==v else ""}><span>{esc(txt)}</span></label>'
 def _radios(n,opts,cur,cls="",x=None): return f"<div class='chips{cls}'>"+"".join(_rad(n,v,t,cur) for v,t in opts)+(_else(n,x) if x is not None else "")+"</div>"
-def _else(n,txt):
-    """'Something else' chip that reveals a short text box for this question (stored per question)."""
-    return f'<span class=else><label class=chip><input type=checkbox name="{n}_xon" value=1 {"checked" if txt else ""}><span>Something else</span></label><input class=elsebox name="{n}_x" value="{esc(txt or "")}" maxlength=200 placeholder="Tell us briefly" aria-label="Something else: tell us briefly"></span>'
+def _else(n,txt,label="Something else"):
+    """'Something else' chip that reveals a short text box for this question (stored per question). Plain Yes/No questions call it 'Not sure / something else'."""
+    return f'<span class=else><label class=chip><input type=checkbox name="{n}_xon" value=1 {"checked" if txt else ""}><span>{label}</span></label><input class=elsebox name="{n}_x" value="{esc(txt or "")}" maxlength=200 placeholder="Tell us briefly" aria-label="Something else: tell us briefly"></span>'
 def _checks(n,opts,cur,x=None): cur=cur or []; return "<div class=chips>"+"".join(_chk(n,v,t,v in cur) for v,t in opts)+(_else(n,x) if x is not None else "")+"</div>"
 def other_txt(fm,n):
     """The 'Something else' text for question n, only if its chip is on."""
@@ -301,9 +301,9 @@ def section_body(form,sec,d):
             h+=_q("How old are they?",_radios("age",[("u3","Under 3"),("3to4","3 or 4"),("5to15","5 to 15"),("ns","Not sure")],d.get("age"),x=X(d,"age")))
         else:
             opts=[("me","Me"),("parent","My mum or dad"),("partner","My partner"),("other","Someone else")] if form=="aa" else [("me","Me"),("other","Someone I help")]
-            h+=_q("Who is this form for?",_radios("who",opts,d.get("who")))
+            h+=_q("Who is this form for?",_radios("who",opts,d.get("who"),x=X(d,"who")))
             # 30 Oct: only shown once 'someone else' is picked (one question per screen skips hidden ones); 'Me' never sees them
-            dv=" ".join(v for v,_ in opts if v!="me")
+            dv=" ".join(v for v,_ in opts if v!="me")+" _xon"   # 16 Nov: their own words for who (Something else) also asks their name and who signs
             h+=f'<div class=wdep data-dep="who" data-vals="{dv}">'+_q("Their first name",f'<input name=name value="{esc(d.get("name",""))}" autocomplete=off maxlength=40 placeholder="e.g. Mum or Margaret">',"We use it in the questions. Optional.")+'</div>'
             h+=f'<div class=wdep data-dep="who" data-vals="{dv}">'+_q("Who will sign the form?",_radios("signer",[("them","They will sign it themselves"),("poa","I have Power of Attorney"),("appointee","I'm their appointee"),("deputy","I'm their deputy (Court of Protection)"),("ns","Not sure yet")],d.get("signer"),x=X(d,"signer")))+'</div>'
             h+=wholeform.DEP_JS
@@ -316,6 +316,7 @@ def section_body(form,sec,d):
         for i,cn in enumerate(CONDS[form]):
             c=have.get(cn,{}); lst+=f'<div class=cond>{_chk(f"cond_{i}","1",cn,bool(c),cls=" k")}<div class=more>{sel(f"cond_{i}_since",c.get("since",""))}{_checks(f"cond_{i}_t",TREAT,c.get("treat"),c.get("tx",""))}</div></div>'
         others=[c for c in d.get("conds") or [] if c.get("name") not in CONDS[form]]+[{}]
+        lst+='<div class="cond ocon">'+_chk("oc_xon","1","Something else",any(c.get("name") for c in others))+'</div>'
         for j,c in enumerate(others[:3]):
             lst+=f'<div class="cond other"><input name="oc_{j}" value="{esc(c.get("name",""))}" placeholder="Another condition (type it)" maxlength=80 aria-label="Another condition">{sel(f"oc_{j}_since",c.get("since",""))}{_checks(f"oc_{j}_t",TREAT,c.get("treat"),c.get("tx",""))}</div>'
         h+=_q("Which health conditions or disabilities "+("do you have?" if me else f"does {nm} have?"),lst,"Tap each one that applies, then roughly when it started. No diagnosis needed.")
@@ -358,7 +359,8 @@ def save(form,sec,d,fm):
     g=lambda k:(str(fm.get(k) or "").strip())[:200]; gl=lambda k:[str(x)[:80] for x in fm.getlist(k)]
     if sec=="about":
         for k in ("who","name","signer","rel","age"): d[k]=g(k)
-        for k in ("signer","rel","age"): d.setdefault("else",{})[k]=other_txt(fm,k)
+        for k in ("signer","rel","age","who"): d.setdefault("else",{})[k]=other_txt(fm,k)
+        if form!="dla" and not d.get("who") and d["else"].get("who"): d["who"]="other"   # they typed who it is for, so not Me
         d["name"]=re.sub(r"[^\w '\-.]","",d["name"])[:40]
         if form!="dla" and d.get("who") in ("me",""): d["signer"]=""; d["name"]=""; d["else"]["signer"]=""   # 'Me': no other-person answers kept
     elif sec=="conds":
@@ -439,6 +441,7 @@ def topic_texts(form,d):
     me=is_me(d,form); nm=name(d,form); T={t:[] for t,_,_ in FORMS[form]["topics"]}
     if form=="dla": intro=f"This form is for my child{(' '+d['name']) if d.get('name') else ''}"+(f"; I am their {d['rel'].lower()}." if d.get("rel") and d["rel"]!="Other" else f"; I am their {X(d,'rel').rstrip('.')}." if X(d,"rel") else ".")
     else: intro={"me":"This form is for me.","parent":"This form is for my parent","partner":"This form is for my partner","other":"This form is for someone I help"}.get(d.get("who") or "me","")
+    if form!="dla" and X(d,"who"): intro=f"This form is for: {X(d,'who').rstrip('.')}"
     if not me and form!="dla": intro+=(f" ({d['name']})." if d.get("name") else ".")
     intro+=" "+{"them":"They will sign the form themselves.","poa":"I have Power of Attorney.","appointee":"I am their appointee.","ns":"I'm not sure yet who will sign."}.get(d.get("signer",""),"")
     if _ok(d.get("age")): intro+=" Age: "+{"u3":"under 3","3to4":"3 or 4","5to15":"5 to 15"}[d["age"]]+"."

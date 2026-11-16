@@ -77,7 +77,7 @@ def _pre_btn(q):
 def render_q(q,w):
     n,k=q["id"],q["kind"]; cur=w.get(n)
     if k=="tap": inner=_tap(q,w)
-    elif k=="radio": inner=f"<div class='chips{q['cls']}'>"+"".join(_rad(n,v,t,cur or "") for v,t in q["opts"])+(_else(n,w.get(n+"_x","")) if q["other"] else "")+"</div>"
+    elif k=="radio": inner=f"<div class='chips{q['cls']}'>"+"".join(_rad(n,v,t,cur or "") for v,t in q["opts"])+(_else(n,w.get(n+"_x",""),"Not sure / something else" if [v for v,_ in q["opts"]]==["yes","no"] else "Something else") if q["other"] else "")+"</div>"
     elif k=="checks": inner=_pre_btn(q)+I._checks(n,q["opts"],cur if isinstance(cur,list) else [],w.get(n+"_x","") if q["other"] else None)
     elif k=="grid": inner=_grid(q,w)
     elif k=="note": inner=""
@@ -450,7 +450,7 @@ def rep(pre,n,base,make,more_label):
     out=[]; dp=(base,["yes"]) if isinstance(base,str) else (base[0],[base[1]])
     for i in range(1,n+1):
         out+=make(i,dp)
-        if i<n: out.append(Q(f"{pre}_more{i}",more_label,"radio",YN,dep=dp,other=False)); dp=(f"{pre}_more{i}",["yes"])
+        if i<n: out.append(Q(f"{pre}_more{i}",more_label,"radio",YN,dep=dp)); dp=(f"{pre}_more{i}",["yes"])   # 16 Nov: Not sure / something else too
     return out
 def is_wf_section(sec): return sec in {"you","child","helper","parent","health","home","often","more"}
 def section_body(form,sec,d):
@@ -493,7 +493,7 @@ def prefill(form,d):
     n=(d.get("name") or "").strip()   # the name of the person the form is about (the child, for DLA)
     if n and (form=="dla" or not me(d,form)) and n.lower() not in KIN_WORDS: p["first"]=n
     return p
-DEP_JS="""<script>(function(){function upd(){document.querySelectorAll('[data-dep]').forEach(function(e){var n=e.getAttribute('data-dep'),v=e.getAttribute('data-vals').split(' '),on=false;document.querySelectorAll('[name="'+n+'"]').forEach(function(i){if(i.checked&&v.indexOf(i.value)>=0)on=true});e.hidden=!on})}
+DEP_JS="""<script>(function(){function upd(){document.querySelectorAll('[data-dep]').forEach(function(e){var n=e.getAttribute('data-dep'),v=e.getAttribute('data-vals').split(' '),on=false;document.querySelectorAll('[name="'+n+'"]').forEach(function(i){if(i.checked&&v.indexOf(i.value)>=0)on=true});if(v.indexOf('_xon')>=0)document.querySelectorAll('[name="'+n+'_xon"]').forEach(function(i){if(i.checked)on=true});e.hidden=!on})}
 document.addEventListener('change',upd);upd();
 document.querySelectorAll('.usepre').forEach(function(b){b.addEventListener('click',function(){var n=b.getAttribute('data-for');b.getAttribute('data-vals').split(' ').forEach(function(v){var i=document.querySelector('[name="'+n+'"][value="'+v+'"]');if(i&&!i.checked){i.checked=true;i.dispatchEvent(new Event('change',{bubbles:true}))}});b.parentNode.hidden=true})});
 document.querySelectorAll('.pcfind').forEach(function(b){var i=document.getElementById('w_'+b.getAttribute('data-for')),last='';if(i)i.addEventListener('input',function(){var v=i.value.replace(/\\s+/g,'').toUpperCase();if(v!=last&&/^[A-Z]{1,2}[0-9][A-Z0-9]?[0-9][A-Z]{2}$/.test(v)){last=v;b.click()}})});
@@ -592,6 +592,9 @@ def pdf_values(form,d,uploads=None):
         if s: T[f]=s
     def other(label,k):
         if w.get(k+"_x"): notes.append(f"{label}: {w[k+'_x']}")
+    for k_ in sorted(w):   # Another ...? Not sure / something else: their words go in the notes
+        m_=re.match(r"(test|surg|ab)_more\d+_x$",k_)
+        if m_ and w[k_]: notes.append({'test':'Tests','surg':'Operations','ab':'Time abroad'}[m_.group(1)]+": "+w[k_])
     chk=set(w.get("checks") or []); answered=bool(chk)
     ev=[x for x in (d.get("evidence") or []) if x not in ("none","nothing")]
     ups=[u.get("name") for u in (uploads if uploads is not None else d.get("uploads") or [])]

@@ -69,4 +69,22 @@ h=A.chat_page('<form id=qform method=post action=/intake/x><div class=qs id=qs><
 check("convo.js" not in h and 'class="uapp chat"' in h,"CONVO=0: the earlier chat look")
 os.environ["CONVO"]="1"; h=A.chat_page('<form id=qform method=post action=/intake/x><div class=qs id=qs></div></form>',"Q",True).body.decode()
 check("convo.js" in h,"CONVO=1: the conversation")
+# v2 (16 Nov, 21:32): every choice list has Something else; one Send per question group (no longer than live main)
+check("cluster-send" in js and "Skip this question" in js,"v2: one Send per question group; a single tap question moves on with the tap")
+loc=post("/checkout",{"form":"aa","tier":"99"}); t2=loc.rsplit("/",1)[1]; post(f"/consent/{t2}",{"health":"1","truth":"1"})
+a=get(f"/intake/{t2}")
+check('name="who_xon"' in a,"v2: Who is this form for? has Something else")
+post(f"/intake/{t2}",{"sec":"about","nav":"next","who_xon":"1","who_x":"My aunt Jo","name":"Jo"})
+c=get(f"/intake/{t2}?s=conds")
+check("oc_xon" in c,"v2: the conditions list has Something else (opens the box to type it)")
+tj=json.loads(get(f"/api/{t2}/told?cur=conds"))
+check("My aunt Jo" in json.dumps(tj),"v2: their own words for who it is for are kept word for word")
+import intake as I2, wholeform as W2
+I2.X  # loaded
+d2={"who":"other","else":{"who":"My aunt Jo"},"name":"Jo"}
+check("This form is for: My aunt Jo" in json.dumps(I2.topic_texts("aa",d2)),"v2: the writer gets their words, not a guessed choice")
+_,_,notes=W2.pdf_values("aa",{"wf":{"test_more1_x":"Maybe one more scan, not sure"}})
+check(any("Maybe one more scan" in n for n in notes),"v2: Not sure / something else on Another test? reaches the form notes")
+qh=W2.render_q(W2.Q("x1","Plain yes or no?","radio",W2.YN),{}) if hasattr(W2,"render_q") else ""
+check("Not sure / something else" in qh,"v2: plain Yes/No questions offer Not sure / something else")
 print("FAILED" if FAIL else "all ok"); raise SystemExit(1 if FAIL else 0)
