@@ -72,7 +72,7 @@ def chat_page(body,title,minimal):
         kind=next((k for m,k in CARD_PAGES if m in body),None)
         body=CHAT.card(body,kind) if kind else CHAT.bot(body)
     # the message bar: not on pages that ask for NI numbers or bank details (those go only into the PDF), nor on payment confirmation pages
-    bar,faq=("","") if ("action=/details/" in body or "/success" in body) else CHAT.composer(HELP_FAQ,placeholder="Ask a question or name your form" if "id=croute" in body else "Type an answer or ask a question")
+    bar,faq=("","") if ("action=/details/" in body or "/success" in body) else CHAT.composer(HELP_FAQ,placeholder="Ask a question or name your form" if "id=croute" in body else "Confused? Ask a question here")
     cv=" convo" if (CHAT.convo() and "id=qform" in body and "id=qs" in body) else ""
     contact="" if minimal else '<a data-contact href="mailto:hello@formsorted.com">Contact</a>'
     save=(f'<button type=submit form=qform name=nav value=save>{UI.icon("save",16)}Save and finish later</button>') if "id=qform" in body else ""
@@ -83,7 +83,7 @@ def chat_page(body,title,minimal):
           if n else f'<div class=mbar aria-hidden=true><div class=mrow>{UI.logo("/")}</div></div>')
     return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg?v={ICON_V} type=image/svg+xml><link rel=icon href=/static/favicon-32.png?v={ICON_V} sizes=32x32 type=image/png><link rel=apple-touch-icon href=/static/apple-touch-icon.png?v={ICON_V}><meta name=theme-color content='#ffffff'><link rel=preload href=/static/inter-var.woff2 as=font type=font/woff2 crossorigin><link rel=stylesheet href=/static/ui.css?v={CSS_V}><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body class="uapp chat{cv}"><a href="#main" class="skip">Skip to main content</a>
 <div class=ushell>{side}<div class=umain>{mbar}<section class=upanel aria-label="{CHAT.NAME}"><header class=phead><div class=who>{CHAT.ORB}<span><strong>{CHAT.NAME}</strong><span class=st>Independent form-filling service</span></span></div><nav class=plinks aria-label=Help><a href="#help" data-help>{UI.icon("help",18)}<span>Help</span></a></nav></header>
-<main id=main class=thread>{srline}<div id=thread>{body}</div>{need_help()}</main>
+<main id=main class=thread>{srline}<div id=thread>{body}</div>{"" if cv else need_help()}</main>
 {f'<div class=pfoot><div class=inner>{bar}{crow}</div></div>' if bar else f'<div class=pfoot><div class=inner>{crow}</div></div>'}
 </section>
 <footer class="ftr uftr"><p><strong>FormSorted</strong> is an independent online form-filling service. Not affiliated with DWP, GOV.UK or any government body. We can't guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a>{contact}</p></footer></div></div>
@@ -1822,7 +1822,8 @@ def chat_intake(o,token,form,d,secs,ids,sec,i,left,refused,first,ret=False):
     n=len(secs); lab=secs[i][1]
     done=CHAT.note(f"<span class=tick aria-hidden=true>✓</span> Part {i} of {n} saved: {esc(secs[i-1][1])}") if i else ""
     intro=CHAT.bot(("<h1 class=bt>We'll fill in your whole form for you</h1>"+first) if i==0 else f"<h1 class=bt>{esc(lab)}</h1>{_cue(sec)}","intro")
+    if CHAT.convo() and i: intro=f'<h1 class="turn part-divider">{esc(lab)}</h1>'+ (f'<p class=part-cue>{_cue(sec)}</p>' if _cue(sec) else '')
     return page(prog(3,f"Part {i+1} of {n}: {lab}",f"About {left} minute{'s' if left!=1 else ''} left")+f"""{done}{refused}{intro}<div class="intake cintake">
 <form method=post action=/intake/{token} id=qform{' data-last=1' if i==n-1 else ''} data-sec={sec}><input type=hidden name=sec value={sec}>{'<input type=hidden name=ret value=1>' if ret else ''}<p class=qcount id=qcount aria-live=polite hidden></p><div class=qs id=qs>{INTAKE.section_body(form,sec,d)}</div>
 <div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Back to your summary' if ret else 'Finish' if i==n-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
-<div class=qtools>{QHELP}<p class=saved>Your answers are saved each time you finish a part.</p></div></form></div>""",lab,minimal=True)
+{'' if CHAT.convo() else '<div class=qtools>'+QHELP+'<p class=saved>Your answers are saved each time you finish a part.</p></div>'}</form></div>""",lab,minimal=True)

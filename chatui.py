@@ -39,12 +39,12 @@ FAQ_EXTRA=[("How much does it cost?","Each form has one fixed price, shown when 
  ("What if I make a mistake?","You can go back and change any answer. After you pay you check every answer before anything is final."),
  ("How long does it take?","About 10 to 15 minutes of questions. Mostly taps."),
  ("Is my information safe?","We only use it to fill in your form. If you don't pay, we delete it after 7 days. National Insurance and bank details go only onto your form.")]
-def composer(faq, mode="", placeholder="Type an answer or ask a question"):   # returns (bar, help list); the help list goes after the footer
+def composer(faq, mode="", placeholder="Confused? Ask a question here"):   # returns (bar, help list); the help list goes after the footer
     """The message bar at the bottom: type an answer to the current question, or ask a question.
     Questions are answered from the fixed help list below, in the browser. Nothing typed here is sent anywhere unless it
     becomes your answer to the question on screen (then it is saved with the part, like any typed answer)."""
     data=json.dumps([{"q":q,"a":a} for q,a in faq+FAQ_EXTRA]).replace("</","<\\/")
-    return (f'<form class=composer id=composer autocomplete=off data-mode="{esc(mode)}">{UI.icon("search",20,"ic lead-ic")}<label for=cmsg class=sr>Type your answer or a question</label>'
+    return (f'<form class=composer id=composer autocomplete=off data-mode="{esc(mode)}">{UI.icon("help",20,"ic lead-ic")}<label for=cmsg class=sr>Ask a question</label>'
             f'<textarea id=cmsg rows=1 maxlength=600 placeholder="{esc(placeholder)}"></textarea>'
             f'<button class=send type=submit aria-label=Send>{UI.icon("send",20)}</button></form>'
             ,f'<script id=cfaq type=application/json>{data}</script>')

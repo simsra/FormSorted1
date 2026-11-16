@@ -14,7 +14,7 @@ function typing(){return el('div','turn bot new',ORB+'<div class="bub typing" ro
 /* Yes / No answers get a check or a cross, like the reference buttons (look only) */
 $$('label.chip').forEach(function(c){var sp=c.querySelector('span');if(!sp)return;var t=sp.textContent.trim();if(/^yes([,.!]|$)/i.test(t))c.classList.add('yes');else if(/^no([,.!]|$)/i.test(t))c.classList.add('no')});
 /* Help: the footer link opens the help list */
-$$('[data-help]').forEach(function(a){a.addEventListener('click',function(e){var h=document.getElementById('help');if(!h)return;e.preventDefault();h.open=true;scrollTo(h);var s=h.querySelector('summary');if(s)s.focus({preventScroll:true})})});
+$$('[data-help]').forEach(function(a){a.addEventListener('click',function(e){var h=document.getElementById('help');if(!h){e.preventDefault();var c=$('#cmsg');if(c){c.focus();c.placeholder='Confused? Ask a question here'}return}e.preventDefault();h.open=true;scrollTo(h);var s=h.querySelector('summary');if(s)s.focus({preventScroll:true})})});
 function botBubble(html){var t=el('div','turn bot new',ORB+'<div class=bub>'+html+'</div>');return t}
 function meBubble(s){return el('div','turn me new','<div class=bub>'+txt(s)+'</div>')}
 function scrollTo(e){if(!e)return;try{e.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(_){e.scrollIntoView()}}
@@ -41,28 +41,19 @@ var ERR='<p>Sorry, I couldn\'t answer that just now, you can carry on or email <
 function token(){var m=/^\/[a-z]+\/([A-Za-z0-9_-]{16,})(\/|$)/.exec(location.pathname);return m?m[1]:''}
 function formKey(){var m=/[?&]form=(\w+)/.exec(location.search);return m?m[1]:''}
 var busy=0;
-function ask(v,where,unclear){var w=where||$('#replies')||$('#thread');if(Q&&w===Q.side)w.innerHTML='';
- w.appendChild(meBubble(v));var t=typing();w.appendChild(t);scrollTo(t);busy=1;
- var c=Q?Q.ctx():{q:'',hint:'',options:[],box:false},body={text:v,token:token(),form:formKey(),q:c.q,hint:c.hint,options:c.options,box:c.box};
+/* The help bar never writes to answer controls, including server-suggested additions. */
+function safeQuestion(v){return v.replace(/\b[A-CEGHJ-PR-TW-Z]{2}\s*\d{2}\s*\d{2}\s*\d{2}\s*[A-D]\b/gi,'[private detail removed]').replace(/\b\d{2}[- ]\d{2}[- ]\d{2}\b/g,'[private detail removed]').replace(/\b\d{7,}\b/g,'[private detail removed]')}
+function ask(v,where){var w=where||$('#replies')||$('#thread');if(Q&&w===Q.side)w.innerHTML='';
+ v=safeQuestion(v);w.appendChild(meBubble(v));var t=typing();w.appendChild(t);scrollTo(t);busy=1;
+ var c=Q?Q.ctx():{q:'',hint:'',options:[],box:false},body={text:v,token:token(),form:formKey(),q:c.q,hint:c.hint,options:c.options,box:false};
  var ac=window.AbortController?new AbortController():null,tm=setTimeout(function(){if(ac)ac.abort()},25000);
- function done(html,after){clearTimeout(tm);busy=0;if(t.parentNode)t.parentNode.removeChild(t);var b=botBubble(html);w.appendChild(b);if(after)after(b);if(Q&&Q.convo&&window.FS.scrollPair)window.FS.scrollPair(w.lastElementChild||b);else scrollTo(w.lastElementChild||b)}
+ function done(html){clearTimeout(tm);busy=0;if(t.parentNode)t.parentNode.removeChild(t);var b=botBubble(html);b.classList.add('help-reply');w.appendChild(b);
+  var g=Q&&Q.again();if(g)w.appendChild(g);if(Q&&Q.convo&&window.FS.scrollPair)window.FS.scrollPair(b);else scrollTo(b)}
  fetch('/api/assist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ac?ac.signal:undefined})
- .then(function(r){if(!r.ok)throw r.status;return r.json()})
- .then(function(j){
-  if(j.kind==='answer'&&Q&&Q.convo){done('<p>That sounds like an answer rather than a question. Tap one of the answers, or type it again and I\'ll check with you before using it.</p>',function(){var g=Q.again();if(g)w.appendChild(g)});return}
-  if(j.kind==='answer'&&Q){clearTimeout(tm);busy=0;if(t.parentNode)t.parentNode.removeChild(t);w.innerHTML='';w.appendChild(meBubble(v));
-   w.appendChild(botBubble(unclear?'<p>Please tap one of the answers above. If none of them fit, tap <strong>Something else</strong> and type it there.</p>':'<p>Thanks. Please put that in the answer above.</p>'));return}
-  done('<p>'+txt(j.reply||'')+'</p>',function(b){
-   b.querySelector('p').innerHTML=b.querySelector('p').innerHTML.replace('hello@formsorted.com','<a href="mailto:hello@formsorted.com">hello@formsorted.com</a>');
-   var box=Q&&j.add?Q.addBox():null;
-   if(box){var o=botBubble('<p>Add this to your answer?</p><p class=addq>&ldquo;'+txt(j.add)+'&rdquo;</p><div class=qchips><button type=button class="qchip c5" data-add=yes>'+IC.check+'Yes, add it</button><button type=button class="qchip alt" data-add=no>'+IC.x+'No thanks</button></div>');
-    o.classList.add('addask');w.appendChild(o);
-    $$('[data-add]',o).forEach(function(k){k.addEventListener('click',function(){var y=k.getAttribute('data-add')==='yes';
-     if(y){box.value=(box.value.trim()?box.value.trim()+' ':'')+j.add;box.dispatchEvent(new Event('input',{bubbles:true}));box.dispatchEvent(new Event('change',{bubbles:true}));box.classList.add('filled');setTimeout(function(){box.classList.remove('filled')},1400)}
-     o.innerHTML=ORB+'<div class=bub><p>'+(y?'Added to your answer. You can change it in the box above.':'OK, nothing added.')+'</p></div>';
-     var g=Q.again();if(g){w.appendChild(g);scrollTo(g)}})});return}
-   var g=Q&&Q.again();if(g)w.appendChild(g)})})
- .catch(function(){done(ERR,function(){var g=Q&&Q.again();if(g)w.appendChild(g)})})}
+ .then(function(r){if(!r.ok)throw r.status;return r.json()}).then(function(j){
+  var answerLike=/^\s*\d+(?:[.,]\d+)?\s*$/.test(v)||j.kind==='answer';
+  done(answerLike?'<p>This box is just for questions. Tap your answer below, or use the box under the question. If none fit, tap <strong>Something else</strong>.</p>':'<p>'+txt(j.reply||'')+'</p>')
+ }).catch(function(){done(ERR)})}
 /* ---- which form (home) ---- */
 var ROUTE=[];try{ROUTE=JSON.parse(($('#croute')||{}).textContent||'[]')}catch(_){}
 function route(s){var t=' '+s.toLowerCase().replace(/[^a-z0-9 ]/g,' ')+' ';for(var i=0;i<ROUTE.length;i++){for(var j=0;j<ROUTE[i].w.length;j++){if(t.indexOf(' '+ROUTE[i].w[j]+' ')>=0||(ROUTE[i].w[j].indexOf(' ')>0&&t.indexOf(ROUTE[i].w[j])>=0))return ROUTE[i]}}return null}
@@ -152,16 +143,11 @@ Q={side:side,ctx:ctx,addBox:addBox,again:again,focus:function(){show(true)},take
 /* shared with convo.js (the questions as a conversation) */
 window.FS={el:el,txt:txt,ORB:ORB,RM:RM,typing:typing,botBubble:botBubble,meBubble:meBubble,ask:ask,isQuestion:isQuestion,setQ:function(q){Q=q}};
 /* ---- the message bar ---- */
-var cf=$('#composer');if(cf){var ta=$('#cmsg');
- ta.addEventListener('input',function(){ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,140)+'px'});
+var cf=$('#composer');if(cf){var ta=$('#cmsg');var sb=cf.querySelector('.send');function sendState(){if(sb){var e=!ta.value.trim();sb.disabled=e;sb.setAttribute('aria-disabled',e?'true':'false')}}sendState();ta.addEventListener('input',sendState);
+ ta.addEventListener('input',function(){ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,200)+'px'});
  ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();cf.requestSubmit?cf.requestSubmit():cf.dispatchEvent(new Event('submit',{cancelable:true}))}});
- cf.addEventListener('submit',function(e){e.preventDefault();var v=ta.value.trim();if(!v){ta.focus();return}ta.value='';ta.style.height='auto';
+ cf.addEventListener('submit',function(e){e.preventDefault();var v=ta.value.trim();if(!v){ta.focus();return}ta.value='';ta.style.height='auto';sendState();
   if(busy)return;
-  if(Q&&Q.say){Q.say(v);return}
-  if(Q){if(isQuestion(v)){ask(v,Q.side);return}var r=Q.take(v);
-   if(r=='date'){Q.side.innerHTML='';Q.side.appendChild(botBubble('<p>Please use the date box above. For example 04/05/2016.</p>'))}
-   else if(r=='none'){ask(v,Q.side,1)}   /* not a clear answer: the server decides if it's a question */
-   else Q.side.innerHTML='';return}
-  if(ROUTE.length&&!(isQuestion(v)&&!route(v))){replyRoute(v);return}
-  ask(v)})}
+  if(!Q&&ROUTE.length&&!(isQuestion(v)&&!route(v))){replyRoute(v);return}
+  if(Q&&Q.place)Q.place();ask(v,Q&&Q.side)})}
 })();

@@ -413,3 +413,51 @@ dl.tell{margin:0 0 10px}dl.tell>div{padding:8px 0;border-top:1px solid var(--g10
 .convo .cintake .cinrow .cok.coff{display:none!important}
 .convo .cintake .fu.dup .futaps,.convo .cintake .fu.dup .fuq,.convo .cintake .fu.dup .carry{display:none!important}
 .convo .cintake button.qchip.cluster-send,.convo .cintake button.qchip.cluster-send:hover{color:#fff!important;background:var(--b600)!important;border-color:var(--b600)!important;font-weight:600}
+/* v3 (16 Nov, 22:47 Simon): one clean column, and a ChatGPT/Claude-style question box made for form filling */
+.thread{max-width:768px}.pfoot .inner{max-width:720px}
+.composer{border-radius:24px;border:1px solid var(--g200);background:#fff;box-shadow:0 4px 16px rgba(16,24,40,.08),0 1px 3px rgba(16,24,40,.06);padding:8px 8px 8px 16px;align-items:flex-end}
+.composer:focus-within{border-color:var(--b300);box-shadow:0 4px 16px rgba(16,24,40,.08),var(--ring)}
+.composer .lead-ic{align-self:flex-end;margin:0 2px 12px 0;color:var(--b600)}
+.composer textarea{padding:11px 0;min-height:44px;max-height:200px;line-height:22px;font-size:16px}
+.composer textarea::placeholder{color:var(--g500)}
+.composer .send{width:44px;height:44px;border-radius:50%;border:0;background:var(--b600);transition:background .15s}
+.composer .send:disabled,.composer .send[aria-disabled=true]{background:var(--g200);color:var(--g500);cursor:default;box-shadow:none}
+.crow{justify-content:center;gap:0;margin-top:6px;color:var(--g500)}
+.crow .cl{gap:0}.crow .cl>*+*:before,.crow .priv:before{content:"·";margin:0 10px;color:var(--g400)}
+.crow a,.crow button,.crow .priv{font:400 13px/18px var(--ui);color:var(--g500);display:inline-flex;align-items:center;gap:0}
+.crow a svg,.crow button svg,.crow .priv svg{display:none}
+.crow .priv{display:inline-flex!important}
+/* messages: the assistant writes plain text beside its avatar; the customer gets a light bubble on the right */
+.convo .turn.bot>.bub,.convo .cside .turn.bot>.bub{background:none;border:0;box-shadow:none;padding:4px 0 0;max-width:none}
+.convo .turn.me .bub{background:var(--g100);border:0;border-radius:18px;padding:10px 14px}
+.convo .cintake .cq{background:none!important;border:0!important;padding:4px 0 0!important;margin:20px 0 10px 44px!important;font:600 16px/24px var(--ui)!important;border-radius:0!important;box-shadow:none!important}
+.convo .cintake .cq:before{left:-44px;top:0}
+.convo .cintake .cpre{font-weight:400!important;margin-top:8px!important}
+.convo .cintake .cq.cnow{color:var(--g900)}
+.convo .cintake .cgroup{margin:0 0 8px}.convo .cintake .cgroup[hidden]{display:none!important}
+.convo .cintake .cgroup>*:first-child .cq:first-of-type{margin-top:8px!important}
+.convo .cintake :is(.hint,.tip,.carry){margin:0 0 10px 44px!important;color:var(--g600)}
+.convo .cintake .cme{margin:6px 0 14px}.convo .cintake .cme{display:flex;justify-content:flex-end}
+.convo .cintake .cme .bub{background:var(--g100);border:0;border-radius:18px;padding:10px 14px;font:500 16px/24px var(--ui);color:var(--g900);cursor:pointer;display:inline-flex;gap:10px;align-items:center}
+.convo .cintake .cme .chg{font-size:14px;color:var(--b700);font-weight:600}
+.convo .cintake .cluster-actions{margin:12px 0 20px 44px}
+.convo .cside{margin:4px 0 0}.convo .cside .turn{margin:12px 0}.convo .cside:empty{display:none}
+.convo .cside .cagain{margin:4px 0 0 44px;font:500 14px/20px var(--ui);color:var(--g600)}
+.convo .cside .help-reply .bub p{margin:0}
+/* the part heading is a small divider, not a message */
+.part-divider{display:flex;align-items:center;gap:12px;margin:24px 0 8px;font:600 12px/18px var(--ui);letter-spacing:.04em;text-transform:uppercase;color:var(--g500)}
+.part-divider:before,.part-divider:after{content:"";flex:1;height:1px;background:var(--g200)}
+.part-cue{margin:0 0 4px 44px;color:var(--g700);font-size:16px}
+.convo .cintake .navrow{margin:16px 0 8px 44px}
+@media (max-width:640px){
+ .composer{padding:6px 6px 6px 14px}
+ .crow a,.crow button,.crow .priv{font-size:14px;min-height:44px}
+ .convo .cintake .cq{margin-left:40px!important}.convo .cintake .cq:before{left:-40px;width:28px;height:28px}
+ .convo .cintake .chips,.convo .cintake .condlist,.convo .cintake .cinrow,.convo .cintake .cluster-actions,.convo .cintake .navrow,.part-cue,.convo .cside .cagain{margin-left:40px}
+ .convo .cintake :is(.hint,.tip,.carry){margin-left:40px!important}
+ .convo .cintake select{margin-left:40px;max-width:calc(100% - 40px)}
+}
+h1.turn.part-divider{margin:24px 0 8px;font:600 12px/18px var(--ui);letter-spacing:.04em;text-transform:uppercase;color:var(--g500);gap:12px;align-items:center}
+.convo .cintake .cme{margin:2px 0 10px}
+.convo .cintake .cq{margin-top:16px!important}
+.convo .cintake .cq{min-height:32px;margin-bottom:8px!important;padding-top:4px!important}.convo .cintake .cq+.cme.coff+:is(.chips,.hint,.tip){margin-top:0}

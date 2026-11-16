@@ -1,8 +1,7 @@
 /* FormSorted assistant: the questions as a conversation (Simon, 16 Nov 2026).
    Same questions, same boxes and the same form post as before (intake.section_body). Each question is an assistant message;
-   the answers are quick-tap replies under it, or the customer's own words in the message bar. Follow-ups arrive as the next
-   messages. Typed words only fill an answer when they match a tap exactly, or when the customer says Yes to using them.
-   Questions typed in the bar go to the help reply (chat.js ask()), then the question waiting for an answer is shown again. */
+   answers only come from quick-tap replies or inline boxes. The bottom bar is for help questions only.
+   Help replies sit immediately before the same pending group, with its original chips (no copied answer controls). */
 (function(){
 var FS=window.FS,box=document.getElementById('qs');if(!FS||!box||!document.body.classList.contains('convo'))return;
 var $=function(s,r){return (r||document).querySelector(s)},$$=function(s,r){return [].slice.call((r||document).querySelectorAll(s))};
@@ -107,18 +106,20 @@ clusters.forEach(function(c){var node=c.roots[c.roots.length-1];c.send=el('butto
  c.send.onclick=function(){c.done=true;c.us.forEach(function(u){u.done=true;u.reopen=false});render()};
  c.auto=c.us.length===1&&c.us[0].kind==='radio'&&!c.us[0].checks.length&&!c.us[0].boxes.length;
  if(c.auto){c.send.className='cskip';c.send.textContent='Skip this question'}
+ /* Keep the actual inputs, dependency scopes and original POST; move the group, never clone its chips. */
+ c.block=el('div','cgroup');c.roots[0].parentNode.insertBefore(c.block,c.roots[0]);c.roots.forEach(function(r){c.block.appendChild(r)});c.block.appendChild(c.row);
 });
 var currentCluster=null;
 function render(anim){
  units.forEach(function(u){parts(u).forEach(function(e){e.classList.remove('cfut','coff','cnow','cwait')})});
- clusters.forEach(function(c){c.row.hidden=false;c.pre.forEach(function(e){e.classList.remove('cfut')})});
+ clusters.forEach(function(c){c.block.hidden=false;c.row.hidden=false;c.pre.forEach(function(e){e.classList.remove('cfut')})});
  units.forEach(function(u){u.live=shown(u.q)&&(u.kind==='info'||u.ctrls.some(shown)||(u.row&&shown(u.row)))});
  var active=null;
  clusters.forEach(function(c){c.live=c.us.some(function(u){return u.live&&u.kind!=='info'});
   if(!active&&c.live&&!c.done){if(c.auto&&answered(c.us[0]))c.done=true;else active=c}});
  var liveCl=clusters.filter(function(c){return c.live}),lastLive=active&&active===liveCl[liveCl.length-1];
  var f=active&&(active.us.filter(function(u){return u.live&&u.kind!=='info'&&!answered(u)})[0]||active.us.filter(function(u){return u.live&&u.kind!=='info'})[0]);
- clusters.forEach(function(c){var future=active&&clusters.indexOf(c)>clusters.indexOf(active);
+ clusters.forEach(function(c){var future=active&&clusters.indexOf(c)>clusters.indexOf(active);c.block.hidden=!!future;
   c.row.hidden=c!==active||(c===active&&lastLive&&!form.hasAttribute('data-last'));
   if(c.auto){var x0=c.us[0].xon&&c.us[0].xon.checked;c.send.className=x0?'qchip cluster-send':'cskip';c.send.textContent=x0?'Send':'Skip this question'}c.pre.forEach(function(e){e.classList.toggle('cfut',!!future)});
   c.us.forEach(function(u){
@@ -133,11 +134,12 @@ function render(anim){
    u.me.firstChild.onclick=function(){c.done=false;u.reopen=true;u.done=false;u.edone=false;render();focusQ(u)};
   });
  });
+ var changed0=active!==currentCluster;
  var showSub=!active||(lastLive&&!form.hasAttribute('data-last'));endb.hidden=!!active;sub.hidden=!showSub;nav.classList.toggle('cnav-wait',!showSub);
  if(!active)showTold();else if(told){told.parentNode.removeChild(told);told=null;endb.classList.remove('chide')}
- var host=active?active.row:endb;if(side.previousSibling!==host)host.parentNode.insertBefore(side,host.nextSibling);
+ var host=active?active.block:endb;if(changed0&&side.nextSibling!==host)host.parentNode.insertBefore(side,host);
  var changed=active!==currentCluster;currentCluster=active;front=f;
- if(changed){side.innerHTML='';if(f)focusQ(f,seen<0);else scrollIn(endb);if(f)seen=Math.max(seen,f.i);offerReuse(f)}
+ if(changed){side.innerHTML='';if(f)focusQ(f,seen<0);else scrollIn(endb);if(f)seen=Math.max(seen,f.i);}
 }
 function wait(u){var ps=parts(u).filter(function(e){return !e.classList.contains('coff')});ps.forEach(function(e){e.classList.add('cwait')});
  var t=FS.typing();u.q.parentNode.insertBefore(t,u.q);clearTimeout(busyT);
@@ -157,56 +159,18 @@ function showTold(){if(!form.hasAttribute('data-last')||told)return;told=el('div
    var rows=p.rows.map(function(r){return '<div><dt>'+txt(r[0])+'</dt><dd>'+txt(r[1].join(', '))+'</dd></div>'}).join('')||'<div><dd>Nothing yet. That\'s fine: skip anything you\'re not sure about.</dd></div>';
    h+='<details class=tellsec><summary><span>'+txt(p.label)+'</span><span class=tn>'+p.rows.length+' answer'+(p.rows.length==1?'':'s')+'</span></summary><dl class=tell>'+rows+'</dl><a class="qchip tchg" href="/intake/'+tk+'?s='+encodeURIComponent(p.sec)+'&ret=1">Change '+txt(p.label.toLowerCase())+'</a></details>'});
   $('.tellsum',told).innerHTML=h;sub.textContent='That\'s right, carry on';scrollIn(told)}).catch(function(){$('.tellsum',told).innerHTML='<p>Your answers are saved. You can check each part with Back.</p>'})}
-/* ---- 5. don't ask twice: if they already said one of these answers in their own words, offer it ---- */
-var KEY='fs_said_'+(location.pathname.split('/')[2]||'');var SAID=[];try{SAID=JSON.parse(sessionStorage.getItem(KEY)||'[]')}catch(_){}
-function remember(v){SAID.push(v);SAID=SAID.slice(-30);try{sessionStorage.setItem(KEY,JSON.stringify(SAID))}catch(_){}}
-function norm(x){return ' '+x.toLowerCase().replace(/[^a-z0-9' ]/g,' ').replace(/\s+/g,' ').trim()+' '}
-function mentions(v,labs){var t=norm(v),o=[];labs.forEach(function(l){var n=norm(l).trim();if(n.length<3||/^(yes|no|not sure|something else|none|none of these|other|never|less often)$/.test(n))return;if(t.indexOf(' '+n+' ')>=0&&o.indexOf(l)<0)o.push(l)});return o}
-function mention(v,labs){return mentions(v,labs)[0]||null}
+/* Questions only in the bar. Answers stay in the group's original controls. */
 function chips(u){var o=[];u.ctrls.forEach(function(c){o=o.concat(c.matches('label.chip')?[c]:$$('label.chip',c))});return o.filter(shown)}
-function offerReuse(u,keep){if(!u||(u.kind!='radio'&&u.kind!='multi')||u.offered)return;var cs=chips(u),labs=cs.map(chipText);
- for(var k=SAID.length-1;k>=0;k--){var ms=mentions(SAID[k],labs);if(u.kind=='radio')ms=ms.slice(0,1);if(ms.length){u.offered=1;var said=SAID[k];
-  var b=FS.botBubble('<p>You told me earlier: &ldquo;'+txt(said)+'&rdquo;</p><p>Shall I use <strong>'+ms.map(txt).join('</strong> and <strong>')+'</strong> for this one?</p><div class=qchips><button type=button class="qchip c5" data-y=1>Yes, use it</button><button type=button class="qchip alt" data-y=0>No</button></div>');
-  b.classList.add('creuse');if(!keep)side.innerHTML='';side.appendChild(b);if(keep)setTimeout(function(){scrollIn(b)},60);
-  $$('[data-y]',b).forEach(function(x){x.addEventListener('click',function(){b.parentNode&&b.parentNode.removeChild(b);if(x.getAttribute('data-y')=='1'){ms.forEach(function(m){var c=cs[labs.indexOf(m)],i=c.querySelector('input');if(!i.checked)c.click()});if(u.kind=='multi')setTimeout(render,0)}})});return}}}
-/* ---- 6. the message bar ---- */
-function exact(u,v){var low=v.trim().toLowerCase().replace(/[.!]+$/,'');var cs=chips(u);for(var i=0;i<cs.length;i++){var inp=cs[i].querySelector('input');if(chipText(cs[i]).toLowerCase()===low&&!/_xon$/.test(inp.name))return cs[i]}return null}
-function confirmUse(u,v){var cs=chips(u),labs=cs.map(chipText),ms=mentions(v,labs),m=ms[0]||null,canOwn=!!u.xon||u.ins.some(function(i){return i.type=='radio'&&i.value=='else'})&&u.boxes.length;
- side.innerHTML='';side.appendChild(FS.meBubble(v));
- var nm=u.kind=='radio'?ms.slice(0,1):ms;
- var h='<p>'+(canOwn?'Shall I put that down as your answer, in your words?':nm.length?'You mentioned '+(nm.length>1?'these':'this')+'. Shall I tap '+(nm.length>1?'them':'it')+' for you?':'I need one of the answers above for this question.')+'</p>';
- if(canOwn)h+='<p class=addq>&ldquo;'+txt(v)+'&rdquo;</p>';h+='<div class=qchips>';
- if(u.kind=='radio')ms=ms.slice(0,1);if(ms.length)h+='<button type=button class="qchip c5" data-c=tap>Use '+ms.map(function(x){return '&ldquo;'+txt(x)+'&rdquo;'}).join(' and ')+'</button>';
- if(canOwn)h+='<button type=button class="qchip c5" data-c=own>Yes, use my words</button>';
- h+='<button type=button class="qchip alt" data-c=ask>No, it\'s a question</button><button type=button class="qchip alt" data-c=no>No, I\'ll tap one</button></div>';
- var b=FS.botBubble(h);b.classList.add('cconfirm');side.appendChild(b);scrollIn(b);
- $$('[data-c]',b).forEach(function(x){x.addEventListener('click',function(){var c=x.getAttribute('data-c');
-  if(c=='ask'){side.innerHTML='';FS.ask(v,side);return}
-  side.innerHTML='';if(c=='no'){focusQ(u);return}
-  if(c=='tap'){ms.forEach(function(x){var ch=cs[labs.indexOf(x)],i=ch.querySelector('input');if(!i.checked)ch.click()});u.offered=1;if(u.kind=='multi'){setTimeout(render,0)}return}
-  if(u.xon){if(!u.xon.checked){u.xon.checked=true;fire(u.xon)}u.ebox.value=v;fire(u.ebox);u.edone=true;if(u.kind=='multi')u.done=true;render();return}
-  var r=u.radios.filter(function(i){return i.value=='else'})[0];if(r&&!r.checked){r.closest('label').click()}
-  setTimeout(function(){var nx=front;if(nx&&nx.boxes.length&&!nx.boxes[0].value){nx.boxes[0].value=v;fire(nx.boxes[0]);nx.done=true;render()}},0)})})}
-function say(v){remember(v);var u=front;
- if(!u){FS.ask(v,side);return}
- var c=(u.kind=='radio'||u.kind=='multi')?exact(u,v):null;
- if(c){side.innerHTML='';var i=c.querySelector('input');if(!i.checked)c.click();return}
- if(FS.isQuestion(v)){FS.ask(v,side);return}
- if(u.kind=='text'){var b=u.boxes.filter(function(x){return !x.value.trim()})[0]||u.boxes[0];b.value=v;fire(b);side.innerHTML='';commit(u);return}
- if(u.kind=='date'){var m=/^(\d{1,2})[\/\.\- ](\d{1,2})[\/\.\- ](\d{4})$/.exec(v.trim());side.innerHTML='';
-  if(m){u.date.value=m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2);fire(u.date);commit(u);return}
-  side.appendChild(FS.meBubble(v));side.appendChild(FS.botBubble('<p>Please put the date in the box above, or type it like 04/05/2016.</p>'));return}
- if(u.kind=='select'){var low=v.trim().toLowerCase(),o=[].filter.call(u.sel.options,function(o){return o.value&&o.text.toLowerCase()===low})[0];side.innerHTML='';
-  if(o){u.sel.value=o.value;fire(u.sel);return}side.appendChild(FS.meBubble(v));side.appendChild(FS.botBubble('<p>Please pick one from the list above, for example 2019. Or skip it if you\'re not sure.</p>'));return}
- if(u.kind=='radio'||u.kind=='multi'){confirmUse(u,v);return}
- FS.ask(v,side)}
-/* the help reply needs: the question waiting, its tips and answers, and where an agreed note goes */
-function ctx(){var u=front;if(!u)return {q:'',hint:'',options:[],box:false};var h=u.tips.map(T);var tips=$('.tips');if(tips)h.push('General tips: '+T(tips));
- return {q:T(u.q),hint:h.join(' '),options:chips(u).map(chipText),box:!!(u.boxes.length||u.xon)}}
-function addBox(){var u=front;if(!u)return null;if(u.boxes.length)return u.boxes[0];if(u.xon){if(!u.xon.checked){u.xon.checked=true;fire(u.xon)}return u.ebox}return null}
-function again(){var u=front;if(!u)return null;setTimeout(function(){offerReuse(front,1)},80);var b=FS.botBubble('<p>Back to the question: <strong>'+txt(T(u.q))+'</strong></p>');b.classList.add('cagain');
- setTimeout(function(){scrollIn(b)},40);return b}
-FS.setQ({convo:true,side:side,ctx:ctx,addBox:addBox,again:again,say:say,focus:function(){if(front)focusQ(front)},take:function(){return 'none'}});
+function ctx(){var u=front;if(!u)return {q:'',hint:'',options:[],box:false};
+ return {q:T(u.q),hint:u.tips.map(T).join(' '),options:chips(u).map(chipText),box:false}}
+function again(){if(!front)return null;var b=el('p','cagain','Back to the question');return b}
+function anchorOf(u){var a=u.q.matches('legend')?u.q.parentNode:u.q;var g=u.cluster&&u.cluster.block;
+ /* the first question of a group: the reply goes before the whole group; a follow-up: just before it */
+ if(g&&u===u.cluster.us.filter(function(x){return x.live&&x.kind!=='info'})[0])return g;return a}
+function place(){if(!front)return;var a=anchorOf(front);if(side.nextSibling!==a)a.parentNode.insertBefore(side,a)}
+FS.setQ({convo:true,side:side,ctx:ctx,again:again,place:place,focus:function(){if(front)focusQ(front)}});
+FS.scrollPair=function(b){setTimeout(function(){if(!b)return;var m=$('#main'),sc=m&&m.scrollHeight>m.clientHeight+4?m:document.scrollingElement;
+ var top=b.getBoundingClientRect().top-(sc===m?m.getBoundingClientRect().top:80)-12;sc.scrollBy({top:top,behavior:'auto'})},60)};
 /* ---- 7. wiring ---- */
 form.addEventListener('change',function(e){var u=units.filter(function(x){return x.ins.indexOf(e.target)>=0})[0];
  if(u&&u.reopen&&(e.target.type=='radio'||e.target.tagName=='SELECT'))u.reopen=false;

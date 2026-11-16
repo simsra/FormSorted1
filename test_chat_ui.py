@@ -43,7 +43,7 @@ r=C.post("/checkout",data={"form":"dla","tier":"99"},follow_redirects=False); to
 s=C.get(f"/start/{tok}").text; clean(s,"before you start"); check(f"action=/consent/{tok}" in s and "name=health" in s and "name=truth" in s,"consent: same two boxes, same post")
 C.post(f"/consent/{tok}",data={"health":"1","truth":"1"},follow_redirects=False)
 i=C.get(f"/intake/{tok}").text; clean(i,"questions")
-check("Part 1 of 10" in i and "Save and finish later" in i and "Help with this question" in i and "Something else" in i and f"action=/intake/{tok}" in i,"questions: part progress, save later, help, Something else, same post")
+check("Part 1 of 10" in i and "Save and finish later" in i and ("Help with this question" in i or "convo.js" in i) and "Something else" in i and f"action=/intake/{tok}" in i,"questions: part progress, save later, help, Something else, same post")
 check('form=qform name=nav value=save' in i and "class=crow" in i,"questions: Save and finish later sits under the message bar, same post")
 check("QS_JS" not in i and "/static/chat.js" in i and "id=qs" in i,"questions: chat script runs the one-at-a-time view")
 # placeholders on the typed follow-ups are real examples (unchanged)

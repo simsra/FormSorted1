@@ -52,9 +52,8 @@ A.prune(lp); kept=[json.loads(l)["q"] for l in open(lp)]
 check(kept==["new"],f"questions older than 90 days are deleted from the log ({kept})")
 # ---- the browser side ----
 js=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),"static","chat.js")).read()
-check("/api/assist" in js and "Add this to your answer?" in js and "data-add" in js,"chat.js asks the helper and offers 'Add this to your answer?'")
-i=js.index("data-add=yes"); seg=js[i:i+1600]
-check("if(y){box.value=" in seg,"a suggested note is only written into the box after the customer taps Yes")
+# v3 (Simon 16 Nov 22:43): the bar is for questions only, so the helper never writes into an answer (no 'Add this to your answer?')
+check("/api/assist" in js and "Add this to your answer?" not in js and "data-add" not in js and "box.value=" not in js[js.index("function ask("):js.index("/* ---- which form")],"chat.js asks the helper; it never writes into an answer box")
 check("Sorry, I couldn\\'t answer that just now, you can carry on or email" in js,"graceful error text")
 check("Back to the question:" in js,"the question on screen is shown again after a reply")
 check(not BANNED.search(re.sub(r"/\*.*?\*/","",js,flags=re.S).replace("model","")) ,"chat.js customer text has no banned words")

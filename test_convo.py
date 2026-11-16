@@ -20,16 +20,21 @@ js=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),"static","convo.
 strings=re.findall(r"'((?:[^'\\]|\\.)*)'",re.sub(r"/\*.*?\*/","",js,flags=re.S))
 bad=[s for s in strings if BANNED.search(s)]
 check(not bad,f"convo.js: no banned words in what customers see {bad[:2]}")
-check("Shall I put that down as your answer, in your words?" in js and "data-c=own" in js and "Yes, use my words" in js,"typed words: a Yes is asked before they fill an answer")
-cu=js[js.index("function confirmUse"):js.index("function say(")]
-check(js.count("u.ebox.value=v")==1 and "u.ebox.value=v" in cu and "nx.boxes[0].value=v" in cu and "if(c=='no')" in cu and cu.index("if(c=='no')")<cu.index("u.ebox.value=v"),"typed words only go into an answer box inside the Yes handler")
-check("You told me earlier" in js and "Yes, use it" in js,"don't ask twice: an earlier typed answer is offered, not assumed")
-check("Back to the question:" in js,"a question mid-way gets an answer, then the question again")
+# v3 (16 Nov 22:43, Simon): the bar is for questions only; answers only in the question's own taps and boxes
+cj=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),"static","chat.js")).read()
+check("Shall I put that down" not in js and "Yes, use my words" not in js and "data-add" not in cj,"bar: never turns typed words into an answer (no confirm path, no 'add to your answer')")
+check("function say(" not in js and "Q.take" not in cj and "ask(v,Q&&Q.side)" in cj,"bar: everything typed there goes to the assistant as a question")
+check("This box is just for questions. Tap your answer below" in cj,"bar: an answer typed there (e.g. 3) is pointed back to the taps below")
+check("Back to the question" in js and "function place()" in js and "insertBefore(side,a)" in js,"after a reply the waiting question (its own chips, not copies) sits right under it")
+ap=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),"app.py")).read(); ch=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),"chatui.py")).read()
+check('placeholder="Confused? Ask a question here"' in ch+ap and 'UI.icon("help",20,"ic lead-ic")' in ch,"bar: 'Confused? Ask a question here' with a help icon")
+check(re.search(r"box:false",cj) and "box:false" in js,"assistant is never told it can write into an answer box")
 # a whole DLA order through the same posts
 loc=post("/checkout",{"form":"dla","tier":"99"}); tok=loc.rsplit("/",1)[1]
 post(f"/consent/{tok}",{"health":"1","truth":"1"})
 i=get(f"/intake/{tok}")
 check('class="uapp chat convo"' in i and "/static/convo.js" in i and "/static/chat.js" in i,"questions: conversational script on the question page")
+check("Help with this question" not in i and "Questions people ask" not in i and "answers are saved each time" not in i,"questions: no floating help clutter in the chat")
 check("class=qform" not in i and i.count("<fieldset class=iq>")>=3,"questions: the same question markup is underneath")
 check("form-card" not in i and "class=qcard" not in i,"questions: no form cards from the server")
 import json
