@@ -213,7 +213,7 @@ def order_summary(form,tier="",pv=""):
 <form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={t}><button class="btn btn-big">{'Continue with' if mine else 'Choose'} {esc(n)}</button></form></div>"""
     up=upgrade_box(form,tier or default_tier(form))
     if CHAT.on(): return chat_package(form,f,cards,up,pv)
-    return page(prog(2)+pv+f"""<section class="hero hero-lt">{DOTS}<p class=caption>{esc(f['short'])}</p><h1>Choose your package</h1><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p></section>
+    return page(prog(2)+pv+f"""<section class="hero hero-lt">{DOTS}<p class=caption>{esc(f['short'])}</p><h1>Choose your package</h1><p class=one>We complete your whole form in full, in plain English, from your answers. Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p></section>
 <div class=pkgs>{cards}</div>
 {more("Compare the packages in detail",up) if up else ""}{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}
 <p class=hint>{esc(DWP_LINE)} No success fee.</p><p class=change><a href="/">Choose a different form</a></p>""",f"Choose your package: {f['name']}",minimal=True)
@@ -575,6 +575,33 @@ def ready(token,paid=True):
     if o["status"] not in (("paid",) if paid else ("paid","free")) or not o["consent_at"]: raise HTTPException(402 if o["status"]=="free" else 403)
     if o["created"] and o["created"]<time.time()-86400*orders.RETENTION_DAYS: raise HTTPException(410)
     return o
+import assist as ASSIST
+ASSIST.FAQ=HELP_FAQ+CHAT.FAQ_EXTRA
+@app.post("/api/assist")
+async def assist_api(req:Request):
+    """Live help in the message bar (see assist.py). Body: {text, token?, form?, q, hint, options[], box}. Never on the NI/bank page."""
+    try: b=await req.json()
+    except Exception: raise HTTPException(400)
+    text=str(b.get("text") or "").strip()
+    if not text: raise HTTPException(400)
+    tok=str(b.get("token") or "")[:80]; form=str(b.get("form") or "")[:12]; answers=""
+    if tok:
+        r=db().execute("select form,intake from orders where token=?",(tok,)).fetchone()
+        if r:
+            form=r["form"] or form
+            try: answers=ASSIST.answers_text(json.loads(r["intake"] or "{}"))
+            except ValueError: answers=""
+        else: tok=""
+    if not ASSIST.allow(tok or client_ip(req)):
+        return {"kind":"question","reply":"You've asked a lot of questions today, so I'll stop here for now. You can carry on with your form, or email hello@formsorted.com.","add":"","limited":True}
+    ctx={"q":str(b.get("q") or "")[:400],"hint":str(b.get("hint") or "")[:800],"options":[str(x)[:80] for x in (b.get("options") or [])][:30],"box":bool(b.get("box"))}
+    try: out=await run_in_threadpool(ASSIST.answer,text,ctx,answers,form)
+    except Exception as e:
+        print("assist failed",type(e).__name__,str(e)[:160],flush=True)
+        ASSIST.log({"t":time.time(),"form":form,"q":ASSIST.mask(text)[:600],"error":type(e).__name__})
+        raise HTTPException(503)
+    ASSIST.log({"t":time.time(),"form":form,"screen":ctx["q"][:200],"q":ASSIST.mask(text)[:600],"kind":out["kind"],"reply":out["reply"],"covered":out["covered"],"add":bool(out["add"]),"model":out["model"],"ms":out["ms"],"dropped":out["dropped"]})
+    return {"kind":out["kind"],"reply":out["reply"],"add":out["add"]}
 @app.post("/api/{token}/message")
 async def message(token:str, req:Request):
     o=ready(token,paid=False); h=json.loads(o["history"]); msg=(await req.json()).get("text","").strip()
@@ -1370,7 +1397,7 @@ def documents_page(token:str, req:Request=None):
         chips=CHAT.file_chip(f"/download/{token}/{main}",main,mlab.replace("Download your ","Your ").replace("Download ",""),True) if main else ""
         chips+="".join(CHAT.file_chip(f"/download/{token}/{f}",f,lab.get(f,f)) for f in files if f!=main)
         extras2=guide+f"{saved}{account_box(o)}{bb_addon_box(o)}"
-        return page(prog(5,"Download")+CHAT.bot(f"""<div class=ready><h1 class=bt>{"Your answers are ready" if form=="atw" else "Your form is ready"}</h1><p>You approved every answer. Here are your files.</p></div><div class=fchips>{chips}</div>{when}{gone}""")
+        return page(prog(5,"Download")+CHAT.bot(f"""<div class=ready><h1 class=bt>{"Your answers are ready" if form=="atw" else "Your form is ready"}</h1><p>Your whole form is completed in full, in plain English, from your answers. You approved every answer. Check it, sign it and send it yourself.</p></div><div class=fchips>{chips}</div>{when}{gone}""")
             +CHAT.bot(nxt)+(CHAT.bot(f'<div class=extras><h2 class=h3>For later</h2>{extras2}</div>') if extras2.strip() else '')
             +CHAT.note(f"We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>."),"Your documents")
     return page(prog(5,"Download")+f"""<div class=ready><h1>{"Your answers are ready" if form=="atw" else "Your form is ready"}</h1><p>You approved every answer.</p></div>
@@ -1753,7 +1780,7 @@ def chat_home(pv=""):
     ns="".join(f'<li><span>{esc(q)}</span> {chip(k,a.split(" (")[0])}</li>' for q,a,k in NOT_SURE)
     route=json.dumps([{"k":k,"w":w,"href":f"/?form={k}","name":("DLA for a child" if k=="dla" else next(t for kk,t,_ in FORM_CARDS if kk==k))} for k,w in ROUTES])
     hello=f"""<div class=empty><span class="orb big" aria-hidden=true></span><p class=hi>Hi there,</p><h1 class=greet>How can I help with your form?</h1>
-<p class=subl>I fill in disability benefit forms from your answers. You answer simple questions, mostly taps. Then you check the form, sign it and send it yourself.</p>
+<p class=subl>We complete your whole form in full, in plain English, from your answers. You answer simple questions, with help any time. Then you check it, sign it and send it yourself.</p>
 <div class=qchips>{chips}<button type=button class="qchip alt c7" data-show=notsure>{UI.icon("question",16)}Not sure which form?</button><button type=button class="qchip alt c7" data-show=selse>{UI.icon("chat",16)}Something else</button></div></div>"""
     notsure=f'<div id=notsure class=reveal hidden>{CHAT.me("Not sure which form?")}{CHAT.bot("<p>Answer yes to one of these, then tap the form.</p><ul class=notsure>"+ns+"</ul><p class=hint>Still not sure? Look at the letter or form DWP sent you. The form&#39;s name is on the first page.</p>")}</div>'
     ask=('<p>Tell me which form you need, or what it is for, in a few words.</p><form class=elseask><label class=sr for=selse_t>Which form do you need?</label>'
@@ -1762,7 +1789,7 @@ def chat_home(pv=""):
     return page(prog(1)+pv+'<div class="turn home">'+hello+'</div>'+notsure+selse+'<div id=replies aria-live=polite></div>'+CHAT.note("England and Wales only. You only pay at the end, after the questions.")+f'<script type=application/json id=croute>{route}</script>',"Choose your form",minimal=True)
 def chat_package(form,f,cards,up,pv=""):
     """Step 2: the form they tapped (their bubble, tap to change), then the two packages inside the assistant's message."""
-    body=(f"""<p class=bt><strong>Which package would you like?</strong></p><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p>
+    body=(f"""<p class=bt><strong>Which package would you like?</strong></p><p class=one>We complete your whole form in full, in plain English, from your answers. Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p>
 <div class=pkgs>{cards}</div>{more("Compare the packages in detail",up) if up else ""}{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}
 <p class=hint>{esc(DWP_LINE)} No success fee.</p>""")
     return page(prog(2)+pv+CHAT.me(f["short"],"/","Change form: "+f["short"])+CHAT.bot(body),f"Choose your package: {f['name']}",minimal=True)

@@ -1,8 +1,8 @@
 """Untitled UI rebuild of formsorted.com (Simon, 16 Nov 2026). TEST COPY: python3 site_build.py <live_mirror_dir> <out_dir>
 Every page gets a fresh shell: a minimal top bar (logo + a few text links), the page's own content in an Untitled UI content layout,
 and a new footer that keeps the same disclaimer words and links. The old stylesheet, navy header, 'Independent' strip, hero,
-stepper and cards are gone. The homepage IS the assistant: orb, 'Hi there,', 'How can I help with your form?', a chip per form,
-'Not sure which form?', 'Something else' and the message bar. Guide, Terms and Privacy text is unchanged."""
+stepper and cards are gone. The homepage is a plain landing page (16 Nov steering: 'we need a clear landing page'): headline, Start your form,
+form cards, How it works, price, FAQ. No chat on the site: the FormSorted assistant lives in the app journey. Guide, Terms and Privacy text is unchanged."""
 import re, os, sys, shutil, hashlib, json
 from html import escape as esc
 SRC,OUT=sys.argv[1],sys.argv[2]
@@ -59,18 +59,27 @@ def faq_json(s):
         t=re.sub(r'<[^>]+>',' ',a); t=re.sub(r'\s+',' ',t).strip()
         if t and q!="Questions people ask": out.append({"q":q.replace("&#x27;","'"),"a":t.replace("&#x27;","'").replace("&amp;","&")})
     return json.dumps(out).replace("</","<\\/")
-def home_assistant():
-    chips="".join(chip(k) for k,*_ in FORMS)
-    ns="".join(f'<li><span>{q}</span> {chip(k,F[k][0])}</li>' for q,k in NOT_SURE)
-    return (f'<section class="hassist" aria-labelledby="hh"><div class="hcard"><div class="thread" id="thread">'
-     f'<div class="empty"><span class="orb big" aria-hidden="true"></span><p class="hi">Hi there,</p><h1 id="hh" class="greet">How can I help with your form?</h1>'
-     f'<p class="subl">I fill in disability benefit forms from your answers. You answer simple questions, mostly taps. Then you check the form, sign it and send it yourself.</p>'
-     f'<div class="qchips">{chips}<button type="button" class="qchip alt c7" data-show="notsure">{UI.icon("question",16)}Not sure which form?</button><button type="button" class="qchip alt c7" data-show="selse">{UI.icon("chat",16)}Something else</button></div></div>'
-     f'<div id="notsure" class="reveal" hidden>{me("Not sure which form?")}'+bot(f'<p>Answer yes to one of these, then tap the form.</p><ul class="notsure">{ns}</ul><p class="hint">Still not sure? Look at the letter or form DWP sent you. The form\'s name is on the first page.</p>')+'</div>'
-     f'<div id="selse" class="reveal" hidden>{me("Something else")}'+bot('<p>Tell me which form you need, or what it is for, in a few words.</p><form class="elseask"><label class="sr" for="selse_t">Which form do you need?</label><div class="composer"><textarea id="selse_t" rows="1" maxlength="200" placeholder="For example: my mum needs help with care at home"></textarea><button class="send" aria-label="Send">'+UI.icon("send",20)+'</button></div></form>')+'</div>'
-     '<div id="replies" aria-live="polite"></div></div>'
-     f'<div class="pfoot"><div class="inner"><form class="composer" id="composer" autocomplete="off">{UI.icon("search",20,"ic lead-ic")}<label for="cmsg" class="sr">Ask a question or name your form</label><textarea id="cmsg" rows="1" maxlength="600" placeholder="Ask a question or name your form"></textarea><button class="send" type="submit" aria-label="Send">{UI.icon("send",20)}</button></form>'
-     f'<div class="crow"><div class="cl"><span>{UI.icon("lock",14)} England and Wales. You only pay at the end, after the questions.</span></div><a href="#faq">{UI.icon("help",16)}Help</a></div></div></div></div></section>')
+def landing():
+    """formsorted.com home (Simon 16 Nov 2026: 'we need a clear landing page'). No chat here: the FormSorted assistant lives in the app journey."""
+    cards="".join(f'<li><a class="fcard" href="{APP}/?form={k}"><span class="otile">{UI.icon(ic,20)}</span><span class="ft">{n}</span><span class="fw">{w}</span><span class="fl">Start {UI.icon("right",16)}</span></a></li>' for k,n,u,ic,c,w in FORMS)
+    ns="".join(f'<li><span>{q}</span> <a class="qchip {F[k][3]}" href="{APP}/?form={k}">{UI.icon(F[k][2],16)}{esc(F[k][0])}</a></li>' for q,k in NOT_SURE)
+    cards+=(f'<li class="fnot"><details class="fcard notsure"><summary><span class="otile">{UI.icon("question",20)}</span><span class="ft">Not sure which form?</span><span class="fw">Answer yes to one of these.</span></summary>'
+            f'<ul class="notsure">{ns}</ul><p class="hint">Still not sure? The form\'s name is on the first page of the letter or form DWP sent you.</p></details></li>')
+    steps=[("chat","Answer simple questions","Mostly taps, one question at a time. Stuck? Ask the FormSorted assistant any time."),
+           ("edit","We write every answer in plain English","Your whole form, completed in full, only from what you told us."),
+           ("pen","Check it, sign it, send it yourself","Change anything you like. You stay in control of your form.")]
+    st="".join(f'<li><span class="snum">{i+1}</span><span class="otile">{UI.icon(ic,20)}</span><h3>{t}</h3><p>{d}</p></li>' for i,(ic,t,d) in enumerate(steps))
+    return (f'<section class="lhero" aria-labelledby="hh"><div class="lin">'
+      f'<p class="sbadge"><span class="sdotb"></span>England and Wales</p>'
+      f'<h1 id="hh">Your disability benefit form, completed in full in plain English</h1>'
+      f'<p class="lsub">Answer simple questions and we complete your whole form from your answers. You check it, sign it and send it yourself.</p>'
+      f'<div class="lcta"><a class="btn btn-start lgo" href="{APP}/">Start your form {UI.icon("right",20)}</a><p class="lpay">{UI.icon("lock",16)} £99 per form · Pay only at the end</p></div></div></section>'
+      f'<section class="sec" aria-labelledby="fh"><div class="sechead"><p class="eyebrow">Choose your form</p><h2 id="fh">Which form do you need?</h2></div><ul class="fcards">{cards}</ul></section>'
+      f'<section class="sec" aria-labelledby="hw"><div class="sechead"><p class="eyebrow">How it works</p><h2 id="hw">Three simple steps</h2></div><ol class="lsteps">{st}</ol></section>'
+      f'<section class="sec" aria-labelledby="ph"><div class="sechead"><p class="eyebrow">Price</p><h2 id="ph">One fixed price. Pay only at the end.</h2><p class="supp">No success fee. Nothing to pay until you have answered the questions.</p></div>'
+      f'<div class="lprice"><div class="pcard"><p class="pn">Done for you</p><p class="pp">£99 <span>per form</span></p><p class="pw">Attendance Allowance, PIP, PIP review or DLA for a child. Your official form, completed in full.</p></div>'
+      f'<div class="pcard plus"><p class="pn">Done for you Plus</p><p class="pp">£199 <span>per form</span></p><p class="pw">Everything in Done for you, plus an assessment briefing, request letters for your GP, carer, school or family, and one next form for the same benefit.</p></div></div>'
+      f'<p class="hint pother">Blue Badge answers £29. Access to Work from £49. <a href="/terms.html">Full prices in our Terms</a>.</p></section>')
 def guides():
     li="".join(f'<li><a class="gcard" href="{u}"><span class="otile">{UI.icon(ic,20)}</span><span class="gt">{n}</span><span class="gw">{w}</span><span class="gl">Read about it {UI.icon("right",16)}</span></a></li>' for k,n,u,ic,c,w in FORMS)
     return f'<section class="sec" aria-labelledby="gh"><div class="sechead"><p class="eyebrow">Guides</p><h2 id="gh">Read about each form</h2></div><ul class="gcards">{li}</ul></section>'
@@ -96,10 +105,8 @@ for root,_,files in os.walk(OUT):
             nh=rest.index('<section class="needhelp"')
             faq=rest[:nh].replace('<h2 class="h3" id="faq">Questions people ask</h2>','')
             needhelp=rest[nh:]
-            body=(home_assistant()+guides()+f'<section class="sec faqsec" aria-labelledby="faq"><div class="sechead"><p class="eyebrow">Help</p><h2 id="faq">Questions people ask</h2><p class="supp">Quick answers about how FormSorted works.</p></div><div class="faqlist">{faq}</div></section>'
+            body=(landing()+f'<section class="sec faqsec" aria-labelledby="faq"><div class="sechead"><p class="eyebrow">Help</p><h2 id="faq">Questions people ask</h2><p class="supp">Quick answers about how FormSorted works.</p></div><div class="faqlist">{faq}</div></section>'
                   +f'<section class="sec">{needhelp}</section>')
-            body+=f'<script type="application/json" id="croute">{json.dumps([{"k":k,"w":w,"href":f"{APP}/?form={k}","name":F[k][0]} for k,w in ROUTES])}</script><script type="application/json" id="cfaq">{faq_json(s)}</script>'
-            tail+=f'<script src="/chat.js?v={V["chat.js"]}"></script>'
             main=f'<main id="main" class="smain home">{body}</main>'
         else:
             # the first heading block becomes the Untitled UI page header

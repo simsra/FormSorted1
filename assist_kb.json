@@ -1,0 +1,152 @@
+[
+{
+"src": "attendance-allowance-form-help",
+"q": "How it works",
+"a": "Choose your form. Choose your package. Nothing to pay yet. Answer simple questions. Mostly taps. Stop and come back any time. Pay once , at the end. Get your form. Check every answer, download it, then sign it and send it yourself."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "Who can get Attendance Allowance?",
+"a": "People over State Pension age who need help with personal care or supervision because of an illness or disability. Check the rules on GOV.UK."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "Is a person involved?",
+"a": "No. Your answers are drafted by our system from what you tell us, guided by the AA1 questions and DWP's published guidance. You review everything before it goes anywhere."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "Do you send the form for me?",
+"a": "No. You check and send the form yourself."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "Can you guarantee an award?",
+"a": "No. DWP makes the decision."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "I live in Scotland",
+"a": "Sorry, we don't cover Scotland. There, Attendance Allowance has been replaced by Pension Age Disability Payment from Social Security Scotland."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "Are you part of DWP?",
+"a": "No. FormSorted is an independent service, not affiliated with DWP or GOV.UK."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "What happens to health information?",
+"a": "We use it only to prepare your claim, with your explicit consent, and delete it after 90 days or sooner if you ask. See the privacy notice ."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "Can I cancel?",
+"a": "Yes, within 14 days of paying for a full refund, as long as you haven't started your conversation."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "Can I stop and come back?",
+"a": "Yes. Tap “Save and finish later” to get your private link. If you don't pay, we delete your answers after 7 days."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "I'm filling this in for someone else",
+"a": "That's fine. Answer about them. They sign the form, or you sign it if you have the right to act for them."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "Is this part of the government?",
+"a": "No. FormSorted is an independent online form-filling service. It isn't part of DWP, GOV.UK or your council."
+},
+{
+"src": "attendance-allowance-form-help",
+"q": "Who sends the form?",
+"a": "You do. You check it, sign it and send it yourself."
+},
+{
+"src": "dla-form-help",
+"q": "Who can get DLA for children?",
+"a": "Children under 16 who need extra looking after or have walking difficulties because of a health condition or disability, living in England or Wales. Anyone 16 or over applies for PIP instead. Check the rules on GOV.UK."
+},
+{
+"src": "dla-form-help",
+"q": "Why compare with a child of the same age?",
+"a": "DLA is about the extra care, supervision or mobility help your child needs compared with other children their age. Our questions are built around that."
+},
+{
+"src": "dla-form-help",
+"q": "Do you send the form for me?",
+"a": "No. You check, sign and send the form yourself. We never fill in National Insurance numbers, bank details or signatures."
+},
+{
+"src": "dla-form-help",
+"q": "We live in Scotland",
+"a": "Sorry, we don't cover Scotland. There, children's DLA has been replaced by Child Disability Payment from Social Security Scotland."
+},
+{
+"src": "dla-form-help",
+"q": "What happens to my child's information?",
+"a": "We use it only to prepare the form, with your explicit consent, and delete it after 90 days or sooner if you ask. See the privacy notice ."
+},
+{
+"src": "index",
+"q": "Not sure which form?",
+"a": "Answer yes to one of these: Is it for a child under 16? Choose DLA for a child . Are they State Pension age or over, and need help with care? Choose Attendance Allowance . Aged 16 to State Pension age, with a health condition or disability? Choose PIP . Already get PIP, and got a review form? Choose PIP review . Need a parking badge? Choose Blue Badge (you can also get one of the forms above) . Still not sure? Look at the letter or form DWP sent you. The form's name is on the first page."
+},
+{
+"src": "index",
+"q": "How does it work?",
+"a": "Choose your form. Choose your package. Nothing to pay yet. Answer simple questions. Mostly taps. Stop and come back any time. Pay once , at the end. Get your form. Check every answer, download it, then sign it and send it yourself."
+},
+{
+"src": "index",
+"q": "Do you send the form for me?",
+"a": "No. You check every answer, then you sign the form and send it yourself."
+},
+{
+"src": "index",
+"q": "Can you guarantee an award?",
+"a": "No. DWP makes the decision. For a Blue Badge, your council decides."
+},
+{
+"src": "index",
+"q": "I live in Scotland",
+"a": "Sorry, we don't cover Scotland for these forms. Access to Work help covers England, Scotland and Wales."
+},
+{
+"src": "index",
+"q": "What happens to my information?",
+"a": "We use it only to prepare your form, with your consent. If you don't pay, we delete it after 7 days; if you do, after 90 days, or sooner if you ask. See the privacy notice ."
+},
+{
+"src": "index",
+"q": "Can I cancel?",
+"a": "Yes, within 14 days of paying for a full refund, as long as we haven't started preparing your form."
+},
+{
+"src": "pip-form-help",
+"q": "Who can claim PIP?",
+"a": "People aged 16 or over, usually under State Pension age, with a long-term health condition or disability that makes everyday tasks or getting around difficult, expected to last at least 12 months. Over State Pension age? See our Attendance Allowance service . Check the rules on GOV.UK."
+},
+{
+"src": "pip-form-help",
+"q": "Can you help with a PIP review?",
+"a": "Yes. Choose \"PIP review (AR1)\" when you start. We map your answers to each of the 12 activity sections on the review form and summarise what has changed."
+},
+{
+"src": "pip-form-help",
+"q": "Will you tell me how many points I'll get?",
+"a": "No. We help you describe your situation clearly and truthfully. DWP and its assessors decide."
+},
+{
+"src": "pip-form-help",
+"q": "I live in Scotland",
+"a": "Sorry, we don't cover Scotland. There, PIP has been replaced by Adult Disability Payment from Social Security Scotland."
+},
+{
+"src": "pip-form-help",
+"q": "What happens to my health information?",
+"a": "We use it only to prepare your answers, with your explicit consent, and delete it after 90 days or sooner if you ask. See the privacy notice ."
+}
+]

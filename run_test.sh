@@ -34,4 +34,7 @@ $PY/python test_ip_allow.py || R=1; $PY/python test_prefill.py || R=1; $PY/pytho
 CH=${LOGDIR:-/tmp}/chat-test; rm -rf $CH; mkdir -p $CH   # chat look (16 Nov 2026): its own servers, and one with CHAT_UI=0
 DATABASE_URL= SUPABASE_URL= WHOLE_FORM=1 WF_LOOKUPS=0 SQLITE_PATH=$CH/orders.db OUT_DIR=$CH/out $PY/uvicorn app:app --port ${PORT_CHAT:-8040} >$CH/server.log 2>&1 & CS=$!
 DATABASE_URL= SUPABASE_URL= WF_LOOKUPS=0 CHAT_UI=0 SQLITE_PATH=$CH/orders0.db OUT_DIR=$CH/out0 $PY/uvicorn app:app --port ${PORT_CHAT0:-8041} >$CH/server0.log 2>&1 & C0=$!; sleep 3
-DATABASE_URL= SUPABASE_URL= $PY/python test_chat_ui.py http://localhost:${PORT_CHAT:-8040} http://localhost:${PORT_CHAT0:-8041} || R=1; kill $CS $C0; exit $R
+DATABASE_URL= SUPABASE_URL= $PY/python test_chat_ui.py http://localhost:${PORT_CHAT:-8040} http://localhost:${PORT_CHAT0:-8041} || R=1; kill $CS $C0
+AS2=${LOGDIR:-/tmp}/assist-test; rm -rf $AS2; mkdir -p $AS2   # live help (16 Nov 2026): mock mode, its own limit and log
+DATABASE_URL= SUPABASE_URL= ASSIST_PER_DAY=5 ASSIST_LOG=$AS2/assist.jsonl SQLITE_PATH=$AS2/orders.db OUT_DIR=$AS2/out $PY/uvicorn app:app --port ${PORT_ASSIST:-8042} >$AS2/server.log 2>&1 & AP=$!; sleep 3
+DATABASE_URL= SUPABASE_URL= SQLITE_PATH=$AS2/orders.db $PY/python test_assist.py http://localhost:${PORT_ASSIST:-8042} $AS2/assist.jsonl || R=1; kill $AP; exit $R
