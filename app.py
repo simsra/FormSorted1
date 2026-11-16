@@ -19,10 +19,11 @@ import bluebadge as BB, printmail
 import evidence as EVID, honesty as HONEST, fraud as FRAUD
 import wholeform as WF, secure as SECURE
 import accounts as ACCT
+import chatui as CHAT
 BRAND=os.getenv("BRAND","FormSorted"); STRIPE=os.getenv("STRIPE_SECRET_KEY","STRIPE_SECRET_KEY_PLACEHOLDER")
 PUBLIC=os.getenv("PUBLIC_URL","http://localhost:8000"); DEV=STRIPE.endswith("PLACEHOLDER")
 HERE=os.path.dirname(os.path.abspath(__file__)); OUT=store.OUT; DB=store.SQLITE_PATH
-import hashlib as _hl; CSS_V=_hl.sha256(open(os.path.join(HERE,"static","app.css"),"rb").read()).hexdigest()[:10]   # cache-bust: browsers keep old app.css otherwise (30 Oct 2026)
+import hashlib as _hl; CSS_V=_hl.sha256(open(os.path.join(HERE,"static","app.css"),"rb").read()+open(os.path.join(HERE,"static","chat.css"),"rb").read()+open(os.path.join(HERE,"static","chat.js"),"rb").read()).hexdigest()[:10]   # cache-bust: browsers keep old app.css otherwise (30 Oct 2026)
 ICON_V=_hl.sha256(open(os.path.join(HERE,"static","logo-white.svg"),"rb").read()+open(os.path.join(HERE,"static","favicon.svg"),"rb").read()).hexdigest()[:10]   # brand logo/favicon cache-bust
 DOTS='<svg class="dots" aria-hidden="true" focusable="false" viewBox="0 0 240 220" fill="#9db1f9"><circle cx="78" cy="10" r="8"/><circle cx="112" cy="10" r="8"/><circle cx="146" cy="10" r="8"/><circle cx="61" cy="40" r="8"/><circle cx="95" cy="40" r="8"/><circle cx="163" cy="40" r="8"/><circle cx="197" cy="40" r="8"/><circle cx="78" cy="70" r="8"/><circle cx="112" cy="70" r="8"/><circle cx="146" cy="70" r="8"/><circle cx="214" cy="70" r="8"/><circle cx="27" cy="100" r="8"/><circle cx="61" cy="100" r="8"/><circle cx="95" cy="100" r="8"/><circle cx="163" cy="100" r="8"/><circle cx="197" cy="100" r="8"/><circle cx="78" cy="130" r="8"/><circle cx="112" cy="130" r="8"/><circle cx="146" cy="130" r="8"/><circle cx="214" cy="130" r="8"/><circle cx="61" cy="160" r="8"/><circle cx="95" cy="160" r="8"/><circle cx="163" cy="160" r="8"/><circle cx="197" cy="160" r="8"/><circle cx="78" cy="190" r="8"/><circle cx="112" cy="190" r="8"/><circle cx="146" cy="190" r="8"/></svg>'   # decorative brand dot motif (aria-hidden), same as the site's brand_edits.dots()
 os.makedirs(OUT,exist_ok=True)
@@ -44,6 +45,7 @@ def bbprog(n):
 def prog(n,label=None,sub=""):
     """5-step bar shown on every screen: 1 Choose your form, 2 Choose your package, 3 Answer the questions, 4 Pay, 5 Get your form.
     label: what this screen is, within the step."""
+    if CHAT.on(): return CHAT.prog(n,STEPS,label,sub)
     lis="".join(f'<li class="{"past" if j<n else "now" if j==n else ""}"{" aria-current=step" if j==n else ""}><span class=n>{j}</span><span class=s>{esc(STEPS_SHORT[j-1])}</span><span class=l>{esc(t)}</span></li>' for j,t in enumerate(STEPS,1))
     lab=STEPS[n-1]+(f": {label}" if label and label!=STEPS[n-1] else "")
     return f"""<nav aria-label="Your progress"><ol class=stepper>{lis}</ol></nav><p class=stepnow>Step {n} of {len(STEPS)}: <strong>{esc(lab)}</strong>{f" · {sub}" if sub else ""}</p>"""
@@ -57,7 +59,22 @@ def need_help():
     """Small help area at the bottom of every screen: common questions behind a toggle, plus the email address. No promise that a person checks anything."""
     qa="".join(f"<details class=qa><summary>{esc(q)}</summary><p>{esc(a)}</p></details>" for q,a in HELP_FAQ)
     return f"""<section class=needhelp aria-labelledby=nh><h2 id=nh>Need help?</h2><details class=more><summary>Questions people ask</summary>{qa}</details><p>Or email <a href="mailto:hello@formsorted.com">hello@formsorted.com</a></p></section>"""
+def chat_page(body,title,minimal):
+    """Chat look (16 Nov 2026): slim header with the assistant and a quiet progress line, one conversation column,
+    a message bar at the bottom, the same footer words and links. Pages that don't build their own turns become one assistant message."""
+    pr,body=CHAT.split_prog(body)
+    if 'class="turn ' not in body: body=CHAT.bot(body)
+    # the message bar: not on pages that ask for NI numbers or bank details (those go only into the PDF), nor on payment confirmation pages
+    bar,faq=("","") if ("action=/details/" in body or "/success" in body) else CHAT.composer(HELP_FAQ)
+    contact="" if minimal else '<a data-contact href="mailto:hello@formsorted.com">Contact</a>'
+    return HTMLResponse(f"""<!doctype html><html lang=en-GB><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><link rel=icon href=/static/favicon.svg?v={ICON_V} type=image/svg+xml><link rel=icon href=/static/favicon-32.png?v={ICON_V} sizes=32x32 type=image/png><link rel=apple-touch-icon href=/static/apple-touch-icon.png?v={ICON_V}><meta name=theme-color content='#ffffff'><link rel=stylesheet href=/static/app.css?v={CSS_V}><link rel=stylesheet href=/static/chat.css?v={CSS_V}><title>{title} | {BRAND}</title><meta name=robots content=noindex></head><body class=chat><a href="#main" class="skip">Skip to main content</a>
+<header class=chdr><div class=cwrap><a class=logo href="/"><img src="/static/logo.svg?v={ICON_V}" alt="FormSorted home" width="160" height="20"></a><div class=who>{CHAT.ORB}<span><strong>{CHAT.NAME}</strong><span class=indep2>Independent. Not affiliated with DWP or GOV.UK.</span></span></div></div>{f'<div class=cwrap>{pr}</div>' if pr else ''}</header>
+<main id=main><div class="cwrap thread" id=thread>{body}</div><div class=cwrap>{need_help()}</div></main>
+{f'<div class=cbarwrap><div class=cwrap>{bar}</div></div>' if bar else ''}
+<footer class="ftr cftr"><div class=cwrap><p><strong>FormSorted</strong> is an independent online form-filling service. Not affiliated with DWP, GOV.UK or any government body. We can't guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a>{contact}</p></div></footer>
+{faq}<script src=/static/chat.js?v={CSS_V}></script></body></html>""")
 def page(body,title="FormSorted",gov="https://www.gov.uk/browse/benefits/disability",minimal=False):
+    if CHAT.on(): return chat_page(body,title,minimal)
     if minimal:  # order summary: no outbound links except Terms/Privacy
         indep='<div class="indep"><div class="wrap"><span class="tag">Independent</span>Not affiliated with DWP or GOV.UK.</div></div>'
         ftr='<footer class="ftr"><div class="wrap"><p><strong>FormSorted</strong> is an independent online form-filling service. Not affiliated with DWP, GOV.UK or any government body. We can\'t guarantee an award or outcome.</p><p><a href="https://formsorted.com/privacy.html">Privacy</a><a href="https://formsorted.com/terms.html">Terms</a></p></div></footer>'
@@ -119,6 +136,7 @@ def not_sure():
 @app.get("/")
 def home(form:str="", tier:str=""):
     pv=PREVIEW if DEV else ""
+    if form not in FORMS and CHAT.on(): return chat_home(pv)
     if form not in FORMS:
         return page(prog(1)+pv+f"""<section class=hero>{DOTS}<h1>Get your benefit form filled in</h1><p class=one>Answer simple questions. We fill in the form. You check it, sign it and send it.</p><a class=btn href="#pick">Choose your form</a></section>
 <h2 class=h3 id=pick>Which form do you need?</h2>{form_cards()}{not_sure()}
@@ -170,6 +188,7 @@ def order_summary(form,tier="",pv=""):
         cards+=f"""<div class="pkg{' mine' if mine else ''}">{'<p class=pill>Your choice</p>' if mine else ''}<h2>{esc(n)}</h2><p class=pr>£{p//100} <small>one-off</small></p><ul class=ticks>{''.join(f'<li>{esc(x)}</li>' for x in pkg_bullets(form,t))}</ul>{NEED_POST if t=="99" and form in PLUS.PLUS_FORMS else ""}
 <form method=post action=/checkout><input type=hidden name=form value={form}><input type=hidden name=tier value={t}><button class="btn btn-big">{'Continue with' if mine else 'Choose'} {esc(n)}</button></form></div>"""
     up=upgrade_box(form,tier or default_tier(form))
+    if CHAT.on(): return chat_package(form,f,cards,up,pv)
     return page(prog(2)+pv+f"""<section class="hero hero-lt">{DOTS}<p class=caption>{esc(f['short'])}</p><h1>Choose your package</h1><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p></section>
 <div class=pkgs>{cards}</div>
 {more("Compare the packages in detail",up) if up else ""}{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}
@@ -264,6 +283,7 @@ def preview(token:str):
     chg=f' <a class=chpk href="/package/{token}">Change package</a>' if choose else ""
     rows=f"""<dl class=order><div><dt>Form</dt><dd>{esc(f['short'])}</dd></div><div><dt>Your answers</dt><dd>{got} of {total} {'sections of the form' if o['intake'] else 'topics'}{f' · <a href="/intake/{token}?s=about">Change</a>' if o['intake'] else ''}</dd></div><div class=pkrow><dt>Your package</dt><dd><strong>{esc(n)}</strong> · £{p//100}{chg}{'<ul class=ticks>'+''.join(f'<li>{esc(x)}</li>' for x in bl)+'</ul>' if bl else ''}</dd></div></dl>"""
     head="<h1>Check your order and pay</h1><p class=one>Nothing is filled in until you pay. Then you check every answer.</p>"
+    if CHAT.on(): head="<p class=bt><strong>That's all the questions.</strong> Here is your order.</p><h1 class=bt>Check your order and pay</h1><p class=one>Nothing is filled in until you pay. Then you check every answer.</p>"
     return page(prog(4)+f"""<div class=summary>{head}{rows}
 <form method=post action=/pay/{token}>{KEEP_OPT if is_premium(o["tier"]) else ""}<div class=total><span>Total to pay</span><strong id=paytotal>£{p//100}</strong></div><div class=paybox><label class=cb><input type=checkbox name=waive required><span>Please start preparing my form straight away. I understand that once you start I lose my 14-day right to cancel.</span></label>
 <button class="btn btn-big" id=paybtn>Pay £{p//100} and get my form</button><p class=hint>Have a discount code? You can enter it on the next screen, when you add your card.</p></div></form>
@@ -352,6 +372,7 @@ def start(token:str):
         if o["draft"] and (o["form"] or "aa") in INTAKE.FORMS_V3: return RedirectResponse(f"/{'documents' if o['approved_at'] and o['details_at'] else 'details' if o['approved_at'] else 'approve' if is_wf(o) else 'deadline'}/{token}",303)
         return RedirectResponse(chat_url(o),303)
     lead="Payment received. Please confirm 2 things." if o["status"]=="paid" else "Please confirm 2 things. You only pay at the end, if you want your completed form."
+    if CHAT.on() and o["form"]!="bb": return chat_consent(o,lead)
     return page((bbprog(2) if o["form"]=="bb" else prog(3,"Before you start"))+f"""<h1>Before you start</h1><p class=one>{lead}</p><form method=post action=/consent/{token}>
 <label class=cb><input type=checkbox name=health required><span>I agree to {BRAND} using the health information I give to prepare this form. If it's about someone else, they agree, or I can act for them.</span></label>
 <label class=cb><input type=checkbox name=truth required><span>I'll only give true information and will check everything before sending it.</span></label>
@@ -776,6 +797,7 @@ def intake_page(token:str, s:str="", r:str=""):
     refused=REFUSED_BOX if r else ""
     reassure="<p class=reassure>It's normal for this to feel hard. Tap what fits and add a few words where you can. We do the writing. Skip anything you're not sure about.</p>" if i==0 else ""
     first=(f'<p class=one>About {left} minutes. Tap what fits and add a few words where you can. We do the writing.</p>'+HONEST_LINE) if i==0 else ''
+    if CHAT.on(): return chat_intake(o,token,form,d,secs,ids,sec,i,left,refused,first)
     return page(prog(3,f"Part {i+1} of {len(secs)}: {secs[i][1]}",f"About {left} minute{'s' if left!=1 else ''} left")+f"""<div class=intake>
 {refused}{'<h1>We\'ll fill in your whole form for you</h1>' if i==0 else f'<h1>{esc(secs[i][1])}</h1>'}{first}{_cue(sec)}<p class=qcount id=qcount aria-live=polite hidden></p>
 <form method=post action=/intake/{token}><input type=hidden name=sec value={sec}><div class=qs id=qs>{INTAKE.section_body(form,sec,d)}</div>
@@ -1316,6 +1338,13 @@ def documents_page(token:str, req:Request=None):
     nxt=ATW_NEXT if form=="atw" else f"<h2>What to do next</h2>{next_steps(form,files,hand_details(o))}"
     guide="" if form=="atw" else more("Full print, sign and post guide",PSP.html_section(form,filled=(F.get('pdf_out') in files),hand_details=hand_details(o),h="h3"))
     extras=(f'<h3>Your other documents</h3><ul class=also>{others}</ul>' if others else '')+guide+f"{saved}{account_box(o)}{bb_addon_box(o)}"
+    if CHAT.on():
+        chips=CHAT.file_chip(f"/download/{token}/{main}",main,mlab.replace("Download your ","Your ").replace("Download ",""),True) if main else ""
+        chips+="".join(CHAT.file_chip(f"/download/{token}/{f}",f,lab.get(f,f)) for f in files if f!=main)
+        extras2=guide+f"{saved}{account_box(o)}{bb_addon_box(o)}"
+        return page(prog(5,"Download")+CHAT.bot(f"""<div class=ready><h1 class=bt>{"Your answers are ready" if form=="atw" else "Your form is ready"}</h1><p>You approved every answer. Here are your files.</p></div><div class=fchips>{chips}</div>{when}{gone}""")
+            +CHAT.bot(nxt)+(CHAT.bot(f'<div class=extras><h2 class=h3>For later</h2>{extras2}</div>') if extras2.strip() else '')
+            +CHAT.note(f"We delete everything 90 days after your order. <a href=/delete/{token}>Delete my information now</a>."),"Your documents")
     return page(prog(5,"Download")+f"""<div class=ready><h1>{"Your answers are ready" if form=="atw" else "Your form is ready"}</h1><p>You approved every answer.</p></div>
 {f'<a class="btn btn-big" href="/download/{token}/{main}" download>{mlab}</a>' if main else ''}{when}{gone}
 {nxt}
@@ -1682,3 +1711,45 @@ def bb_addon_box(o):
 <form method=post action=/bb/addon/{o['token']}><button class="btn btn-2">Get my Blue Badge answers</button></form><p class=hint>{esc(BB.NOT_ELIG)}</p></div>"""
     return f"""<div class=panel><h2 class=h3>Applying for a Blue Badge too?</h2><p>We can turn the answers you've already given us into answers for the online Blue Badge application, with a checklist of what to upload. £15, and you only pay once you've checked your answers.</p>
 <form method=post action=/bb/addon/{o['token']}><button class="btn btn-2">Add Blue Badge answers, £15</button></form><p class=hint>{esc(BB.NOT_ELIG)}</p></div>"""
+
+# ---------- Chat look (16 Nov 2026, Simon): the same steps, shown as a conversation. Nothing here changes what is asked, saved or charged. ----------
+ROUTES=[("bb",["blue badge","parking","badge"]),("pipr",["ar1","pip review","review form","renew"]),("dla",["dla","child","son","daughter","kid","baby","under 16"]),
+ ("atw",["access to work","at work","my job","employer"]),("pip",["pip","pip2","personal independence"]),("aa",["attendance","aa1","aa","pension age","elderly","older","care at home","help with care","mum","dad","gran","nan","grandma","grandad"])]
+def chat_home(pv=""):
+    """Step 1: 'How can I help?' with one chip per form, plus 'Not sure which form?' and 'Something else'."""
+    chips="".join(f'<a class=qchip href="/?form={k}">{esc("DLA for a child" if k=="dla" else t)}</a>' for k,t,w in FORM_CARDS)
+    ns="".join(f'<li><span>{esc(q)}</span> <a class=qchip href="/?form={k}">{esc(a.split(" (")[0])}</a></li>' for q,a,k in NOT_SURE)
+    route=json.dumps([{"k":k,"w":w,"href":f"/?form={k}","name":("DLA for a child" if k=="dla" else next(t for kk,t,_ in FORM_CARDS if kk==k))} for k,w in ROUTES])
+    hello=CHAT.bot(f"""<p class=hi>Hello. I fill in disability benefit forms from your answers. You answer simple questions, mostly taps. Then you check the form, sign it and send it yourself.</p>
+<h1 class=greet>How can I help?</h1><div class=qchips>{chips}<button type=button class="qchip alt" data-show=notsure>Not sure which form?</button><button type=button class="qchip alt" data-show=selse>Something else</button></div>""")
+    notsure=f'<div id=notsure class=reveal hidden>{CHAT.me("Not sure which form?")}{CHAT.bot("<p>Answer yes to one of these, then tap the form.</p><ul class=notsure>"+ns+"</ul><p class=hint>Still not sure? Look at the letter or form DWP sent you. The form&#39;s name is on the first page.</p>")}</div>'
+    ask=('<p>Tell me which form you need, or what it is for, in a few words.</p><form class=elseask><label class=sr for=selse_t>Which form do you need?</label>'
+         '<input id=selse_t maxlength=200 placeholder="For example: my mum needs help with care at home"><button class="btn btn-sm">Send</button></form>')
+    selse=f'<div id=selse class=reveal hidden>{CHAT.me("Something else")}{CHAT.bot(ask)}</div>'
+    return page(prog(1)+pv+hello+notsure+selse+'<div id=replies aria-live=polite></div>'+CHAT.note("England and Wales only. You only pay at the end, after the questions.")+f'<script type=application/json id=croute>{route}</script>',"Choose your form",minimal=True)
+def chat_package(form,f,cards,up,pv=""):
+    """Step 2: the form they tapped (their bubble, tap to change), then the two packages inside the assistant's message."""
+    body=(f"""<p class=bt><strong>Which package would you like?</strong></p><p class=one>Nothing to pay now. You pay once, at the end, after the questions. You can change package before you pay.</p>
+<div class=pkgs>{cards}</div>{more("Compare the packages in detail",up) if up else ""}{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}
+<p class=hint>{esc(DWP_LINE)} No success fee.</p>""")
+    return page(prog(2)+pv+CHAT.me(f["short"],"/","Change form: "+f["short"])+CHAT.bot(body),f"Choose your package: {f['name']}",minimal=True)
+def chat_consent(o,lead):
+    token=o["token"]; form=o["form"] or "aa"; tn,tp,_=tier_info(form,o["tier"])
+    body=f"""<h1 class=bt>Before you start</h1><p class=one>{lead}</p><form method=post action=/consent/{token}>
+<label class=cb><input type=checkbox name=health required><span>I agree to {BRAND} using the health information I give to prepare this form. If it's about someone else, they agree, or I can act for them.</span></label>
+<label class=cb><input type=checkbox name=truth required><span>I'll only give true information and will check everything before sending it.</span></label>
+<div class=warning>Giving false information on a benefit claim is an offence.</div>
+<button class="btn btn-big">Start the questions</button></form>{more("How we look after your information","<p>If you don't pay, we delete your information after 7 days. If you do, after 90 days, or sooner if you ask. <a href='https://formsorted.com/privacy.html'>Privacy notice</a></p>")}"""
+    mine=CHAT.me(f"{FORMS[form]['short']} · {tn}") if o["status"]=="free" else ""
+    return page(prog(3,"Before you start")+mine+CHAT.bot(body),"Before we start")
+def chat_intake(o,token,form,d,secs,ids,sec,i,left,refused,first):
+    """Step 3 as a conversation. The part's questions are the same HTML as before (intake.section_body), in the same form post.
+    static/chat.js shows them one at a time as assistant messages, turns each answer into the customer's bubble, and lets them
+    type an answer in the message bar. The server still gets the whole part in one POST, as before."""
+    n=len(secs); lab=secs[i][1]
+    done=CHAT.note(f"<span class=tick aria-hidden=true>✓</span> Part {i} of {n} saved: {esc(secs[i-1][1])}") if i else ""
+    intro=CHAT.bot(("<h1 class=bt>We'll fill in your whole form for you</h1>"+first) if i==0 else f"<h1 class=bt>{esc(lab)}</h1>{_cue(sec)}","intro")
+    return page(prog(3,f"Part {i+1} of {n}: {lab}",f"About {left} minute{'s' if left!=1 else ''} left")+f"""{done}{refused}{intro}<div class="intake cintake">
+<form method=post action=/intake/{token} id=qform><input type=hidden name=sec value={sec}><p class=qcount id=qcount aria-live=polite hidden></p><div class=qs id=qs>{INTAKE.section_body(form,sec,d)}</div>
+<div class=navrow>{f'<button class="btn btn-2" name=nav value=back>Back</button>' if i else ''}<button class="btn btn-start" name=nav value=next>{'Finish' if i==n-1 else 'Next: '+esc(secs[i+1][1])}</button></div>
+<div class=qtools>{QHELP}<p class=saved>Your answers are saved each time you finish a part.</p><button class="linkbtn" name=nav value=save>Save and finish later</button></div></form></div>""",lab,minimal=True)
