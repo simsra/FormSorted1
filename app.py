@@ -11,7 +11,7 @@ import intake as INTAKE
 from starlette.concurrency import run_in_threadpool
 import llm, fill_pdf, documents, quality, deadlines, letters, grounding, facts, ticks as TICKS, contsheet, formwatch
 from html import escape as esc
-from forms import FORMS, is_full, tier_info, default_tier, is_premium, is_posted, options as tier_options, gbp, SUPPORT_DAYS, TWO_OPTION_FORMS
+from forms import FORMS, is_full, tier_info, default_tier, is_premium, is_posted, options as tier_options, gbp, SUPPORT_DAYS, TWO_OPTION_FORMS, POSTED_ON
 import plus as PLUS
 import premium as PREMIUM
 import psp as PSP
@@ -189,16 +189,17 @@ def ui_notes(form):
     """Plus notes for the customer pages. Posting is hidden in the clean-steps UI (decision pending, Oct 2026)."""
     return [x for x in PLUS.notes(form) if x!=getattr(PLUS,"POST_SOON",None)]
 def how_it_works(form,price):
-    pay="Choose Download or Posted to you, and pay" if (form in TWO_OPTION_FORMS) else f"Pay £{price}"
+    pay=("Choose Download or Posted to you, and pay" if POSTED_ON else f"Pay {gbp(min(p for _,p,_ in FORMS[form]['tiers'].values()))}") if (form in TWO_OPTION_FORMS) else f"Pay £{price}"
     return f"""<ol class=howit><li><strong>Answer simple questions.</strong> {"Mostly taps, about 10 minutes." if form in INTAKE.FORMS_V3 else "In plain English, at your own pace."}</li><li><strong>{pay}.</strong> Only at the end, if you want your form.</li>
 <li><strong>Check every answer</strong> and change anything that isn't right.</li><li><strong>Download your form</strong>, then print, sign and post it.</li></ol>"""
 def no_printer():
     """Posting is Plus-only (Simon, 30 Oct 2026). Says 'coming soon' until print-and-post is really live."""
     return "No printer? We'll post you a printed copy"+("" if PLUS.posting() else " (coming soon)")
-NEED_POST="<p class=hint>Need it posted? Choose Posted to you when you pay.</p>"
+NEED_POST="<p class=hint>Need it posted? Choose Posted to you when you pay.</p>" if POSTED_ON else ""
 def pkg_bullets(form,t):
     """3-4 short bullets per package for the package cards."""
     ts=FORMS[form]["tiers"]
+    if t=="1999": return ["The filled-in form as a PDF","Print it, sign it and send it yourself","Evidence checklist and a request letter for your GP"]
     if form in PLUS.PLUS_FORMS:
         if t=="99": return [l for l,d,b,p_ in PLUS.compare_rows(form) if b==1][:3]+["You check every answer before it's final"]
         return ["Everything in "+ts["99"][0]]+[l for l,d in PLUS.items(form) if l not in PLUS.POST_ON.values()][:2]+[no_printer()]
@@ -228,7 +229,7 @@ def start_page(form,pv=""):
 <label class=cb><input type=checkbox name=truth value=1 required><span>I'll only give true information and will check everything before sending it.</span></label>
 <div class=warning>Giving false information on a benefit claim is an offence.</div>
 <button class="btn btn-big">Start the questions</button></form>"""
-    lead=f"Answer the questions first. You only pay at the end, from {gbp(lo)}, if you want your completed form."
+    lead=f"Answer the questions first. You only pay at the end, {'from ' if len(f['tiers'])>1 else ''}{gbp(lo)}, if you want your completed form."
     more_=more("How we look after your information","<p>If you don't pay, we delete your information after 7 days. If you do, after 90 days, or sooner if you ask. <a href='https://formsorted.com/privacy.html'>Privacy notice</a></p>")
     if CHAT.on():
         body=f"<h1 class=bt>Before you start</h1><p class=one>{lead} Please confirm 2 things.</p>{boxes}{more_}{more("Applying for a Blue Badge too?",BB_ADDON_LINE) if form in BB.PARENT_FORMS else ""}<p class=hint>{esc(DWP_LINE)} No success fee.</p>"
@@ -321,7 +322,7 @@ def preview(token:str, err:str=""):
     f=FORMS[o["form"] or "aa"]; n,p,_=tier_info(o["form"] or "aa",o["tier"]); got,total=INTAKE.coverage(o["form"],json.loads(o["intake"])) if o["intake"] else covered(o)
     choose=bool(tier_options(o["form"] or "aa")) and o["tier"] in FORMS[o["form"] or "aa"]["tiers"]
     facts=[f"Your details cover {got} of {total} sections of the form" if o["intake"] else f"{got} of {total} topics covered in your conversation",f"Prepared for the {esc(f['short'])}"]+[esc(i) for i in pack_items(o["form"] or "aa",default_tier(o["form"] or "aa") if choose else o["tier"])]
-    extra=more("What happens after you pay",f"""<ol class=howit><li>We write every section from what you told us and check each one against your answers.</li><li>You check every answer and change anything that isn't right.</li><li>You download your form, or we post it to you if you choose Posted. You sign it and send it yourself.</li></ol>
+    extra=more("What happens after you pay",f"""<ol class=howit><li>We write every section from what you told us and check each one against your answers.</li><li>You check every answer and change anything that isn't right.</li><li>{"You download your form, or we post it to you if you choose Posted." if POSTED_ON else "You download your form and print it."} You sign it and send it yourself.</li></ol>
 <figure class=lockprev><img src="/static/preview-placeholder.svg" alt="Example illustration of a filled-in form (not your answers)" width=520 height=360><figcaption>Illustration only. Your own answers appear after payment.</figcaption></figure>{TRUST}
 <p class=hint>One-off fee. No success fee. If you don't pay, we delete everything you told us after 7 days.</p>""")
     form=o["form"] or "aa"; bl=[] if choose else ([x for x in pkg_bullets(form,o["tier"]) if not x.startswith("Everything in")][:3] if o["tier"] in FORMS[form]["tiers"] else [])

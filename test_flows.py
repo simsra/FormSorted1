@@ -79,7 +79,7 @@ for form,f in FORMS.items():
     if form in TWO_OPTION_FORMS:   # Nov 2026: no package step; Download or Posted is chosen when paying
         for q in ("","&tier=bogus","&tier=99","&tier=199"):
             h=req(f"/?form={form}{q}").read().decode()
-            assert "Step 2 of 5: <strong>Before you start</strong>" in h and h.count("<form method=post action=/checkout>")==1 and "from £19.99" in h and "Choose your package" not in h, (form,q)
+            assert "Step 2 of 5: <strong>Before you start</strong>" in h and h.count("<form method=post action=/checkout>")==1 and "£19.99" in h and "Choose your package" not in h, (form,q)
             assert h.count("You can claim directly from DWP for free; FormSorted is a paid online form-filling service.")==1 and "stripe" not in h.lower() and "£99" not in h and "£199" not in h
     else:
         hb=req(f"/?form={form}&tier=bogus").read().decode(); assert "Choose your package" in hb and "Your choice" not in hb   # invalid tier -> package step, nothing preselected

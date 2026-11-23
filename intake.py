@@ -267,14 +267,18 @@ def fu_lines(form,r,v,d):
             what=pw(cm.get(key,key),is_me(d,form),form)
         if f.get("w"): words.append(f'"{f["w"]}" ({what.lower()})')
         t,q,tp,_=fu_spec(form,key,d); tl=dict(tp).get(f.get("t"))
-        if tl: taps.append(FU_P[t].format(tl[0].lower()+tl[1:]))
+        if tl and FU_P[t].format(tl[0].lower()+tl[1:]) not in taps: taps.append(FU_P[t].format(tl[0].lower()+tl[1:]))   # a repeated question is one fact
     return words,taps
 FU_JS="""<script>(function(){
  /* Inline follow-ups: one per tapped chip. If the same question is already showing on this card, only its words box shows.
     'Who helps' carries to the next cards (shown as a tap they can change). One gentle nudge on Next if a shown box is empty. */
  function vis(e){return e.offsetParent!==null}
- function tidy(card){var seen={};card.querySelectorAll('.fu').forEach(function(f){if(!vis(f))return;var t=f.dataset.fu;
-   f.classList.toggle('dup',!!seen[t]&&!f.querySelector('.futaps input:checked'));seen[t]=1})}
+ function tidy(card){var seen={};card.querySelectorAll('.fu').forEach(function(f){if(!vis(f)){f.classList.remove('dup');return}var t=f.dataset.fu,first=seen[t];
+   if(!first){f.classList.remove('dup');seen[t]=f;return}
+   /* 23 Nov 2026: never the same question twice on a card. A repeat (e.g. 'Who helps Mum?' under the level and under a chip) is
+      always hidden, even when a carried tap ticked it, and takes the first one's answer. Only its words box shows. */
+   f.classList.add('dup');f.classList.remove('carried');var s=first.querySelector('.futaps input:checked');
+   f.querySelectorAll('.futaps input').forEach(function(i){i.checked=!!s&&i.value===s.value})})}
  var last=null;
  document.querySelectorAll('.card').forEach(function(c){c.addEventListener('change',function(e){
    var i=e.target;if(i.closest('.fu[data-fu=who] .futaps')&&i.checked&&i.value!='else')last=i.value;
@@ -282,6 +286,7 @@ FU_JS="""<script>(function(){
      if(vis(f)&&!f.querySelector('.futaps input:checked')){var r=f.querySelector('.futaps input[value="'+last+'"]');if(r){r.checked=true;f.classList.add('carried')}}})},0)}
    if(i.closest('.fu .futaps'))i.closest('.fu').classList.remove('carried');
    setTimeout(function(){tidy(c)},0)})});
+ document.querySelectorAll('.card').forEach(tidy);
  document.addEventListener('click',function(e){var b=e.target.closest('button');if(!b||!(b.value==='next'||b.textContent==='Next question'))return;
    var empty=[].filter.call(document.querySelectorAll('.fu'),function(f){return vis(f)&&!f.dataset.nudged&&!f.querySelector('.fuw input').value.trim()});
    if(!empty.length)return;e.preventDefault();e.stopImmediatePropagation();empty.forEach(function(f){f.dataset.nudged=1});

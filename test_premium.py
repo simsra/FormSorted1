@@ -2,9 +2,10 @@
 print-and-post (disabled, queued only), appeal (reconsideration) and renewal for Plus orders, retention. DEV server:  python test_premium.py URL"""
 import sys, re, json, io, uuid, time, urllib.request, urllib.parse, os
 from forms import FORMS, is_full, is_premium, tier_info, default_tier
+import forms as forms_mod
 import printmail, grounding
 for f in ("aa","dla","pip","pipr"):
-    assert list(FORMS[f]["tiers"])==["1999","2999"] and default_tier(f)=="1999"   # Nov 2026 prices; £99/£199 orders are legacy and still work
+    assert list(FORMS[f]["tiers"])==(["1999","2999"] if forms_mod.POSTED_ON else ["1999"]) and "2999" in {**FORMS[f]["tiers"],**FORMS[f].get("hidden_tiers",{})} and default_tier(f)=="1999"   # Nov 2026 prices; £99/£199 orders are legacy and still work
     assert tier_info(f,"99")[1]==9900 and tier_info(f,"199")[1]==19900
     assert tier_info(f,"79")[1]==7900   # legacy orders still render
 assert is_full("99") and is_full("199") and is_premium("199") and not is_premium("99") and not printmail.ENABLED

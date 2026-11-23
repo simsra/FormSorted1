@@ -34,7 +34,7 @@ def split_prog(body):
     """-> (n, sub, screen-reader line, rest of body). n=0 when the page has no progress."""
     m=_PROG.match(body)
     return (int(m.group(1)),m.group(2),m.group(3),body[m.end():]) if m else (0,"","",body)
-FAQ_EXTRA=[("How much does it cost?","Download is £19.99. Posted to you, with support is £29.99: we print your finished form and post it to you with a prepaid envelope, and you sign it and post it yourself. You choose when you pay, once, at the end. No success fee."),
+FAQ_EXTRA=[("How much does it cost?",(os.getenv("POSTED_OPTION","0")=="1" and "Download is £19.99. Posted to you, with support is £29.99: we print your finished form and post it to you with a prepaid envelope, and you sign it and post it yourself. You choose when you pay, once, at the end. No success fee.") or "Attendance Allowance, PIP and child DLA forms are £19.99 to download. You pay once, at the end, after the questions. No success fee."),
  ("Do you send the form to DWP?","No. You check it, sign it and send it yourself."),
  ("What if I make a mistake?","You can go back and change any answer. After you pay you check every answer before anything is final."),
  ("How long does it take?","About 10 to 15 minutes of questions. Mostly taps."),

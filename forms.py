@@ -1,4 +1,5 @@
 """Form registry: one engine, several government forms. Each form = question topics + delivery (filled PDF or typed answers)."""
+import os
 from questions import CARE_QUESTIONS
 import plus as _plus
 def _plus_summary(f): return _plus.summary(f)   # per-form Plus copy lives in plus.py
@@ -70,25 +71,31 @@ def DOWNLOAD(form):
     return ("Download",1999,f"Download {_DL_WHAT[form]}, as a PDF to print, sign and send yourself. Plus an evidence checklist and a request letter for your GP.")
 def POSTED(form):
     return ("Posted to you, with support",2999,f"Everything in Download, plus we print it and post it to you, with sign-here markers and a prepaid envelope addressed to the right DWP office. You sign it and post it back yourself. Support until your decision, for up to 6 months: help with any question, reminders about your decision, and plain-English help with DWP letters.")
+# POSTED_OPTION (Simon, 23 Nov 2026): only the £19.99 Download goes live. "Posted to you, with support" (£29.99) is not
+# offered to customers until Simon OKs its Terms and a posting provider. Off: tier "2999" is hidden (kept in hidden_tiers so
+# tier_info still describes it), the pay step shows Download only, and /pay ignores pack=2999. Set POSTED_OPTION=1 to offer it.
+POSTED_ON=os.getenv("POSTED_OPTION","0")=="1"
+def _offer(form): return {"1999":DOWNLOAD(form),"2999":POSTED(form)} if POSTED_ON else {"1999":DOWNLOAD(form)}
+def _hidden(form): return {} if POSTED_ON else {"2999":POSTED(form)}
 FORMS={
  "aa":{"name":"Attendance Allowance","short":"Attendance Allowance (AA1)","form":"AA1","gov":"https://www.gov.uk/attendance-allowance",
    "who":"State Pension age and over","topics":AA_TOPICS,"pdf":"aa1.pdf","pdf_out":"AA1-filled.pdf",
-   "tiers":{"1999":DOWNLOAD("aa"),"2999":POSTED("aa")},
+   "tiers":_offer("aa"),"hidden_tiers":_hidden("aa"),
    "legacy_tiers":{"49":("Claim Answers",4900,""),"79":("Form pack",7900,""),"99":("Done for you",9900,"We fill in the official AA1 form for you, ready to print and sign. Plus answers to every care question in your own words, an evidence checklist, and a request letter for your GP."),"199":("Done for you Plus",19900,_plus_summary("aa"))},
    "subject":"the person claiming"},
  "dla":{"name":"Child DLA","short":"Disability Living Allowance for children (DLA1A)","form":"DLA1A","gov":"https://www.gov.uk/disability-living-allowance-children",
    "who":"children under 16","topics":DLA_TOPICS,"pdf":"dla1a.pdf","pdf_out":"DLA1A-filled.pdf",
-   "tiers":{"1999":DOWNLOAD("dla"),"2999":POSTED("dla")},
+   "tiers":_offer("dla"),"hidden_tiers":_hidden("dla"),
    "legacy_tiers":{"49":("Answers",4900,""),"79":("Form pack",7900,""),"99":("Done for you",9900,"We fill in the official DLA1A form for you, ready to check, sign and post free. Plus answers to every question in your own words, mapped to the question numbers, and a school and medical evidence checklist."),"199":("Done for you Plus",19900,_plus_summary("dla"))},
    "subject":"the child"},
  "pip":{"name":"PIP","short":"PIP: How your disability affects you (PIP2)","form":"PIP2","gov":"https://www.gov.uk/pip",
    "who":"16 to State Pension age","topics":PIP_TOPICS,"pdf":None,
-   "tiers":{"1999":DOWNLOAD("pip"),"2999":POSTED("pip")},
+   "tiers":_offer("pip"),"hidden_tiers":_hidden("pip"),
    "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,""),"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each PIP2 question, PIP extra sheets ready to print and send with your form, an evidence checklist, a phone-call prep sheet, assessment notes and a request letter for your GP."),"199":("Done for you Plus",19900,_plus_summary("pip"))},
    "subject":"you (or the person you help)"},
  "pipr":{"name":"PIP review","short":"PIP review form (AR1)","form":"AR1","gov":"https://www.gov.uk/pip/when-your-pip-claim-is-reviewed",
    "who":"people already getting PIP","topics":PIP_TOPICS,"pdf":None,
-   "tiers":{"1999":DOWNLOAD("pipr"),"2999":POSTED("pipr")},
+   "tiers":_offer("pipr"),"hidden_tiers":_hidden("pipr"),
    "legacy_tiers":{"59":("PIP Answers",5900,""),"79":("PIP Complete Pack",7900,""),"99":("Done for you",9900,"Typed answers for all 12 activities, mapped to each AR1 activity section, extra sheets ready to send, an evidence checklist, a 'what has changed' summary, an assessment-call prep sheet and a request letter for your GP."),"199":("Done for you Plus",19900,_plus_summary("pipr"))},
    "subject":"you (or the person you help)"},
  "atw":{"name":"Access to Work","short":"Access to Work application","form":"AtW","gov":"https://www.gov.uk/access-to-work",
@@ -119,14 +126,14 @@ def tick_list(form, answers):
 FULL_TIERS={"79","99","199","1999","2999"}
 def is_full(tier): return str(tier) in FULL_TIERS
 def tier_info(form,tier):
-    f=FORMS[form]; return f["tiers"].get(tier) or f.get("included_tiers",{}).get(tier) or f.get("legacy_tiers",{}).get(tier) or next(iter(f["tiers"].values()))
+    f=FORMS[form]; return f["tiers"].get(tier) or f.get("included_tiers",{}).get(tier) or f.get("hidden_tiers",{}).get(tier) or f.get("legacy_tiers",{}).get(tier) or next(iter(f["tiers"].values()))
 def default_tier(form): return list(FORMS[form]["tiers"])[0]
 PREMIUM_TIERS={"199"}
 def is_premium(tier): return str(tier) in PREMIUM_TIERS
 POSTED_TIERS={"2999"}
 def is_posted(tier): return str(tier) in POSTED_TIERS
 TWO_OPTION_FORMS=("aa","dla","pip","pipr")
-def options(form): return list(FORMS[form]["tiers"]) if form in TWO_OPTION_FORMS else []
+def options(form): return list(FORMS[form]["tiers"]) if (form in TWO_OPTION_FORMS and len(FORMS[form]["tiers"])>1) else []   # [] = nothing to choose at the pay step
 
 # Where the prepaid envelope in the posted pack is addressed. DWP Freepost addresses need no stamp, licence or postcode:
 # "Do not write anything except the freepost address" (GOV.UK). None = not confirmed: the fulfilment queue says to check.

@@ -4,7 +4,7 @@ code (price_data), checked here with the Stripe call captured (no network). Inte
 import os, sys, json, re, tempfile, sqlite3
 D=tempfile.mkdtemp()
 for k in ("GEMINI_API_KEY","OPENAI_API_KEY","ANTHROPIC_API_KEY","LLM_API_KEY","RESEND_API_KEY","DATABASE_URL","SUPABASE_URL","ALLOW_LEGACY_TIERS","STRIPE_SECRET_KEY"): os.environ.pop(k,None)
-os.environ.update(SQLITE_PATH=D+"/orders.db",OUT_DIR=D+"/out",MAIL_LOG=D+"/mail.log",RETENTION_LOOP="0",CRON_SECRET="c",STRIPE_WEBHOOK_SECRET="w",ADMIN_SECRET="adm",WHOLE_FORM="0",FOLLOWUPS="0")
+os.environ.update(POSTED_OPTION="1",SQLITE_PATH=D+"/orders.db",OUT_DIR=D+"/out",MAIL_LOG=D+"/mail.log",RETENTION_LOOP="0",CRON_SECRET="c",STRIPE_WEBHOOK_SECRET="w",ADMIN_SECRET="adm",WHOLE_FORM="0",FOLLOWUPS="0")
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 import subprocess, time, urllib.request, urllib.parse, urllib.error
 PORT=int(os.environ.get("PORT_PRICING","8044")); PY=os.path.join(os.environ.get("PY",os.path.join(os.path.dirname(os.path.abspath(__file__)),"../../.venv/bin")),"uvicorn")
