@@ -49,7 +49,7 @@ def prog(n,label=None,sub=""):
     lis="".join(f'<li class="{"past" if j<n else "now" if j==n else ""}"{" aria-current=step" if j==n else ""}><span class=n>{j}</span><span class=s>{esc(STEPS_SHORT[j-1])}</span><span class=l>{esc(t)}</span></li>' for j,t in enumerate(STEPS,1))
     lab=STEPS[n-1]+(f": {label}" if label and label!=STEPS[n-1] else "")
     return f"""<nav aria-label="Your progress"><ol class=stepper>{lis}</ol></nav><p class=stepnow>Step {n} of {len(STEPS)}: <strong>{esc(lab)}</strong>{f" · {sub}" if sub else ""}</p>"""
-HELP_FAQ=[("When do I pay?","Only at the end, after the questions. You see the price before you start, and you can change package before you pay."),
+HELP_FAQ=[("When do I pay?","Only at the end, after the questions. You see the price before you start."),
  ("Can I stop and come back?","Yes. Tap \u201cSave and finish later\u201d to get your private link. If you don't pay, we delete your answers after 7 days."),
  ("I'm filling this in for someone else","That's fine. Answer about them. They sign the form, or you sign it if you have the right to act for them."),
  ("I'm not sure what to answer","Pick the answer closest to a normal day. Skip anything you're not sure about. You check every answer before anything is final."),

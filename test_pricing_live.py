@@ -41,6 +41,7 @@ ok(forms.FORMS["atw"]["tiers"]["49"][1]==4900 and forms.FORMS["atw"]["tiers"]["7
 h=c.get("/?form=aa").text
 ok("Before you start" in h and "£19.99" in h and "from £19.99" not in h and "£99" not in h and not POSTED.search(text(h)), "start page: £19.99, no Posted")
 ok(not BANNED.search(text(h)), "start page wording")
+ok("change package" not in h.lower() and "choose your package" not in h.lower(), "no package wording on the start page")
 r=c.post("/checkout",data={"form":"aa","tier":"2999","health":"1","truth":"1"},follow_redirects=False); tok=r.headers["location"].rsplit("/",1)[1]
 db=sqlite3.connect(D+"/orders.db"); db.row_factory=sqlite3.Row
 ok(db.execute("select tier from orders where token=?",(tok,)).fetchone()[0]=="1999", "a 2999 link starts a Download order")
